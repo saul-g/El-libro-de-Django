@@ -77,7 +77,7 @@ Repasemos el código anterior línea a línea:
       respuesta generada. Cada función de vista es responsable de retornar un
       objeto ``HttpResponse``. (Hay excepciones, pero lo haremos más adelante)
 
-.. exhortacion:: Zona Horaria de Django
+.. admonition:: Zona Horaria de Django
 
     Django incluye una opción ``TIME_ZONE`` que por omisión es
     ``America/Chicago``. Probablemente no es donde vivas, por lo que puedes
@@ -97,7 +97,7 @@ ser llamadas por esos patrones URL. Es como decirle a Django, "Para esta URL,
 llama a este código, y para esta URL, llama a este otro código". Recuerda que
 estas funciones de vista deben estar en tu Python path.
 
-.. exhortacion:: Python Path
+.. admonition:: Python Path
 
     *Python path* es la lista de directorios en tu sistema en donde Python
     buscará cuando uses la sentencia ``import`` de Python.
@@ -311,8 +311,8 @@ middleware.  Los secretos del middleware serán tratados en profundidad en el
 :doc:`Capítulo15<chapter15>`, pero un esquema (ver Figura 3-1) te ayudará conceptualmente a
 poner todas las piezas juntas.
 
-    .. image:: graficos/chapter03/get_response.png
-       :alt: El flujo completo de un petición y una respuesta Django.
+.. image:: graficos/chapter03/get_response.png
+   :alt: El flujo completo de un petición y una respuesta Django.
 
 Figura 3-1: El flujo completo de un petición y una respuesta Django.
 
@@ -391,8 +391,8 @@ not found" (ver la Figura 3-2). (Es linda, ¿no? A la gente de Django seguro le
 gustan los colores pasteles). Django muestra este mensaje porque solicitaste una
 URL que no está definida en tu URLconf.
 
-    .. image:: graficos/chapter03/404.png
-       :alt: Captura de pantalla de la página 404 de Django.
+.. image:: graficos/chapter03/404.png
+   :alt: Captura de pantalla de la página 404 de Django.
 
 Figura 3-2. Página 404 de Django
 
@@ -485,7 +485,7 @@ regulares, con lo que nos quedaría así ``\d{1,2}``::
 
     (r'^time/plus/\d{1,2}/$', hours_ahead),
 
-.. nota::
+.. admonition::
 
     Cuando construimos aplicaciones Web, siempre es importante considerar el
     caso más descabellado posible de entrada, y decidir si la aplicación
@@ -520,7 +520,7 @@ quedará algo así::
 
 Con cuidado, vamos a escribir la vista ``hours_ahead``.
 
-.. exhortacion:: Orden para programar
+.. admonition:: Orden para programar
 
     En este ejemplo, primero escribimos el patrón URL y en segundo lugar la
     vista, pero en el ejemplo anterior, escribimos la vista primero y luego el
@@ -555,60 +555,62 @@ horas que debemos adelantar. Agrega al archivo ``views.py`` lo siguiente::
 
 Repasemos el código anterior línea a línea:
 
-    * Tal como hicimos en la vista ``current_datetime``, importamos la clase
-      ``django.http.HttpResponse`` y el módulo ``datetime``.
+* Tal como hicimos en la vista ``current_datetime``, importamos la clase
+  ``django.http.HttpResponse`` y el módulo ``datetime``.
 
-    * La función de vista ``hours_ahead``, toma *dos* parámetros: ``request`` y
-      ``offset``.
+* La función de vista ``hours_ahead``, toma *dos* parámetros: ``request`` y
+  ``offset``.
 
-        * ``request`` es un objeto ``HttpRequest``, al igual que en
-          ``current_datetime``. Lo diremos nuevamente: cada vista *siempre*
-          toma un objeto ``HttpRequest`` como primer parámetro.
+* ``request`` es un objeto ``HttpRequest``, al igual que en
+    ``current_datetime``. Lo diremos nuevamente: cada vista *siempre*
+    toma un objeto ``HttpRequest`` como primer parámetro.
 
-        * ``offset`` es la cadena de caracteres capturada por los paréntesis en
-          el patrón URL. Por ejemplo, si la petición URL fuera
-          ``/time/plus/3/``, entonces el ``offset`` debería ser la cadena de
-          caracteres ``'3'``. Si la petición URL fuera ``/time/plus/21/``,
-          entonces el ``offset`` debería ser la cadena de caracteres ``'21'``.
-          Notar que la cadena de caracteres capturada siempre es una cadena de
-          caracteres, no un entero, incluso si se compone sólo de dígitos, como
-          en el caso ``'21'``.
+* ``offset`` es la cadena de caracteres capturada por los paréntesis en
+  el patrón URL. Por ejemplo, si la petición URL fuera
+  ``/time/plus/3/``, entonces el ``offset`` debería ser la cadena de
+  caracteres ``'3'``. Si la petición URL fuera ``/time/plus/21/``,
+  entonces el ``offset`` debería ser la cadena de caracteres ``'21'``.
+  Notar que la cadena de caracteres capturada siempre es una cadena de
+  caracteres, no un entero, incluso si se compone sólo de dígitos, como
+  en el caso ``'21'``.
 
-          Decidimos llamar a la variable ``offset``, pero puedes asignarle el
-          nombre que quieras, siempre que sea un identificador válido para
-          Python. El nombre de la variable no importa; todo lo que importa es lo
-          que contiene el segundo parámetro de la función (luego de
-          ``request``).  Es posible también usar una palabra clave, en lugar de
-          posición, como argumentos en la URLconf. Eso lo veremos en detalle en
-          el :doc:`Capítulo 8<chapter08>`.
+Decidimos llamar a la variable ``offset``, pero puedes asignarle el
+nombre que quieras, siempre que sea un identificador válido para
+Python. El nombre de la variable no importa; todo lo que importa es lo
+que contiene el segundo parámetro de la función (luego de
+``request``).  Es posible también usar untienes que hacer esto.
+No es una buena idea poner cualquier código Python en la carpeta 
+raíz del servia palabra clave, en lugar de
+posición, como argumentos en la URLconf. Eso lo veremos en detalle en
+el :doc:`Capítulo 8<chapter08>`.
 
-    * Lo primero que hacemos en la función es llamar a ``int()`` sobre
-      ``offset``. Esto convierte el valor de la cadena de caracteres a entero.
+* Lo primero que hacemos en la función es llamar a ``int()`` sobre
+  ``offset``. Esto convierte el valor de la cadena de caracteres a entero.
 
-      Tener en cuenta que Python lanzará una excepción ``ValueError`` si se
-      llama a la función ``int()`` con un valor que no puede convertirse a un
-      entero, como lo sería la cadena de caracteres ``'foo'``. Sin embargo, en
-      este ejemplo no debemos preocuparnos de atrapar la excepción, porque
-      tenemos la certeza que la variable ``offset`` será una cadena de
-      caracteres conformada sólo por dígitos. Sabemos esto, por el patrón URL
-      de la expresión regular en el URLconf -- ``(\d{1,2})``-- captura sólo
-      dígitos. Esto ilustra otra ventaja de tener un URLconf: nos provee un
-      primer nivel de validación de entrada.
+Tener en cuenta que Python lanzará una excepción ``ValueError`` si se
+llama a la función ``int()`` con un valor que no puede convertirse a un
+entero, como lo sería la cadena de caracteres ``'foo'``. Sin embargo, en
+este ejemplo no debemos preocuparnos de atrapar la excepción, porque
+tenemos la certeza que la variable ``offset`` será una cadena de
+caracteres conformada sólo por dígitos. Sabemos esto, por el patrón URL
+de la expresión regular en el URLconf -- ``(\d{1,2})``-- captura sólo
+dígitos. Esto ilustra otra ventaja de tener un URLconf: nos provee un
+primer nivel de validación de entrada.
 
-    * La siguiente línea de la función muestra la razón por la que se llamó a
-      la función ``int()`` con ``offset``. En esta línea, calculamos la hora
-      actual más las hora que tiene ``offset``, almacenando el resultado en la
-      variable ``dt``. La función ``datetime.timedelta`` requiere que el
-      parámetro ``hours`` sea un entero.
+* La siguiente línea de la función muestra la razón por la que se llamó a
+  la función ``int()`` con ``offset``. En esta línea, calculamos la hora
+  actual más las hora que tiene ``offset``, almacenando el resultado en la
+  variable ``dt``. La función ``datetime.timedelta`` requiere que el
+  parámetro ``hours`` sea un entero.
 
-    * A continuación, construimos la salida HTML de esta función de vista, tal
-      como lo hicimos en la vista ``current_datetime``. Una pequeña diferencia
-      en esta línea, es que usamos el formato de cadenas de Python con *dos*
-      valores, no sólo uno. Por lo tanto, hay dos símbolos ``%s`` en la cadena
-      de caracteres y la tupla de valores a insertar sería: ``(offset, dt)``.
+* A continuación, construimos la salida HTML de esta función de vista, tal
+  como lo hicimos en la vista ``current_datetime``. Una pequeña diferencia
+  en esta línea, es que usamos el formato de cadenas de Python con *dos*
+  valores, no sólo uno. Por lo tanto, hay dos símbolos ``%s`` en la cadena
+  de caracteres y la tupla de valores a insertar sería: ``(offset, dt)``.
 
-    * Finalmente, retornamos el ``HttpResponse`` del HTML -- de nuevo, tal como
-      hicimos en la vista ``current_datetime``.
+* Finalmente, retornamos el ``HttpResponse`` del HTML -- de nuevo, tal como
+  hicimos en la vista ``current_datetime``.
 
 Con esta función de vista y la URLconf escrita, ejecuta el servidor de
 desarrollo de Django (si no está corriendo), y visita
@@ -741,6 +743,7 @@ Hasta ahora hemos producido las vistas mediante código HTML dentro del código
 Python. Desafortunadamente, esto es casi siempre es una mala idea. Pero por
 suerte, con Django podemos hacer esto con un potente motor de plantillas que nos
 permite separar el diseño de las páginas del código fuente subyacente. Nos
-sumergiremos en el motor de plantillas de Django en el :doc:`próximo capitulo<chapter04>`
+sumergiremos en el motor de plantillas de Django en el 
+:doc:`próximo capitulo<chapter04>`
 
 

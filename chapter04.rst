@@ -42,7 +42,9 @@ cualquier formato basado en texto.
 
 Vamos a sumergirnos en una simple plantilla de ejemplo. Esta plantilla describe
 una página HTML que agradece a una persona por hacer un pedido de la empresa. Piensa
-en esto como un modelo de carta::
+en esto como un modelo de carta:
+
+.. code-block:: html 
 
     <html>
     <head><title>Ordering notice</title></head>
@@ -141,7 +143,7 @@ constructor toma un argumento, el código en crudo de la plantilla. Vamos a
 sumergirnos en el intérprete interactivo de Python para ver cómo funciona este
 código.
 
-.. exhortacion:: Ejemplos del Intérprete Interactivo
+.. admonition:: Ejemplos del Intérprete Interactivo
 
     Durante todo el libro, hemos expuesto sesiones de ejemplo del intérprete
     Python interactivo. Puedes reconocer estos ejemplos por el triple signo
@@ -149,7 +151,7 @@ código.
     copiando los ejemplos del libro, no copies estos signos mayor-que.
 
     Las sentencias multilíneas en el intérprete interactivo son rellenadas con
-    tres puntos (``...``), por ejemplo::
+    tres puntos (``...``), por ejemplo:
 
         >>> print """This is a
         ... string that spans
@@ -170,7 +172,7 @@ código.
 Desde dentro del directorio del proyecto creado por
 ``django-admin.py startproject`` (como se expuso en el :doc:`Capítulo 2<chapter02>`), escribe
 ``python manage.py shell`` para comenzar el intérprete interactivo. Aquí hay
-un ensayo básico::
+un ensayo básico:
 
     >>> from django.template import Template
     >>> t = Template("My name is {{ name }}.")
@@ -183,7 +185,7 @@ Si lo estás siguiendo interactivamente, verás algo como esto::
 Ese ``0xb7d5f24c`` será distinto cada vez, y realmente no importa; es la forma
 simple en que Python "identifica" un objeto de ``Template``.
 
-.. exhortacion:: Variables de configuración de Django
+.. admonition:: Variables de configuración de Django
 
     Cuando usas Django, necesitas indicarle qué valores usar para sus variables
     de configuración.  Interactivamente, suele usarse ``python manage.py
@@ -192,7 +194,7 @@ simple en que Python "identifica" un objeto de ``Template``.
 Cuando creas un objeto ``Template``, el sistema de plantillas compila el código
 en crudo a uno interno, de forma optimizada, listo para renderizar. Pero si tu
 código de plantilla incluye errores de sintaxis, la llamada a ``Template()``
-causará una excepción ``TemplateSyntaxError``::
+causará una excepción ``TemplateSyntaxError``:
 
     >>> from django.template import Template
     >>> t = Template('{% notatag %} ')
@@ -224,7 +226,7 @@ Un contexto es representado en Django por la clase ``Context``, ésta se
 encuentra en el módulo ``django.template``. Su constructor toma un argumento
 opcional: un diccionario que mapea nombres de variables con valores. Llama
 al método ``render()`` del objeto ``Template`` con el contexto para "llenar" la
-plantilla::
+plantilla:
 
     >>> from django.template import Context, Template
     >>> t = Template("My name is {{ name }}.")
@@ -232,7 +234,7 @@ plantilla::
     >>> t.render(c)
     'My name is Stephane.'
 
-.. exhortacion:: Diccionarios y Contextos
+.. admonition:: Diccionarios y Contextos
 
     Un diccionario de Python es un mapeo entre llaves conocidas y valores de
     variables. Un ``Context`` es similar a un diccionario, pero un ``Context``
@@ -244,7 +246,7 @@ llegaremos en un momento). Los nombres de variables son sensible a
 mayúsculas-minúsculas.
 
 Este es un ejemplo de compilación y renderización de una plantilla, usando la
-plantilla de muestra del comienzo de este capítulo::
+plantilla de muestra del comienzo de este capítulo:
 
     >>> from django.template import Template, Context
     >>> raw_template = """<p>Dear {{ person_name }},</p>
@@ -323,7 +325,9 @@ Múltiples contextos, mismas plantillas
 ----------------------------------------
 
 Una vez que tengas un objeto ``Template``, puedes renderizarlo con múltiples
-contextos, por ejemplo::
+contextos, por ejemplo:
+
+.. code-block:: python
 
     >>> from django.template import Template, Context
     >>> t = Template('Hello, {{ name }}')
@@ -336,7 +340,9 @@ contextos, por ejemplo::
 
 Cuando estés usando la misma plantilla fuente para renderizar múltiples
 contextos como este, es más eficiente crear el objeto ``Template`` *una sola
-vez* y luego llamar a ``render()`` sobre éste muchas veces::
+vez* y luego llamar a ``render()`` sobre éste muchas veces:
+
+.. code-block:: python
 
     # Bad
     for name in ('John', 'Julie', 'Pat'):
@@ -368,7 +374,7 @@ un diccionario, atributos, índices o métodos de un objeto.
 
 Esto es mejor ilustrarlos con algunos ejemplos. Por ejemplo, imagina que pasas un
 diccionario de Python a una plantilla. Para acceder al valor de ese diccionario
-por su clave, usa el punto::
+por su clave, usa el punto:
 
     >>> from django.template import Template, Context
     >>> person = {'name': 'Sally', 'age': '43'}
@@ -380,7 +386,7 @@ por su clave, usa el punto::
 De forma similar, los puntos te permiten acceder a los atributos de los objetos.
 Por ejemplo, un objeto de Python ``datetime.date`` tiene los atributos ``year``,
 ``month`` y ``day``, y puedes usar el punto para acceder a ellos en las
-plantillas de Django::
+plantillas de Django:
 
     >>> from django.template import Template, Context
     >>> import datetime
@@ -410,7 +416,7 @@ Este ejemplo usa una clase personalizada::
 Los puntos también son utilizados para llamar a métodos sobre los objetos. Por
 ejemplo, cada cadena de caracteres de Python tiene el métodos ``upper()`` y
 ``isdigit()``, y puedes llamar a estos en las plantillas de Django usando la
-misma sintaxis de punto::
+misma sintaxis de punto:
 
     >>> from django.template import Template, Context
     >>> t = Template('{{ var }} -- {{ var.upper }} -- {{ var.isdigit }}')
@@ -425,7 +431,7 @@ los métodos que no requieran argumentos. (Explicaremos esta filosofía luego
 en este capítulo).
 
 Finalmente, los puntos también son usados para acceder a los índices de las
-listas, por ejemplo::
+listas, por ejemplo:
 
     >>> from django.template import Template, Context
     >>> t = Template('Item 2 is {{ items.2 }}.')
@@ -436,7 +442,7 @@ listas, por ejemplo::
 Los índices negativos de las listas no están permitidos. Por ejemplo,
 la variable ``{{ items.-1 }}`` causará una ``TemplateSyntaxError``.
 
-.. exhortacion:: Listas de Python
+.. admonition:: Listas de Python
 
     Las listas de Python comienzan en cero, entonces el primer elemento
     es el 0, el segundo es el 1 y así sucesivamente.
@@ -456,7 +462,7 @@ cortocircuito.
 Los puntos pueden ser anidados a múltiples niveles de profundidad. El siguiente
 ejemplo usa ``{{ person.name.upper }}``, el que se traduce en una búsqueda de
 diccionario (``person['name']``) y luego en una llamada a un método
-(``upper()``)::
+(``upper()``):
 
     >>> from django.template import Template, Context
     >>> person = {'name': 'Sally', 'age': '43'}
@@ -475,7 +481,9 @@ búsqueda. Aquí hay algunas cosas a tener en cuenta:
       excepción será propagada, a menos que la excepción tenga un atributo
       ``silent_variable_failure`` cuyo valor sea ``True``. Si la excepción
       *tiene* el atributo ``silent_variable_failure``, la variable será
-      renderizada como un string vacío, por ejemplo::
+      renderizada como un string vacío, por ejemplo:
+      
+.. code-block:: python      
 
             >>> t = Template("My name is {{ person.first_name }}.")
             >>> class PersonClass3:
@@ -496,29 +504,31 @@ búsqueda. Aquí hay algunas cosas a tener en cuenta:
             >>> t.render(Context({"person": p}))
             "My name is ."
 
-    * La llamada a un método funcionará sólo si el método no requiere
-      argumentos. En otro caso, el sistema pasará a la siguiente búsqueda de
-      tipo (índice de lista).
+* La llamada a un método funcionará sólo si el método no requiere
+  argumentos. En otro caso, el sistema pasará a la siguiente búsqueda de
+  tipo (índice de lista).
 
-    * Evidentemente, algunos métodos tienen efectos secundarios, por lo que
-      sería absurdo, en el mejor de los casos, y posiblemente un agujero de
-      seguridad, permitir que el sistema de plantillas tenga acceso a ellos.
+* Evidentemente, algunos métodos tienen efectos secundarios, por lo que
+  sería absurdo, en el mejor de los casos, y posiblemente un agujero de
+  seguridad, permitir que el sistema de plantillas tenga acceso a ellos.
 
-      Digamos, por ejemplo, tienes objeto ``BankAccount`` que tiene un método
-      ``delete()``. Una plantilla no debería permitir incluir algo como
-      ``{{ account.delete }}``.
+Digamos, por ejemplo, tienes objeto ``BankAccount`` que tiene un método
+``delete()``. Una plantilla no debería permitir incluir algo como
+``{{ account.delete }}``.
 
-      Para prevenir esto, asigna el atributo ``alters_data`` de la función en el
-      método::
+Para prevenir esto, asigna el atributo ``alters_data`` de la función en el
+método:
+
+.. code-block:: python
 
           def delete(self):
               # Delete the account
           delete.alters_data = True
 
-      El sistema de plantillas no debería ejecutar cualquier método marcado de
-      este modo. En otras palabras, si una plantilla incluye
-      ``{{ account.delete }}``, esta etiqueta no ejecutará el método
-      ``delete()``. Este fallará silenciosamente.
+El sistema de plantillas no debería ejecutar cualquier método marcado de
+este modo. En otras palabras, si una plantilla incluye
+``{{ account.delete }}``, esta etiqueta no ejecutará el método
+``delete()``. Este fallará silenciosamente.
 
 ¿Cómo se manejan las variables inválidas?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -553,7 +563,7 @@ Jugando con objetos Context
 La mayoría de la veces, instancias un objeto ``Context`` pasando un diccionario
 completamente poblado a  ``Context``. Pero puedes agregar y quitar elementos
 de un objeto ``Context`` una vez que éste está instanciado, también, usando
-la sintaxis estándar de los diccionarios de Python::
+la sintaxis estándar de los diccionarios de Python:
 
     >>> from django.template import Context
     >>> c = Context({"foo": "bar"})
@@ -581,13 +591,17 @@ if/else
 
 La etiqueta ``{% if %}`` evalúa una variable, y si esta es "true" (esto es,
 existe, no está vacía y no es un valor Boolean falso), el sistema mostrará
-todo lo que hay entre ``{% if %}`` y ``{% endif %}``, por ejemplo::
+todo lo que hay entre ``{% if %}`` y ``{% endif %}``, por ejemplo:
+
+.. code-block:: html
 
     {% if today_is_weekend %}
         <p>Welcome to the weekend!</p>
     {% endif %}
 
-La etiqueta ``{% else %}`` es opcional::
+La etiqueta ``{% else %}`` es opcional:
+
+.. code-block:: html
 
     {% if today_is_weekend %}
         <p>Welcome to the weekend!</p>
@@ -595,14 +609,16 @@ La etiqueta ``{% else %}`` es opcional::
         <p>Get back to work.</p>
     {% endif %}
 
-.. exhortacion:: Las "verdades" de Python
+.. admonition:: Las "verdades" de Python
 
     En Python, la lista vacía (``[]``), la tupla vacía (``()``), el diccionario
     vacío (``{}``), la cadena vacía (``''``), el cero (``0``), y el objeto especial
     ``None`` son ``False`` en un contexto booleano.  Todo lo demás es ``True``.
 
 La etiqueta ``{% if %}`` acepta ``and``, ``or``, o ``not`` para testear
-múltiples variables, o para negarlas. Por ejemplo::
+múltiples variables, o para negarlas. Por ejemplo:
+
+.. code-block:: html
 
     {% if athlete_list and coach_list %}
         Both athletes and coaches are available.
@@ -628,7 +644,9 @@ múltiples variables, o para negarlas. Por ejemplo::
 
 Las etiquetas ``{% if %}`` no permiten las cláusulas ``and`` y ``or`` en la
 misma etiqueta, porque el orden de evaluación lógico puede ser ambiguo. Por
-ejemplo, esto es inválido::
+ejemplo, esto es inválido:
+
+.. code-block:: html
 
     {% if athlete_list and coach_list or cheerleader_list %}
 
@@ -636,7 +654,10 @@ No se admite el uso de paréntesis para controlar el orden de las operaciones.
 Si necesitas paréntesis, considera efectuar la lógica en el código de la
 vista para simplificar las plantillas. Aún así, si necesitas combinar
 ``and`` y ``or`` para hacer lógica avanzada, usa etiquetas
-``{% if %}`` anidadas, por ejemplo::
+``{% if %}`` anidadas, por ejemplo:
+
+.. code-block:: html
+
 
     {% if athlete_list %}
         {% if coach_list or cheerleader_list %}
@@ -645,12 +666,16 @@ vista para simplificar las plantillas. Aún así, si necesitas combinar
     {% endif %}
 
 Usar varias veces el mismo operador lógico están bien, pero no puedes combinar
-diferentes operadores. Por ejemplo, esto es válido::
+diferentes operadores. Por ejemplo, esto es válido:
+
+.. code-block:: html
 
     {% if athlete_list or coach_list or parent_list or teacher_list %}
 
 Ahí no hay una etiqueta ``{% elif %}``. Usa etiquetas ``{% if %}`` anidadas
-para conseguir alguna cosa::
+para conseguir alguna cosa:
+
+.. code-block:: html
 
     {% if athlete_list %}
         <p>Here are the athletes: {{ athlete_list }}.</p>
@@ -675,7 +700,9 @@ vez que atravesamos el bucle, el sistema de plantillas renderizará todo entre
 ``{% for %}`` y ``{% endfor %}``.
 
 Por ejemplo, puedes usar lo siguiente para mostrar una lista de atletas tomadas
-de la variable ``athlete_list``::
+de la variable ``athlete_list``:
+
+.. code-block:: html
 
     <ul>
     {% for athlete in athlete_list %}
@@ -683,7 +710,9 @@ de la variable ``athlete_list``::
     {% endfor %}
     </ul>
 
-Agrega ``reversed`` a la etiqueta para iterar sobre la lista en orden inverso::
+Agrega ``reversed`` a la etiqueta para iterar sobre la lista en orden inverso:
+
+.. code-block:: html
 
     {% for athlete in athlete_list reversed %}
     ...
@@ -711,53 +740,55 @@ La etiqueta ``{% for %}`` asigna la variable ``forloop`` mágica a la plantilla
 con el bucle. Esta variable tiene algunos atributos que toman información acerca
 del progreso del bucle:
 
-    * ``forloop.counter`` es siempre asignada a un número entero representando
-      el número de veces que se ha entrado en el bucle. Esta es indexada a
-      partir de 1, por lo que la primera vez que se ingresa al bucle,
-      ``forloop.counter`` será ``1``. Aquí un ejemplo::
+* ``forloop.counter`` es siempre asignada a un número entero representando
+  el número de veces que se ha entrado en el bucle. Esta es indexada a
+  partir de 1, por lo que la primera vez que se ingresa al bucle,
+  ``forloop.counter`` será ``1``. Aquí un ejemplo::
 
-          {% for item in todo_list %}
-              <p>{{ forloop.counter }}: {{ item }}</p>
+      {% for item in todo_list %}
+          <p>{{ forloop.counter }}: {{ item }}</p>
+      {% endfor %}
+
+* ``forloop.counter0`` es como ``forloop.counter``, excepto que esta es
+  indexada a partir de cero. Contendrá el valor ``0`` la primera vez que se
+  atraviese el bucle.
+
+* ``forloop.revcounter`` es siempre asignada a un entero que representa
+  el número de iteraciones que faltan para terminar el bucle. La primera vez
+  que se ejecuta el bucle ``forloop.revcounter`` será igual al número de
+  elementos que hay en la secuencia. La última vez que se atraviese el
+  bucle, a ``forloop.revcounter`` se la asignará el valor ``1``.
+
+* ``forloop.revcounter0`` es como ``forloop.revcounter``, a excepción de que
+  está indexada a partir de cero. La primera vez que se atraviesa el bucle,
+  ``forloop.revcounter0`` es asignada al número de elementos que hay en la
+  secuencia menos 1. La última vez que se atraviese el bucle, el valor de
+  esta será ``0``.
+
+* ``forloop.first`` es un valor booleano asignado a ``True`` si es la
+  primera vez que se pasa por el bucle. Esto es conveniente para ocasiones
+  especiales:
+
+      {% for object in objects %}
+          {% if forloop.first %}<li class="first">{% else %}<li>{% endif %}
+          {{ object }}
+          </li>
           {% endfor %}
 
-    * ``forloop.counter0`` es como ``forloop.counter``, excepto que esta es
-      indexada a partir de cero. Contendrá el valor ``0`` la primera vez que se
-      atraviese el bucle.
+* ``forloop.last`` es un valor booleano asignado a ``True`` si es la última
+  pasada por el bucle. Un uso común es para esto es poner un carácter pipe
+  entre una lista de enlaces:
+  
+.. code-block:: html
 
-    * ``forloop.revcounter`` es siempre asignada a un entero que representa
-      el número de iteraciones que faltan para terminar el bucle. La primera vez
-      que se ejecuta el bucle ``forloop.revcounter`` será igual al número de
-      elementos que hay en la secuencia. La última vez que se atraviese el
-      bucle, a ``forloop.revcounter`` se la asignará el valor ``1``.
+{% for link in links %}{{ link }}{% if not forloop.last %} | {% endif %}{% endfor %}
 
-    * ``forloop.revcounter0`` es como ``forloop.revcounter``, a excepción de que
-      está indexada a partir de cero. La primera vez que se atraviesa el bucle,
-      ``forloop.revcounter0`` es asignada al número de elementos que hay en la
-      secuencia menos 1. La última vez que se atraviese el bucle, el valor de
-      esta será ``0``.
+El código de la plantilla de arriba puede mostrar algo parecido a esto::
 
-    * ``forloop.first`` es un valor booleano asignado a ``True`` si es la
-      primera vez que se pasa por el bucle. Esto es conveniente para ocasiones
-      especiales::
+       Link1 | Link2 | Link3 | Link4
 
-          {% for object in objects %}
-              {% if forloop.first %}<li class="first">{% else %}<li>{% endif %}
-              {{ object }}
-              </li>
-          {% endfor %}
-
-    * ``forloop.last`` es un valor booleano asignado a ``True`` si es la última
-      pasada por el bucle. Un uso común es para esto es poner un carácter pipe
-      entre una lista de enlaces::
-
-          {% for link in links %}{{ link }}{% if not forloop.last %} | {% endif %}{% endfor %}
-
-      El código de la plantilla de arriba puede mostrar algo parecido a esto::
-
-          Link1 | Link2 | Link3 | Link4
-
-    * ``forloop.parentloop`` esta es una referencia al objeto *padre* de
-      ``forloop``, en el caso de bucles anidados. Aquí un ejemplo::
+* ``forloop.parentloop`` esta es una referencia al objeto *padre* de
+  ``forloop``, en el caso de bucles anidados. Aquí un ejemplo::
 
           {% for country in countries %}
               <table>
@@ -774,15 +805,15 @@ del progreso del bucle:
 La variable mágica ``forloop`` está sólo disponible dentro de bucles. Después de
 que el analizados sintáctico encuentra ``{% endfor %}``, ``forloop`` desaparece.
 
-.. exhortacion:: Contextos y la variable forloop
+.. admonition:: Contextos y la variable forloop
 
-    Dentro de un bloque ``{% for %}``, las variables existentes se
-    mueven fuera de tal manera de evitar sobreescribir la variable mágica
-    ``forloop``. Django expone ese contexto movido en ``forloop.parentloop``.
-    Generalmente no necesitas preocuparte por esto, si provees una variable a
-    la plantilla llamada ``forloop`` (a pesar de que no lo recomendamos), se
-    llamará ``forloop.parentloop`` mientras esté dentro del bloque
-    ``{% for %}``.
+Dentro de un bloque ``{% for %}``, las variables existentes se
+mueven fuera de tal manera de evitar sobreescribir la variable mágica
+``forloop``. Django expone ese contexto movido en ``forloop.parentloop``.
+Generalmente no necesitas preocuparte por esto, si provees una variable a
+la plantilla llamada ``forloop`` (a pesar de que no lo recomendamos), se
+llamará ``forloop.parentloop`` mientras esté dentro del bloque
+   ``{% for %}``.
 
 ifequal/ifnotequal
 ~~~~~~~~~~~~~~~~~~
@@ -797,14 +828,18 @@ etiqueta ``{% ifequal %}`` para este propósito.
 La etiqueta ``{% ifequal %}``  compara dos valores y muestra todo lo que se
 encuentra entre ``{% ifequal %}``  y ``{% endifequal %}`` si el valor es igual.
 
-Este ejemplo compara las variables ``user`` y ``currentuser`` de la plantilla::
+Este ejemplo compara las variables ``user`` y ``currentuser`` de la plantilla:
+
+.. code-block:: html
 
     {% ifequal user currentuser %}
         <h1>Welcome!</h1>
     {% endifequal %}
 
 Los argumentos pueden ser strings hard-codeados, con simples o dobles comillas,
-lo siguiente es válido::
+lo siguiente es válido:
+
+.. code-block:: html
 
     {% ifequal section 'sitenews' %}
         <h1>Site News</h1>
@@ -815,7 +850,9 @@ lo siguiente es válido::
     {% endifequal %}
 
 Como ``{% if %}``, la etiqueta ``{% ifequal %}`` admite un opcional
-``{% else %}``::
+``{% else %}``:
+
+.. code-block:: html
 
     {% ifequal section 'sitenews' %}
         <h1>Site News</h1>
@@ -824,7 +861,9 @@ Como ``{% if %}``, la etiqueta ``{% ifequal %}`` admite un opcional
     {% endifequal %}
 
 Sólo las variables de la plantilla, string, enteros y números decimales son
-permitidos como argumentos para ``{% ifequal %}``. Estos son ejemplos válidos::
+permitidos como argumentos para ``{% ifequal %}``. Estos son ejemplos válidos:
+
+.. code-block:: html
 
     {% ifequal variable 1 %}
     {% ifequal variable 1.23 %}
@@ -833,13 +872,16 @@ permitidos como argumentos para ``{% ifequal %}``. Estos son ejemplos válidos::
 
 Cualquier otro tipo de variables, tales como diccionarios de Python, listas, o
 booleanos, no pueden ser comparados en ``{% ifequal %}``. Estos ejemplos son
-inválidos::
+inválidos:
 
     {% ifequal variable True %}
     {% ifequal variable [1, 2, 3] %}
     {% ifequal variable {'key': 'value'} %}
 
 Si necesitas comprobar cuando algo es verdadero o falso, usa la etiqueta
+
+.. code-block:: html
+
 ``{% if %}`` en vez de ``{% ifequal %}``.
 
 Comentarios
@@ -847,7 +889,7 @@ Comentarios
 
 Al igual que en HTML o en un lenguaje de programación como Python, el lenguaje
 de plantillas de Django permite comentarios. Para designar un comentario, usa
-``{# #}``::
+``{# #}``:
 
     {# This is a comment #}
 
@@ -867,7 +909,7 @@ Filtros
 
 Como explicamos anteriormente en este capítulo, los filtros de plantillas son
 formas simples de alterar el valor de una variable antes de mostrarla. Los
-filtros se parecen a esto::
+filtros se parecen a esto:
 
     {{ name|lower }}
 
@@ -877,11 +919,11 @@ aplicar el filtro.
 
 Los filtros pueden estar en *cadena* -- eso es, la salida del uno de los filtros
 puede ser aplicada al próximo. Aquí un modismo común para escapar contenido del
-texto, y entonces convertir los saltos de líneas en etiquetas ``<p>``::
+texto, y entonces convertir los saltos de líneas en etiquetas ``<p>``:
 
     {{ my_text|escape|linebreaks }}
 
-Algunos filtros toman argumentos. Un filtro con argumento se ve de este modo::
+Algunos filtros toman argumentos. Un filtro con argumento se ve de este modo:
 
     {{ bio|truncatewords:"30" }}
 
@@ -896,7 +938,7 @@ el resto.
       producido está incluido en un string de JavaScript.
 
     * ``date``: Formatea un objeto ``date`` o ``datetime`` de acuerdo al formato
-      tomado como parámetro, por ejemplo::
+      tomado como parámetro, por ejemplo:
 
           {{ pub_date|date:"F j, Y" }}
 
@@ -1012,7 +1054,9 @@ Uso de plantillas en las vistas
 Has aprendido el uso básico del sistema de plantillas; ahora vamos a usar este
 conocimiento para crear una vista. Recordemos la vista ``current_datetime`` en
 ``mysite.views``, la que comenzamos en el capítulo anterior. Se veía como
-esto::
+esto:
+
+.. code-block:: python
 
     from django.http import HttpResponse
     import datetime
@@ -1023,7 +1067,9 @@ esto::
         return HttpResponse(html)
 
 Vamos a cambiar esta vista usando el sistema de plantillas de Django. Primero,
-podemos pensar en algo como esto::
+podemos pensar en algo como esto:
+
+.. code-block:: python
 
     from django.template import Template, Context
     from django.http import HttpResponse
@@ -1043,7 +1089,9 @@ plantilla en un *archivo separado*, que la vista cargará.
 Puedes primer considerar guardar la plantilla en algún lugar del disco y usar
 las funcionalidades de Python para abrir y leer el contenido de la plantilla.
 Esto puede verse así, suponiendo que la plantilla esté guardada en
-``/home/djangouser/templates/mytemplate.html``::
+``/home/djangouser/templates/mytemplate.html``:
+
+.. code-block:: python
 
     from django.template import Template, Context
     from django.http import HttpResponse
@@ -1093,14 +1141,14 @@ para tu instancia de Django (aka [#]_ tu proyecto de Django). Es un simple
 módulo de Python con variables, una por cada configuración.
 
 Cuando ejecutaste ``django-admin.py startproject mysite`` en el :doc:`Capítulo 2<chapter02>`,
-el script creó un archivo de configuración por omisión por ti, bien llamado
+el script creó un archivo de configuración por omisión por ti, llamado
 ``settings.py``. Échale un vistazo al contenido del archivo. Este contiene
-variables que se parecen a estas (no necesariamente en este orden)::
+variables que se parecen a estas (no necesariamente en este orden):
 
-    DEBUG = True
-    TIME_ZONE = 'America/Chicago'
-    USE_I18N = True
-    ROOT_URLCONF = 'mysite.urls'
+    * DEBUG = True
+    * TIME_ZONE = 'America/Chicago'
+    * USE_I18N = True
+    * ROOT_URLCONF = 'mysite.urls'
 
 Éstas se explican por sí solas; las configuraciones y sus respectivos valores
 son simples variables de Python. Como el archivo de configuración es sólo un
@@ -1112,11 +1160,9 @@ Cubriremos el archivo de configuración en profundidad en el :doc:`Apéndice E<a
 ahora, veamos la variable de configuración ``TEMPLATE_DIRS``. Esta variable le
 indica al mecanismo de carga de plantillas dónde buscar las plantillas. Por
 omisión, ésta es una tupla vacía. Elige un directorio en el que desees guardar
-tus plantillas y agrega este a ``TEMPLATE_DIRS``, así::
+tus plantillas y agrega este a ``TEMPLATE_DIRS``, así:
 
-    TEMPLATE_DIRS = (
-        '/home/django/mysite/templates',
-    )
+    * TEMPLATE_DIRS = ('/home/django/mysite/templates',)
 
 Hay algunas cosas para notar:
 
@@ -1135,11 +1181,9 @@ Hay algunas cosas para notar:
 
       Si quieres evitar este error, puedes hacer ``TEMPLATE_DIRS`` una lista,
       en vez de una tupla, porque un solo elemento en una lista no requiere
-      estar seguido de una coma::
+      estar seguido de una coma:
 
-          TEMPLATE_DIRS = [
-              '/home/django/mysite/templates'
-          ]
+      *TEMPLATE_DIRS = ['/home/django/mysite/templates']
 
       Una tupla es un poco más correcta semánticamente que una lista (las
       tuplas no pueden cambiar luego de ser creadas, y nada podría cambiar las
@@ -1149,15 +1193,15 @@ Hay algunas cosas para notar:
     * Si estás en Windows, incluye tu letra de unidad y usa el estilo de Unix
       para las barras en vez de barras invertidas, como sigue::
 
-          TEMPLATE_DIRS = (
-              'C:/www/django/templates',
-          )
+          TEMPLATE_DIRS = ('C:/www/django/templates',)
 
     * Es más sencillo usar rutas absolutas (esto es, las rutas de directorios
       comienzan desde la raíz del sistema de archivos). Si quieres sen un poco
       más flexible e independiente, también, puedes tomar el hecho de que el
       archivo de configuración de Django es sólo código de Python y construir la
-      variable ``TEMPLATE_DIRS`` dinámicamente, por ejemplo::
+      variable ``TEMPLATE_DIRS`` dinámicamente, por ejemplo:
+      
+      .. code-block:: python
 
           import os.path
 
@@ -1172,7 +1216,9 @@ Hay algunas cosas para notar:
 Con la variable ``TEMPLATE_DIRS`` configurada, el próximo paso es cambiar el
 código de vista que usa la funcionalidad de carga de plantillas de Django,
 para no incluir la ruta a la plantilla. Volvamos a nuestra vista
-``current_datetime``, vamos a cambiar esta como sigue::
+``current_datetime``, vamos a cambiar esta como sigue:
+
+.. code-block:: python
 
     from django.template.loader import get_template
     from django.template import Context
@@ -1201,8 +1247,8 @@ variable de configuración ``DEBUG`` está asignada a ``True`` y todavía no has
 creado la plantilla ``current_datetime.html``, deberías ver una página de error
 de Django resaltando el error ``TemplateDoesNotExist``.
 
-    .. image:: graficos/chapter04/missing_template.png
-       :alt: Screenshot of a "TemplateDoesNotExist" error.
+.. image:: graficos/chapter04/missing_template.png
+   :alt: Screenshot of a "TemplateDoesNotExist" error.
 
 Figura 4-1: La página de error que se muestra cuando una plantilla no se encuentra
 
@@ -1223,7 +1269,9 @@ examinado hasta que se encuentre la plantilla o hasta que no haya más
 directorios.
 
 Continuando, crea el archivo ``current_datetime.html`` en tu directorio de
-plantillas usando el siguiente código::
+plantillas usando el siguiente código:
+
+.. code-block:: html
 
     <html><body>It is now {{ current_date }}.</body></html>
 
@@ -1242,7 +1290,9 @@ módulo ``django.shortcuts``. La mayoría de las veces, usarás
 ``Context`` y ``HttpResponse`` manualmente.
 
 Aquí está el ejemplo actual ``current_datetime`` reescrito utilizando
-``render_to_response()``::
+``render_to_response()``:
+
+.. code-block:: python
 
     from django.shortcuts import render_to_response
     import datetime
@@ -1274,7 +1324,9 @@ diccionario vacío.
 El truco locals()
 ------------------
 
-Considera nuestra última versión de ``current_datetime``::
+Considera nuestra última versión de ``current_datetime``:
+
+.. code-block:: python
 
     def current_datetime(request):
         now = datetime.datetime.now()
@@ -1291,7 +1343,9 @@ Entonces si eres uno de esos programadores perezosos y quieres ahorrar código
 particularmente conciso, puedes tomar la ventaja de la función built-in de
 Python llamada ``locals()``. Esta retorna un diccionario mapeando todos los
 nombres de variables locales con sus valores. De esta manera, la vista anterior
-podría reescribirse como sigue::
+podría reescribirse como sigue:
+
+.. code-block:: python
 
     def current_datetime(request):
         current_date = datetime.datetime.now()
@@ -1327,7 +1381,9 @@ distribución de las plantillas como una convención por omisión.
 
 Guardar las plantillas en subdirectorios de tu directorio de plantilla es
 fácil. En tus llamadas a ``get_template()``, sólo incluye el nombre del
-subdirectorio y una barra antes del nombre de la plantilla, así::
+subdirectorio y una barra antes del nombre de la plantilla, así:
+
+.. code-block:: python
 
     t = get_template('dateapp/current_datetime.html')
 
@@ -1338,7 +1394,7 @@ Debido a que ``render_to_response()`` es un pequeño envoltorio de
 No hay límites para la profundidad del árbol de subdirectorios. Siéntete libre
 de usar tantos como quieras.
 
-.. nota::
+.. admonition::
 
     Los usuario de Windows, asegúrense de usar barras comunes en vez de barras
     invertidas. ``get_template()`` asume el estilo de designación de archivos
@@ -1358,17 +1414,23 @@ duplicado.
 
 Estos dos ejemplos incluyen el contenido de la plantilla ``nav.html``. Los
 ejemplos son equivalentes e ilustran que cualquier modo de comillas está
-permitido::
+permitido:
+
+.. code-block:: html
 
     {% include 'nav.html' %}
     {% include "nav.html" %}
 
-Este ejemplo incluye el contenido de la plantilla ``includes/nav.html``::
+Este ejemplo incluye el contenido de la plantilla ``includes/nav.html``:
+
+.. code-block:: html
 
     {% include 'includes/nav.html' %}
 
 Este ejemplo incluye el contenido de la plantilla cuyo nombre se encuentra en
-la variable ``template_name``::
+la variable ``template_name``:
+
+.. code-block:: html
 
     {% include template_name %}
 
@@ -1408,8 +1470,10 @@ En esencia, la herencia de plantillas te deja construir una plantilla base
 "bloques" que los hijos puedan sobreescribir.
 
 Veamos un ejemplo de esto creando una plantilla completa para nuestra vista
-``current_datetime``, editando el archivo ``current_datetime.html``::
+``current_datetime``, editando el archivo ``current_datetime.html``:
 
+.. code-block:: html
+ 
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
     <html lang="en">
     <head>
@@ -1427,7 +1491,9 @@ Veamos un ejemplo de esto creando una plantilla completa para nuestra vista
 Esto se ve bien, pero ¿Qué sucede cuando queremos crear una plantilla para otra
 vista --digamos, ¿La vista ``hours_ahead`` del :doc:`Capítulo 3<chapter03>`? Si queremos
 hacer nuevamente una agradable, válida, y completa plantilla HTML, crearíamos
-algo como::
+algo como:
+
+.. code-block:: html 
 
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
     <html lang="en">
@@ -1452,14 +1518,18 @@ La solución a este problema usando includes en el servidor es sacar
 factor común de ambas plantillas y guardarlas en recortes de
 plantillas separados, que luego son incluidos en cada plantilla. Quizás
 quieras guardar la parte superior de la plantilla en un archivo
-llamado ``header.html``::
+llamado ``header.html``:
+
+.. code-block:: html
 
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
     <html lang="en">
     <head>
 
 Y quizás quieras guardar la parte inferior en un archivo llamado
-``footer.html``::
+``footer.html``:
+
+.. code-block:: html
 
         <hr>
         <p>Thanks for visiting my site.</p>
@@ -1480,7 +1550,10 @@ los pedazos que son *comunes*, defines los pedazos que son *diferentes*.
 
 El primer paso es definir una *plantilla base*-- un "esquelete" de tu página
 que las *plantillas hijas* llenaran luego. Aquí hay una platilla para nuestro
-ejemplo actual::
+ejemplo actual:
+
+.. code-block:: html
+
 
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
     <html lang="en">
@@ -1509,7 +1582,9 @@ plantillas que una plantilla hijo quizás sobreescriba esa porción de la
 plantilla.
 
 Ahora que tenemos una plantilla base, podemos modificar nuestra plantilla
-existente ``current_datetime.html`` para usar esto::
+existente ``current_datetime.html`` para usar esto:
+
+.. code-block:: python
 
     {% extends "base.html" %}
 
@@ -1522,7 +1597,9 @@ existente ``current_datetime.html`` para usar esto::
 Como estamos en este tema, vamos a crear una plantilla para la vista
 ``hours_ahead`` del :doc:`Capítulo 3<chapter03>`. (Si lo estás siguiendo junto con el código,
 te dejamos cambiar ``hours_ahead`` para usar el sistema de plantilla). Así sería
-el resultado::
+el resultado:
+
+.. code-block:: html
 
     {% extends "base.html" %}
 

@@ -144,31 +144,31 @@ Todavía no hay una plantilla para esta vista. Esto lo solucionará:
 A esta altura, lo que esto hace debería ser obvio. Sin embargo, hay
 unas pocas sutilezas que vale la pena resaltar:
 
-    * *action* es ``.`` en el formulario, esto significa "la URL
-      actual". Esta es una buena práctica estándar: no utilices vistas
-      distintas para la página que contiene el formulario y para la
-      página con los resultados; usa una página única para las dos
-      cosas.
+*  *action* s ``.`` en el formulario, esto significa "la URL
+   actual". Esta es una buena práctica estándar: no utilices vistas
+   distintas para la página que contiene el formulario y para la
+   página con los resultados; usa una página única para las dos
+   cosas.
 
-    * Volvemos a insertar el texto de la consulta en el
-      ``<input>``. Esto permite a los usuarios refinar fácilmente sus
-      búsquedas sin tener que volver a teclear todo nuevamente.
+* Volvemos a insertar el texto de la consulta en el
+  ``<input>``. Esto permite a los usuarios refinar fácilmente sus
+  búsquedas sin tener que volver a teclear todo nuevamente.
 
-    * En todo lugar que aparece ``query`` y ``book``, lo pasamos por
-      el filtro ``escape`` para asegurarnos de que cualquier búsqueda
-      potencialmente maliciosa sea descartada antes de que se inserte
-      en la página
+* En todo lugar que aparece ``query`` y ``book``, lo pasamos por
+  el filtro ``escape`` para asegurarnos de que cualquier búsqueda
+  potencialmente maliciosa sea descartada antes de que se inserte
+  en la página
 
-      ¡Es *vital* hacer esto con todo el contenido suministrado por el
-      usuario! De otra forma el sitio se abre a ataques de cross-site
-      scripting (XSS). El :doc:`Capítulo 19<chapter19>` discute XSS y la
-      seguridad con  más detalle.
+  ¡Es *vital* hacer esto con todo el contenido suministrado por el
+  usuario! De otra forma el sitio se abre a ataques de cross-site
+  scripting (XSS). El :doc:`Capítulo 19<chapter19>` discute XSS y la
+  seguridad con  más detalle.
 
-    * En cambio, no necesitamos preocuparnos por el contenido
-      malicioso en las búsquedas de la base de datos -- podemos pasar
-      directamente la consulta a la base de datos. Esto es posible
-      gracias a que la capa de base de datos de Django se encarga de
-      manejar este aspecto de la seguridad por ti.
+* En cambio, no necesitamos preocuparnos por el contenido
+  malicioso en las búsquedas de la base de datos -- podemos pasar
+  directamente la consulta a la base de datos. Esto es posible
+  gracias a que la capa de base de datos de Django se encarga de
+  manejar este aspecto de la seguridad por ti.
 
 Ahora ya tenemos la búsqueda funcionando. Se podría mejorar más el
 sitio colocando el formulario de búsqueda en cada página (esto es, en
@@ -312,7 +312,9 @@ acción. En ``views.py``:
         **form = ContactForm()**
         **return render_to_response('contact.html', {'form': form})**
 
-y en ``contact.html``::
+y en ``contact.html``:
+
+.. code-block html
 
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
     <html lang="en">
@@ -335,7 +337,10 @@ nuestra instancia de ContactForm, que fue pasada al
 ``render_to_response``. ``as_table`` es un método de ese objeto que
 reproduce el formulario como una secuencia de renglones de una tabla
 (también pueden usarse ``as_ul`` y ``as_p``). El HTML generado se ve
-así::
+así:
+
+.. code-block:: html
+
 
     <tr>
         <th><label for="id_topic">Topic:</label></th>
@@ -576,7 +581,9 @@ La forma más rápida de personalizar la presentación de un formulario
 es mediante CSS. En particular, la lista de errores puede dotarse de
 mejoras visuales, y el elemento ``<ul>`` tiene asignada la clase
 ``errorlist`` para ese propósito. El CSS a continuación hace que
-nuestros errores salten a la vista::
+nuestros errores salten a la vista:
+
+.. code-block html
 
     <style type="text/css">
         ul.errorlist {
@@ -606,7 +613,9 @@ Cada *widget* de un campo (``<input type="text">``, ``<select>``,
 accediendo a ``{{ form.fieldname }}``. Cualquier error asociado con un
 campo está disponible como ``{{ form.fieldname.errors }}``.  Podemos
 usar estas variables para construir nuestra propia plantilla para el
-formulario::
+formulario:
+
+.. code-block html+django
 
     <form action="." method="POST">
         <div class="fieldWrapper">
@@ -632,7 +641,9 @@ class="errorlist">`` si se presentan errores y como una cadena de
 caracteres en blanco si el campo es válido ( o si el formulario no
 está vinculado). También podemos tratar a la variable
 ``form.message.errors`` como a un booleano o incluso iterar sobre la
-misma como en una lista, por ejemplo::
+misma como en una lista, por ejemplo:
+
+.. code-block html+django
 
     <div class="fieldWrapper{% if form.message.errors %} errors{% endif %}">
         {% if form.message.errors %}
@@ -661,8 +672,8 @@ que Django intenta adherirse, es: no te repitas (del inglés *Don't
 Repeat Yourself*, abreviado DRY). Andy Hunt y Dave Thomas la definen
 como sigue, en *The Pragmatic Programmer*:
 
-    Cada pieza de conocimiento debe tener una representación única, no
-    ambigua, y de autoridad, dentro de un sistema.
+Cada pieza de conocimiento debe tener una representación única, no
+ambigua, y de autoridad, dentro de un sistema.
 
 Nuestro modelo de la clase ``Publisher`` dice que un publicista tiene
 un nombre, un domicilio, una ciudad, un estado o provincia, un país, y
@@ -713,8 +724,8 @@ instancia de un modelo. Esto es útil al crear formularios "editar".
 Este capítulo concluye con el material introductorio de este
 libro. Los próximos trece capítulos tratan con varios tópicos
 avanzados, incluyendo la generación de contenido que no es HTML
-(:doc:`Capítulo 11<chapter11>`), seguridad (:doc:`Capítulo 19<chapter19>`), y entrega del servicio
-(:doc:`Capítulo 20<chapter20>`).
+(:doc:`Capítulo 11<chapter11>`), seguridad (:doc:`Capítulo19<chapter19>`), 
+y entrega del servicio (:doc:`Capítulo 20<chapter20>`).
 
 Luego de estos primeros siete capítulos, deberías saber lo suficiente
 como para comenzar a escribir tus propios proyectos en Django. El
