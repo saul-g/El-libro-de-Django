@@ -326,7 +326,7 @@ El Framework de Feeds de Sindicación
 Django incluye un framework para la generación y sindicación de *feeds* de alto
 nivel que permite crear feeds RSS y Atom de manera sencilla.
 
-.. exhortacion:: ¿Qué es RSS? ¿Qué es Atom?
+.. admonition:: ¿Qué es RSS? ¿Qué es Atom?
 
     RSS y Atom son formatos basados en XML que se puede utilizar para actualizar
     automáticamente los "feeds" con el contenido de tu sitio. Lee más sobre RSS
@@ -745,7 +745,7 @@ Para instalar la aplicación sitemap, sigue los siguientes pasos:
 
     #. Asegúrate de que tienes instalado el framework sites (ver `Capítulo 14`_).
 
-.. nota::
+.. admonititon:: Nota
 
     La aplicación sitemap no instala tablas en la base de datos. La única razón
     de que esté en ``INSTALLED_APPS`` es que el cargador de plantillas
