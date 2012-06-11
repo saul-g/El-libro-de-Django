@@ -61,7 +61,7 @@ bien, deberías poder importar el módulo ``django``::
     >>> django.VERSION
     (TU VERSION)
 
-.. nota::
+.. admonition:: Nota
 
     El intérprete interactivo de Python es un programa de línea de comandos que
     te permite escribir un programa Python de forma interactiva. Para iniciarlo
@@ -104,7 +104,7 @@ Para obtener el trunk de Django, sigue los siguientes pasos:
     #. Incluye ``djtrunk/django/bin`` en el PATH de tu sistema. Este directorio
        incluye utilidades de administración como ``django-admin.py``.
 
-.. exhortacion:: Consejo:
+.. admonition:: Consejo:
 
     Si los archivo ``.pth`` son nuevos para ti, puedes aprender más de ellos en
     http://www.djangoproject.com/r/python/site-module/.
@@ -136,12 +136,13 @@ Si sólo quieres comenzar a jugar con Django, salta a la sección
 una base de datos finalmente.Todos los ejemplos de este libro asumen
 que tienes una base de datos configurada.
 
-Hasta el momento de escribir esto, Django admite tres motores de base de
+Hasta el momento de escribir esto, Django admite estos motores de base de
 datos:
 
     * PostgreSQL (http://www.postgresql.org/)
     * SQLite 3 (http://www.sqlite.org/)
     * MySQL (http://www.mysql.com/)
+    * Oracle (http://www.oracle.com/)
 
 Se está trabajando para admitir Microsoft SQL Server y Oracle. El sitio
 web de Django siempre contendrá la última información acerca de las base de
@@ -192,6 +193,15 @@ anidadas ni algunas otras sentencias SQL perfectamente estándar. También
 necesitas instalar el paquete ``MySQLdb`` desde
 http://www.djangoproject.com/r/python-mysql/.
 
+Usar Django con Oracle
+----------------------
+
+Django trabaja con versiones servidor de Oracle  9i o mas alto,
+si estas usando oracle necesitas instalar ``cx_Oracle``, usa versiones 
+superiores ala 4.31 pero evita la version 5 ya que tiene un bug el 
+controlador de esa versiòn.  
+
+
 Usar Django sin una base de datos
 ---------------------------------
 
@@ -218,7 +228,7 @@ Si esta es la primera vez que usas Django, tendrás que tener cuidado de algunas
 configuraciones iniciales. Crea un nuevo directorio para empezar a trabajar,
 por ejemplo algo como ``/home/username/djcode/``, e ingresa a este directorio.
 
-.. nota::
+.. admonition:: Donde esta ``django-admin.py`
 
     ``django-admin.py`` debería estar en el PATH de tu sistema si instalaste
     Django con la utilidad ``setup.py``. Si hiciste un check out desde
@@ -270,16 +280,16 @@ Estos archivos son los siguientes:
 * :file:`mysite/wsgi.py`: El archivo encargado de ser compatible con el  servidor
   web.
 
-.. exhortacion:: ¿Dónde debería estar este directorio?
+¿Dónde debería estar este directorio?
+-----------------------------------------
 
-    Si vienes de PHP, probablemente pondrías el código debajo de la carpeta raíz
-    del servidor web (en lugares como ``/var/www``). Con Django, no tienes que
-    hacer esto. No es una buena idea poner cualquier código Python en la
-    carpeta raíz del servidor web, porque al hacerlo se arriesga a que la
-    gente sea capaz de ver el código en la web. Esto no es bueno para la
-    seguridad.
-
-    Pon tu código en algún directorio **fuera** de la carpeta raíz.
+Si vienes de PHP, probablemente pondrías el código debajo de la carpeta raíz
+del servidor web (en lugares como ``/var/www``). Con Django, no tienes que
+hacer esto. No es una buena idea poner cualquier código Python en la
+carpeta raíz del servidor web, porque al hacerlo se arriesga a que la
+gente sea capaz de ver el código en la web. Esto no es bueno para la
+seguridad.
+``Pon tu código en algún directorio fuera de la carpeta raíz.``
 
 El servidor de desarrollo
 -------------------------
@@ -309,7 +319,7 @@ sola petición a la vez, y no ha pasado por una auditoría de seguridad de ning�
 tipo. Cuando sea el momento de lanzar tu sitio, mira el :doc:`Capítulo 20<chapter20>` para
 información sobre cómo hacerlo con Django.
 
-.. exhortacion:: Cambiar el host o el puerto
+.. admonition:: Cambiar el host o el puerto
 
     Por defecto, el comando ``runserver`` inicia el servidor de desarrollo en
     el puerto 8000, escuchando sólo conexiones locales. Si quieres cambiar el
@@ -330,13 +340,14 @@ Ahora que el servidor está corriendo, visita http://127.0.0.1:8000/ con tu
 navegador web. Verás una página de "Bienvenido a Django" sombreada con un azul
 pastel agradable. ¡Funciona!
 
-    .. image:: graficos/chapter02/it-worked.png
-        :alt: "Bienvenido a Django" 
+.. image:: graficos/chapter02/it-worked.png
+   :alt: "Bienvenido a Django" 
 
 ¿Qué sigue?
 ===========
 
-Ahora que tienes todo instalado y el servidor de desarrollo corriendo, en el  :doc:`próximo capítulo<chapter03>` escribirás algo de código básico que muestra cómo servir
+Ahora que tienes todo instalado y el servidor de desarrollo corriendo, en el 
+:doc:`próximo capítulo<chapter03>` escribirás algo de código básico que muestra cómo servir
 páginas Web usando Django.
 
 
