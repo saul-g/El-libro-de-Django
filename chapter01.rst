@@ -76,26 +76,26 @@ También es sencillo de utilizar: tan sólo guarda este código en un archivo ll
 Pero a medida que una aplicación Web crece más allá de lo trivial, este enfoque
 se desmorona y te enfrentas a una serie de problemas:
 
-    * ¿Qué sucede cuando múltiples páginas necesitan conectarse a la base de datos?
-      Seguro que ese código de conexión a la base de datos no debería estar duplicado
-      en cada uno de los scripts CGI, así que la forma pragmática de hacerlo sería
-      refactorizarlo en una función compartida.
+* ¿Qué sucede cuando múltiples páginas necesitan conectarse a la base de datos?
+  Seguro que ese código de conexión a la base de datos no debería estar duplicado
+  en cada uno de los scripts CGI, así que la forma pragmática de hacerlo sería
+  refactorizarlo en una función compartida.
 
-    * ¿Debería un desarrollador *realmente* tener que preocuparse por imprimir
-      la línea de "Content-Type" y acordarse de cerrar la conexión con la base de datos?
-      Este tipo de código repetitivo reduce la productividad del programador e
-      introduce la oportunidad para que se cometan errores. Estas tareas de configuración y
-      cierre estarían mejor manejadas por una infraestructura común.
+* ¿Debería un desarrollador *realmente* tener que preocuparse por imprimir
+  la línea de "Content-Type" y acordarse de cerrar la conexión con la base de datos?
+  Este tipo de código repetitivo reduce la productividad del programador e
+  introduce la oportunidad para que se cometan errores. Estas tareas de configuración y
+  cierre estarían mejor manejadas por una infraestructura común.
 
-    * ¿Qué sucede cuando este código es reutilizado en múltiples entornos,
-      cada uno con una base de datos y contraseñas diferentes? En ese punto,
-      se vuelve esencial alguna configuración específica del entorno.
+* ¿Qué sucede cuando este código es reutilizado en múltiples entornos,
+  cada uno con una base de datos y contraseñas diferentes? En ese punto,
+  se vuelve esencial alguna configuración específica del entorno.
 
-    * ¿Qué sucede cuando un diseñador Web que no tiene experiencia programando
-      en Python desea rediseñar la página? Lo ideal sería que la lógica de la página
-      -- la búsqueda de libros en la base de datos -- esté separada del código HTML
-      de la página, de modo que el diseñador pueda hacer modificaciones sin afectar
-      la búsqueda.
+* ¿Qué sucede cuando un diseñador Web que no tiene experiencia programando
+  en Python desea rediseñar la página? Lo ideal sería que la lógica de la página
+  -- la búsqueda de libros en la base de datos -- esté separada del código HTML
+  de la página, de modo que el diseñador pueda hacer modificaciones sin afectar
+  la búsqueda.
 
 Precisamente estos son los problemas que un framework Web intenta
 resolver. Un framework Web provee una infraestructura de programación para tus
@@ -108,7 +108,9 @@ El patrón de diseño MVC
 
 Comencemos con un rápido ejemplo que demuestra la diferencia entre el enfoque
 anterior y el empleado al usar un framework Web. Así es como se podría escribir
-el código CGI anterior usando Django::
+el código CGI anterior usando Django:
+
+.. code-block:: python
 
     # models.py (las tablas de la base de datos)
 
@@ -117,7 +119,8 @@ el código CGI anterior usando Django::
     class Book(models.Model):
         name = models.CharField(maxlength=50)
         pub_date = models.DateField()
-
+        
+.. code-block:: python
 
     # views.py (la parte lógica)
 
@@ -128,6 +131,7 @@ el código CGI anterior usando Django::
         book_list = Book.objects.order_by('-pub_date')[:10]
         return render_to_response('latest_books.html', {'book_list': book_list})
 
+.. code-block:: python
 
     # urls.py (la configuración URL)
 
@@ -138,6 +142,8 @@ el código CGI anterior usando Django::
         (r'latest/$', views.latest_books),
     )
 
+
+.. code-block:: html
 
     # latest_books.html (la plantilla)
 
@@ -155,21 +161,21 @@ Todavía no es necesario preocuparse por los detalles de *cómo* funciona esto -
 tan sólo queremos que te acostumbres al diseño general --. Lo que hay que notar
 principalmente en este caso son las *cuestiones de separación*:
 
-    * El archivo ``models.py`` contiene una descripción de la tabla de la base
-      de datos, como una clase Python. A esto se lo llama el *modelo*. Usando esta
-      clase se pueden crear, buscar, actualizar y borrar entradas de tu base de
-      datos usando código Python sencillo en lugar de escribir declaraciones
-      SQL repetitivas.
+* El archivo ``models.py`` contiene una descripción de la tabla de la base
+  de datos, como una clase Python. A esto se lo llama el *modelo*. Usando esta
+  clase se pueden crear, buscar, actualizar y borrar entradas de tu base de
+  datos usando código Python sencillo en lugar de escribir declaraciones
+  SQL repetitivas.
 
-    * El archivo ``views.py`` contiene la lógica de la página, en la función
-      ``latest_books()``. A esta función se la denomina vista.
+* El archivo ``views.py`` contiene la lógica de la página, en la función
+  ``latest_books()``. A esta función se la denomina vista.
 
-    * El archivo ``urls.py`` especifica qué vista es llamada según el patrón URL.
-      En este caso, la URL ``/latest/`` será manejada por la función
-      ``latest_books()``.
+* El archivo ``urls.py`` especifica qué vista es llamada según el patrón URL.
+  En este caso, la URL ``/latest/`` será manejada por la función
+  ``latest_books()``.
 
-    * El archivo ``latest_books.html`` es una plantilla HTML que describe el
-      diseño de la página.
+* El archivo ``latest_books.html`` es una plantilla HTML que describe el
+  diseño de la página.
 
 Tomadas en su conjunto, estas piezas se aproximan al patrón de diseño 
 Modelo-Vista-Controlador (MVC). Dicho de manera más fácil, MVC define una forma de
@@ -204,14 +210,14 @@ Si has estado creando aplicaciones Web por un tiempo, probablemente estés
 familiarizado con los problemas del ejemplo CGI presentado con anterioridad.
 El camino clásico de un desarrollador Web es algo como esto:
 
-    1. Escribir una aplicación Web desde cero.
-    2. Escribir otra aplicación Web desde cero.
-    3. Darse cuenta de que la aplicación del paso 1 tiene muchas cosas en común con
-       la aplicación del paso 2.
-    4. Refactorizar el código para que la aplicación 1 comparta código con la
-       aplicación 2.
-    5. Repetir los pasos 2-4 varias veces.
-    6. Darse cuenta de que acaba de inventar un framework.
+1. Escribir una aplicación Web desde cero.
+2. Escribir otra aplicación Web desde cero.
+3. Darse cuenta de que la aplicación del paso 1 tiene muchas
+   cosas en común con la aplicación del paso 2.
+4. Refactorizar el código para que la aplicación 1 comparta código con la
+   aplicación 2.
+5. Repetir los pasos 2-4 varias veces.
+6. Darse cuenta de que acabamos  de inventar un framework.
 
 Así es precisamente como fue creado Django.
 
@@ -335,13 +341,13 @@ probablemente tendrá un gran número de nuevas -- e incluso *esenciales* --
 características para cuando este libro sea publicado. Por ese motivo, nuestro
 objetivo como autores de este libro es doble:
 
-    * Asegurarnos que este libro sea "a prueba de tiempo" tanto como nos sea
-      posible, para que cualquier cosa que leas aquí todavía sea relevante en
-      futuras versiones de Django.
+* Asegurarnos que este libro sea "a prueba de tiempo" tanto como nos sea
+  posible, para que cualquier cosa que leas aquí todavía sea relevante en
+  futuras versiones de Django.
 
-    * Actualizar este libro continuamente en el sitio Web en inglés,
-      http://www.djangobook.com/, para que puedas acceder a la mejor y más reciente
-      documentación tan pronto como la escribimos.
+* Actualizar este libro continuamente en el sitio Web en inglés,
+  http://www.djangobook.com/, para que puedas acceder a la mejor y más reciente
+  documentación tan pronto como la escribimos.
       
 
 
