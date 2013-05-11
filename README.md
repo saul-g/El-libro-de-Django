@@ -1,7 +1,21 @@
-EL LIBRO DE DJANGO
+**EL LIBRO DE DJANGO**
 ======================
 
-la versiòn en español del libro Django. 
+Bienvenidos a la versión en línea de El libro de Django, un libro gratis sobre
+el framework web Django para el lenguaje de programación Python.
+
+Una nota acerca de esta edición
+
+Bienvenidos a la edición en español del libro Django!
+Este libro fue publicado originalmente por la editorial  Apress en 2009 y
+cubrió Django 1.0. Desde entonces, se ha desactualizado. Estamos trabajando en 
+conseguir actualizar el libro  para cubrir Django 1.5, 2.0  y más allá.
+Pero necesitamos de tu ayuda, para actualizar este  libro de codigo abierto
+-con todos sus defectos y virtudes-   con la esperanza de que vas a
+encontrarte con el amor de un un proyecto comunitario.
+
+Por lo tanto, si deseas ayudar, complementar, corrregir algun detalle o defecto,
+puedes hacerlo a  traves de GitHub y enviarnos tus correcciones!
 
 
 **Como crear la documentaciòn:**
