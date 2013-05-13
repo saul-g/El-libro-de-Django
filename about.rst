@@ -75,6 +75,5 @@ Jeremy fue el desarrollador principal de Pegasus News, uno de los primeros sitio
 Django fuera de World Online, y desde entonces se ha sumado a Votizen, en un intento de reducir la
 influencia del dinero en la política.
 Se desempeña como Secretario DSF, organiza y ayuda a organizar los sprints, se preocupa por
-la salud y la equidad de la comunidad Django. Ha pasado un largo tiempo sin vergonzosamente un blog de ​​trabajo.
-
+la salud y la equidad de la comunidad Django. 
 Jeremy vive en Mountain View, CA, USA.
