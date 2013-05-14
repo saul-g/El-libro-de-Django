@@ -18,17 +18,44 @@ Django está escrito 100% en puro código Python, así que necesitarás
 instalar Python en tu computadora. Django necesita Python 2.3 o superior.
 
 Si estás usando Linux o Mac OS X probablemente ya tienes Python instalado.
-Escribe ``python`` en una terminal. Si ves algo así, Python está instalado::
+Escribe ``python`` en una terminal. Si ves algo así, Python está instalado:
 
-    Python 2.6.6 (r266:84292, Sep 15 2010, 15:52:39) 
+.. code-block:: python
+
+    Python 2.6.6 (r266:84292, Sep 15 2010, 15:52:39)
     [GCC 4.4.5] on linux2
     Type "help", "copyright", "credits" or "license" for more information.
-    >>> 
+    >>>
 
 
 Si ves un error como: ``"command not found"`` u ``"orden no encontrada"``,
 tienes que bajar e instalar Python. Fíjate en http://www.python.org/download/
 para empezar. La instalación es rápida y fácil.
+
+Versiones de Python
+===================
+
+El nucleo del framework Django (versión 1.4 y superior) funciona con cualquier
+versión de Python superior ala 2.5 hasta la 2.7, ambas inclusive. Opcionalmente
+soporta GIS (Sistemas de Información Geográfica) requiere Python 2.5 a 2,7.
+
+Si no estás seguro de qué versión de Python debes instalar y tienes completa libertad
+de decisión, debes elegir la version mas reciente en la serie 2.x:, la versión 2.7.
+Aunque Django funciona igual de bien con cualquier versión de 2.5 a 2.7, las últimas versiones
+de Python tienen mejoras en el rendimiento y poseen características de idiomas
+adicionales que puedes utilizar en tus aplicaciones. Además, ciertos
+complementos de terceros que desees utilizar pueden requerir una nueva versión de
+Python 2.5, por lo que el uso de una versión posterior de Python mantiene tus
+opciones abiertas.
+
+Django y Python 3.x
+===================
+
+Al momento de escribir esto, Django soporta  Python 3, tanto la version 3.2 y la 3.3
+en modo experimental, lo que significa que los desarrolladores de Django todavía
+no estan lo suficientemente seguros como para prometer la estabilidad en
+producción. Para ello, sugieren esperar hasta la version de  Django 1.6.
+
 
 Instalar Django
 ===============
@@ -43,19 +70,21 @@ La mayoría de la gente querrá instalar el lanzamiento oficial más reciente
 de http://www.djangoproject.com/download/. Django usa el método ``distutils``
 estándar de instalación de Python, que en el mundo de Linux es así:
 
-   #. Baja el tarball, que se llamará algo así como *Django-version.tar.gz*
+#. Baja el tarball, que se llamará algo así como *Django-version.tar.gz*
 
-   #. ``tar xzvf Django-*.tar.gz``
+#. ``tar xzvf Django-*.tar.gz``
 
-   #. ``cd Django-*``
+#. ``cd Django-*``
 
-   #. ``sudo python setup.py install``
+#. ``sudo python setup.py install``
 
 En Windows, recomendamos usar 7-Zip para manejar archivos comprimidos de todo
 tipo, incluyendo ``.tar.gz``. Puedes bajar 7-Zip de http://www.djangoproject.com/r/7zip/.
 
 Cambia a algún otro directorio e inicia ``python``. Si todo está funcionando
-bien, deberías poder importar el módulo ``django``::
+bien, deberías poder importar el módulo ``django``:
+
+.. code-block:: python
 
     >>> import django
     >>> django.VERSION
@@ -91,18 +120,18 @@ permanecer estable.
 
 Para obtener el trunk de Django, sigue los siguientes pasos:
 
-    #. Asegúrate de tener un cliente de Subversion instalado. Puedes conseguir
-       este programa libremente desde http://subversion.tigris.org/, y puedes
-       encontrar documentación excelente en http://svnbook.red-bean.com/.
+#. Asegúrate de tener un cliente de Subversion instalado. Puedes conseguir
+   este programa libremente desde http://subversion.tigris.org/, y puedes
+   encontrar documentación excelente en http://svnbook.red-bean.com/.
 
-    #. Haz un check out del trunk usando el comando ``svn co
-       http://code.djangoproject.com/svn/django/trunk djtrunk``.
+#. Haz un check out del trunk usando el comando ``svn co
+   http://code.djangoproject.com/svn/django/trunk djtrunk``.
 
-    #. Crea ``site-packages/django.pth`` y agrega el directorio ``djtrunk``
-       a este, o actualiza tu ``PYTHONPATH`` agregando ``djtrunk``.
+#. Crea ``site-packages/django.pth`` y agrega el directorio ``djtrunk``
+   a este, o actualiza tu ``PYTHONPATH`` agregando ``djtrunk``.
 
-    #. Incluye ``djtrunk/django/bin`` en el PATH de tu sistema. Este directorio
-       incluye utilidades de administración como ``django-admin.py``.
+#. Incluye ``djtrunk/django/bin`` en el PATH de tu sistema. Este directorio
+   incluye utilidades de administración como ``django-admin.py``.
 
 .. admonition:: Consejo:
 
@@ -131,7 +160,7 @@ Django, el desarrollo de sitios web *con soporte de base de datos*, para esto
 necesitarás instalar un servidor de base de datos de algún tipo, para almacenar
 tus datos.
 
-Si sólo quieres comenzar a jugar con Django, salta a la sección 
+Si sólo quieres comenzar a jugar con Django, salta a la sección
 :doc:`Capítulo 20<chapter20>` -- pero créenos, querrás instalar
 una base de datos finalmente.Todos los ejemplos de este libro asumen
 que tienes una base de datos configurada.
@@ -139,10 +168,10 @@ que tienes una base de datos configurada.
 Hasta el momento de escribir esto, Django admite estos motores de base de
 datos:
 
-    * PostgreSQL (http://www.postgresql.org/)
-    * SQLite 3 (http://www.sqlite.org/)
-    * MySQL (http://www.mysql.com/)
-    * Oracle (http://www.oracle.com/)
+* PostgreSQL (http://www.postgresql.org/)
+* SQLite 3 (http://www.sqlite.org/)
+* MySQL (http://www.mysql.com/)
+* Oracle (http://www.oracle.com/)
 
 Se está trabajando para admitir Microsoft SQL Server y Oracle. El sitio
 web de Django siempre contendrá la última información acerca de las base de
@@ -197,9 +226,9 @@ Usar Django con Oracle
 ----------------------
 
 Django trabaja con versiones servidor de Oracle  9i o mas alto,
-si estas usando oracle necesitas instalar ``cx_Oracle``, usa versiones 
-superiores ala 4.31 pero evita la version 5 ya que tiene un bug el 
-controlador de esa versiòn.  
+si estas usando oracle necesitas instalar ``cx_Oracle``, usa versiones
+superiores ala 4.31 pero evita la version 5 ya que tiene un bug el
+controlador de esa versiòn.
 
 
 Usar Django sin una base de datos
@@ -220,7 +249,7 @@ Comenzar un proyecto
 .. The below (down to "The rest of this section") is adapted from "Initial
 .. setup" in tutorial01.txt.
 
-Un *proyecto* es una colección de configuraciones para una instancia de Django,
+Un **proyecto** es una colección de configuraciones para una instancia de Django,
 incluyendo configuración de base de datos, opciones específicas de Django y
 configuraciones específicas de aplicaciones.
 
@@ -228,7 +257,7 @@ Si esta es la primera vez que usas Django, tendrás que tener cuidado de algunas
 configuraciones iniciales. Crea un nuevo directorio para empezar a trabajar,
 por ejemplo algo como ``/home/username/djcode/``, e ingresa a este directorio.
 
-.. admonition:: Donde esta ``django-admin.py`
+.. admonition:: Donde esta ``django-admin.py``
 
     ``django-admin.py`` debería estar en el PATH de tu sistema si instalaste
     Django con la utilidad ``setup.py``. Si hiciste un check out desde
@@ -251,24 +280,24 @@ Echemos un vistazo a lo que ``startproject`` creó::
                settings.py
                urls.py
                wsgi.py
-	    
-.. admonition:: ¿ No es lo mismo que ves ?	
- 
+
+.. admonition:: ¿ No es lo mismo que ves ?
+
      Si estamos viendo un arbol de directorios diferentes al anterior
      problablemente estamos usando una version de Django anterior.
 
 Estos archivos son los siguientes:
 
-* :file:`mysite/`:  El Directorio que contiene nuestro projecto. Podemos cambiarle el 
+* :file:`mysite/`:  El Directorio que contiene nuestro projecto. Podemos cambiarle el
   nombre en cualquier momento sin afectar nuestro proyecto.
-      
+
 * :file:`manage.py`: Una utilidad de línea de comandos que te deja interactuar
   con este proyecto de Django de varias formas.
-      
+
 * :file:`mysite/mysite/`:El directorio de nuestro paquete que contiene nuestro projecto
   el cual es un paquete python  y el que se usara para importar cualquier cosa dentro
-  de el.       
-       
+  de el.
+
 * :file:`mysite/__init__.py`: Un archivo requerido para que Python trate a este
   directorio como un paquete (i.e. un grupo de módulos).
 
@@ -276,7 +305,7 @@ Estos archivos son los siguientes:
 
 * :file:`mysite/urls.py`: La declaración de las URL para este proyecto de Django; una
   "tabla de contenidos" de tu sitio hecho con Django.
-      
+
 * :file:`mysite/wsgi.py`: El archivo encargado de ser compatible con el  servidor
   web.
 
@@ -341,13 +370,11 @@ navegador web. Verás una página de "Bienvenido a Django" sombreada con un azul
 pastel agradable. ¡Funciona!
 
 .. image:: graficos/chapter02/it-worked.png
-   :alt: "Bienvenido a Django" 
+   :alt: "Bienvenido a Django"
 
 ¿Qué sigue?
 ===========
 
-Ahora que tienes todo instalado y el servidor de desarrollo corriendo, en el 
+Ahora que tienes todo instalado y el servidor de desarrollo corriendo, en el
 :doc:`próximo capítulo<chapter03>` escribirás algo de código básico que muestra cómo servir
 páginas Web usando Django.
-
-
