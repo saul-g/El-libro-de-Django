@@ -968,7 +968,7 @@ de la forma en que este funciona.
 
 Más que cualquier otro componente de la aplicación web, las opiniones de los
 programadores sobre el sistema de plantillas varía extremadamente. El hecho de
-que Python sólo implemente decenas, sino cientos, de lenguajes de plantillas de
+que Python no sólo implemente decenas, sino cientos, de lenguajes de plantillas de
 código abierto lo dice todo. Cada uno fue creado probablemente porque su
 desarrollador estima que todos los existentes son inadecuados. (¡De hecho, se
 dice que es un rito para los desarrolladores de Python escribir su propio
