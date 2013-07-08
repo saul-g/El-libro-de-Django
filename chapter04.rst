@@ -1196,7 +1196,7 @@ Hay algunas cosas para notar:
           TEMPLATE_DIRS = ('C:/www/django/templates',)
 
     * Es más sencillo usar rutas absolutas (esto es, las rutas de directorios
-      comienzan desde la raíz del sistema de archivos). Si quieres sen un poco
+      comienzan desde la raíz del sistema de archivos). Si quieres ser un poco
       más flexible e independiente, también, puedes tomar el hecho de que el
       archivo de configuración de Django es sólo código de Python y construir la
       variable ``TEMPLATE_DIRS`` dinámicamente, por ejemplo:
