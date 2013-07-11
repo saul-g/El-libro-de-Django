@@ -968,7 +968,7 @@ de la forma en que este funciona.
 
 Más que cualquier otro componente de la aplicación web, las opiniones de los
 programadores sobre el sistema de plantillas varía extremadamente. El hecho de
-que Python sólo implemente decenas, sino cientos, de lenguajes de plantillas de
+que Python no sólo implemente decenas, sino cientos, de lenguajes de plantillas de
 código abierto lo dice todo. Cada uno fue creado probablemente porque su
 desarrollador estima que todos los existentes son inadecuados. (¡De hecho, se
 dice que es un rito para los desarrolladores de Python escribir su propio
@@ -1196,7 +1196,7 @@ Hay algunas cosas para notar:
           TEMPLATE_DIRS = ('C:/www/django/templates',)
 
     * Es más sencillo usar rutas absolutas (esto es, las rutas de directorios
-      comienzan desde la raíz del sistema de archivos). Si quieres sen un poco
+      comienzan desde la raíz del sistema de archivos). Si quieres ser un poco
       más flexible e independiente, también, puedes tomar el hecho de que el
       archivo de configuración de Django es sólo código de Python y construir la
       variable ``TEMPLATE_DIRS`` dinámicamente, por ejemplo:
