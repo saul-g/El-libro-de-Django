@@ -1,591 +1,1402 @@
-========================================
-Capítulo 7: Procesamiento de formularios
-========================================
+﻿=======================
+Capítulo 7: Formularios
+=======================
 
-**Autor invitado: Simon Willison**
+**Los formularios en HTML**, son la columna vertebral de los sitios Web
+interactivos, los encontramos como simples caja de búsquedas como los que usa
+Google o como los inconfundibles formularios para subir comentarios siempre
+presentes en la mayoría de blogs, pero también existen complejas interfaces
+que permiten la entradas de datos interactivamente y de forma personalizada,
+y es que los formularios son una necesidad básica en la mayoria de aplicaciones
+Web modernas, que necesitan recopilar datos a través de  internet. Este
+capítulo cubre  la manera de usar Django para recopilar datos a través de
+formularios, validarlos y hacer algo útil con ellos. A lo largo de este
+capítulo nos enfocaremos en conocer los objetos ``HttpRequest`` y los objetos
+``Form``
 
-Si has estado siguiendo el capítulo anterior, ya deberías tener un
-sitio completamente funcional, aunque un poco simple. En este capítulo
-trataremos con la próxima pieza del juego: cómo construir vistas que
-obtienen entradas desde los usuarios.
+Comenzaremos creando un simple formulario de búsquedas "a mano", observando
+cómo manejar los datos suministrados al navegador. Y a partir de ahí, pasaremos
+al uso del *framework* de formularios que viene incluido en Django.
 
-Comenzaremos haciendo un simple formulario de búsqueda "a mano",
-viendo cómo manejar los datos suministrados al navegador. Y a partir
-de ahí, pasaremos al uso del *framework* de formularios que trae
-Django.
+Obteniendo datos de los objetos "Request"
+=========================================
 
-Búsquedas
-=========
+Introducimos los objetos ``HttpRequest``  en el :doc:`capítulo 3<chapter03>`,
+cuando cubrimos las funciones vista, pero no tuvimos mucho que decir acerca de
+ellos en aquel momento. Recuerdas que cada función de vista toma un objeto
+``HttpRequest`` como primer parámetro, tal como en la vista ``hola()`` que
+construimos::
 
-En la Web todo se trata de búsquedas. Dos de los casos de éxito más
-grandes, Google y Yahoo, han construido sus empresas multimillonarias
-alrededor de las búsquedas. Casi todos los sitios observan un gran
-porcentaje de tráfico viniendo desde y hacia sus páginas de
-búsqueda. A menudo, la diferencia entre el éxito y el fracaso de un
-sitio, lo determina la calidad de su búsqueda. Así que sería mejor que
-agreguemos un poco de búsqueda a nuestro pequeño sitio de libros, ¿no?
+    from django.http import HttpResponse
 
-Comenzaremos agregando la vista para la búsqueda a nuestro URLconf
-(``mysite.urls``). Recuerda que esto se hace agregando algo como
-``(r'^search/$', 'mysite.books.views.search')`` al conjunto de URL patterns
-(patrones).
+    def hola(request):
+        return HttpResponse("Hola mundo")
 
-A continuación, escribiremos la vista ``search`` en nuestro módulo de vistas
-(``mysite.books.views``)::
+Los objetos ``HttpRequest``, tal como la variable ``request``, contienen un numero
+de atributos y métodos interesantes  con los cuales deberías familiarizarte, a
+fin de saber cómo utilizarlos lo mejor posible. Puedes utilizar estos atributos
+para conseguir información acerca de las peticiones que recibes (por ejemplo: el
+usuario o el navegador que está cargando la pagina en tu sitio creado con
+Django), al mismo tiempo que la función vista es ejecutada.
 
-    from django.db.models import Q
-    from django.shortcuts import render_to_response
-    from models import Book
+Información acerca de las URL
+-----------------------------
 
-    def search(request):
-        query = request.GET.get('q', '')
-        if query:
-            qset = (
-                Q(title__icontains=query) |
-                Q(authors__first_name__icontains=query) |
-                Q(authors__last_name__icontains=query)
-            )
-            results = Book.objects.filter(qset).distinct()
+Los objetos ``HttpRequest`` contienen algunas piezas de información acerca de
+la URL requerida.
+
+.. table:: Tabla 7.1 Información acerca de las URL
+
+  ===========================   ====================================  ========================
+  Atributos o Métodos           Descripción                           Ejemplo
+  ===========================   ====================================  ========================
+  ``request.path``              La ruta completa, no incluye el       ``"/hola/"``
+                                dominio pero incluye, la barra
+                                inclinada.
+
+  ``request.get_host()``        El host (ejemplo: tu "dominio," en    ``"127.0.0.1:8000"`` o
+                                lenguaje común).                      ``"www.example.com"``
+
+  ``request.get_full_path()``   La ``ruta`` (path), mas una cadena
+                                de consulta (si está disponible).     ``"/hola/?print=true"``
+
+  ``request.is_secure()``       ``True`` si la petición fue hecha
+                                vía  HTTPS. Si no, ``False``.         ``True`` o ``False``
+  ===========================   ====================================  ========================
+
+Siempre usa estos atributos/métodos en lugar de codificar en crudo tus URLs en
+tu vistas. Esto hace más flexible tu código y mas fácil de usar en otros lugares.
+Un simple ejemplo::
+
+    # MAL!
+    def vista_actual_url(request):
+        return HttpResponse("Bienvenido a mi pagina en /pagina_actual/")
+
+    # BIEN
+    def vista_actual_url(request):
+        return HttpResponse("bienvenido a mi pagina en  %s" % request.path)
+
+Más información acerca de las peticiones o Request
+--------------------------------------------------
+
+``request.META``  es un diccionario Python , que contiene todas las cabeceras
+HTTP disponibles para la petición dada --Incluyendo la dirección IP y el
+agente-- Generalmente el nombre y la versión del navegador Web. Observa que
+la lista completa de cabeceras disponibles depende de las cabeceras que el
+usuario envía y  las cabeceras que el servidor Web seleccione. Algunas de las
+claves mas comúnes están disponibles como diccionarios y son:
+
+* ``HTTP_REFERER`` -- La respectiva URL, en dado caso. (Observa la forma en que
+  se escribe  ``REFERER``.)
+* ``HTTP_USER_AGENT`` -- El navegador del usuario en forma de cadena, cualquiera
+  que sea.  Esta es algo si: ``"Mozilla/5.0 (X11; U; Linux i686; fr-FR; rv:1.8.1.17)
+  Gecko/20080829 Firefox/2.0.0.17"``.
+* ``REMOTE_ADDR`` -- La dirección IP de el cliente, por ejemplo:
+  ``"12.345.67.89"``. (Si la petición ha pasado a través de un proxi,  entonces
+  puede retornar una lista separada por comas, conteniendo  las direcciones IP,
+  por ejemplo: ``"12.345.67.89,23.456.78.90"``.)
+
+Observa que ``request.META`` es básicamente un diccionario Python, que contiene
+todas las cabeceras HTTP  disponibles, las que dependen del navegador y del
+servidor que se este usando en ese determinado momento, por lo que obtendrás una
+excepción ``KeyError``  si intentas acceder a una clave que no existe. (Además las
+cabeceras HTTP son datos *externos* -- que son subidos por los navegadores de los
+usuarios, por lo que no deberías confiar en ellos, así que siempre diseña tus
+aplicaciónes para que fallen airadamente,  si una cabecera en particular esta
+vacía o no existe.) Aprende a usar las clausulas ``try``/``except`` o el método
+``get()`` para manejar los casos en que alguna de  estas claves estén indefinidas,
+para evitar errores::
+
+    # MAL!
+    def mostrar_navegador(request):
+        ua = request.META['HTTP_USER_AGENT']  # ¡Podría lanzar: KeyError!
+        return HttpResponse("Tu navegador es %s" % ua)
+
+    # BIEN (VERSION 1)
+    def mostrar_navegador(request):
+        try:
+            ua = request.META['HTTP_USER_AGENT']
+        except KeyError:
+            ua = 'unknown'
+        return HttpResponse("Tu navegador es %s" % ua)
+
+    # BIEN (VERSION 2)
+    def mostrar_navegador2(request):
+        ua = request.META.get('HTTP_USER_AGENT', 'unknown')
+        return HttpResponse("Tu navegador es %s" % ua)
+
+Te animamos a escribir pequeñas  vistas como estas, que muestren todos los datos
+``request.META``,  que puedas conseguir para familiarizarte con los conceptos.
+La vista puede empezar así::
+
+    def atributos_meta(request):
+        valor = request.META.items()
+        valor.sort()
+        html = []
+        for k, v in valor:
+            html.append('<tr><td>%s</td><td>%s</td></tr>' % (k, v))
+        return HttpResponse('<table>%s</table>' % '\n'.join(html))
+
+Como ejercicio trata de convertir la vista anterior, para que use el sistema de
+plantillas en lugar de incrustar el código HTML en la vista. También trata de
+agregar ``request.path``  y los otros métodos ``HttpRequest`` que vimos en la
+sección anterior.
+
+Información acerca de los datos recibidos
+-----------------------------------------
+
+Mas allá de los metadatos básicos obtenidos de las peticiones Web,  los objetos
+``HttpRequest`` poseen dos atributos mas, que contienen información recibida de los
+usuarios: ``request.GET`` y ``request.POST``. Ambos atributos son como objetos
+tipo diccionarios que permiten el acceso a datos ``GET`` y ``POST``
+
+.. admonition:: ¿Objetos como diccionarios?
+
+    Cuando decimos  que ``request.GET`` y ``request.POST`` son como objetos
+    tipo diccionario ("dictionary-like"), lo que tratamos de decirte es que se
+    comportan como diccionarios estándar de Python, pero técnicamente en el
+    fondo no son diccionarios. Por ejemplo ``request.GET`` y ``request.POST``
+    contienen ambos,  métodos  como ``get()``, ``keys()`` y ``values()``, por
+    lo que puede iterarse sobre sus claves usando ``for key in request.GET``.
+
+    ¿Entonces porque la distinción? bueno, porque ambos ``request.GET`` y
+    ``request.POST`` contienen métodos adicionales, que los diccionarios
+    normales no, llegaremos a eso dentro de poco.
+
+    Puede ser que encuentres el termino similar a "file-like objects" -- Objetos
+    Python que contienen algunos métodos básicos como ``read()``, lo que
+    le permite actuar a un  determinado archivo como un "objeto".
+
+Los datos ``POST``  generalmente son recibidos de formularios (``<form>``) HTML,
+mientras que los datos ``GET`` son enviados a los formularios (``<form>``) o
+mediante una cadena de consulta a una página URL.
+
+Tu primer formulario creado con Django
+======================================
+
+Continuando con el ejemplo en curso sobre: libros, autores y editores, vamos a
+crear un formulario, mediante una vista muy simple que permita a los usuarios
+buscar libros en la base de datos mediante el titulo.
+
+Generalmente, se necesitan dos partes para desarrollar un formulario: la
+interfaz de usuario en HTML y la vista que procesa los datos obtenidos o subidos
+por los usuarios. La  primera parte es sencilla; solo necesitamos crear una vista
+que muestre el formulario de busqueda::
+
+  def formulario_buscar(request):
+      return render(request, 'formulario_buscar.html')
+
+Tal como aprendimos en el :doc:`capítulo 3<chapter03>`, la vista puede estar
+en cualquier lugar de la ruta de búsqueda de Python. Pero por convensión esta
+deve de ir en una vista, por lo que la colocamos en ``biblioteca/views.py``.
+
+Acompañada de una plantilla ``formulario_buscar.html``, que deve ubicarse en
+un directorio llamado ``templates``, dentro del directorio de la aplicación
+``biblioteca``, en el mismo nivel que el directorio ``migrations``:
+
+.. code-block:: html
+
+  <html>
+  <head>
+      <title>Buscar</title>
+  </head>
+  <body>
+      <form action="/buscar/" method="get">
+          <input type="text" name="q">
+          <input type="submit" value="Buscar">
+      </form>
+  </body>
+  </html>
+
+El patrón para la URL deve de ir en el archivo ``biblioteca/urls.py``  asi::
+
+    from biblioteca  import views
+
+    urlpatterns = [
+        # ...
+        url(r'^formulario-buscar/$', views.formulario_buscar),
+        # ...
+    ]
+
+(Observa que hemos importando el modulo ``views`` directamente, en lugar de
+hacer algo como esto: ``from biblioteca.views import buscar`` , porque lo
+anterior es mas elegante y entendible. Veremos la forma de aprovechar este
+tipo de importaciónes en más detalle,  en el :doc:`capítulo 8<chapter08>`.)
+
+Ahora, ejecuta ``manage runserver`` o recarga la pagina y visita:
+http://127.0.0.1:8000/formulario-buscar/, donde veras una  interfaz de búsqueda,
+bastante simple, construida mediante un sencillo formulario:
+
+.. figure:: graphics/chapter07/formulario_de_busqueda.png
+   :alt: Captura de un formulario de busqueda en Django.
+
+   **Figura 7-1.** Ejemplo de un formulario de busquedas.
+
+Trata de subir el formulario, y solo conseguirás  un error 404. El formulario
+que apunta a la URL ``/buscar/``, aun no ha sido implementado. Reparemos eso
+con una segunda funcion de vista y su respectiva URLconf:
+
+.. snippet::
+   :filename: urls.py
+
+    urlpatterns = [
+        # ...
+        url(r'^formulario-buscar/$', views.formulario_buscar),
+        url(r'^buscar/$', views.buscar),
+        # ...
+    ]
+
+.. snippet::
+   :filename: views.py
+
+    def buscar(request):
+        if 'q' in request.GET:
+            mensaje = 'Estas buscando: %r' % request.GET['q']
         else:
-            results = []
-        return render_to_response("books/search.html", {
-            "results": results,
-            "query": query
-        })
+            mensaje = 'Haz subido un formulario vacio.'
+        return HttpResponse(mensaje)
 
-Aquí han surgido algunas cosas que todavía no hemos vimos. La primera, ese
-``request.GET``. Así es cómo accedes a los datos del GET desde Django;
-Los datos del POST se acceden de manera similar, a través de un objeto
-llamado ``request.POST``. Estos objetos se comportan exactamente como
-los diccionarios estándar de Python, y tienen además otras
-capacidades, que se cubren en el :doc:`apéndice H<appendixH>`.
+.. SL Tested ok
 
-.. admonition:: ¿Qué son estos datos del GET y del POST?
+Por el momento, esto exhibe meramente el término de búsqueda del usuario, así
+que podemos estar seguros, de que los datos están siendo enviado a Django
+correctamente, y puede darnos una ligera percepción sobre la manera en que el
+término de búsqueda atraviesa el sistema.
 
-    GET y POST son los dos métodos que emplean los navegadores para
-    enviar datos a un servidor. Los encontrarás con frecuencia en los
-    elementos *form* de HTML::
+En resumen:
 
-        <form action="/books/search/" method="get">
+1. El formulario HTML (``<form>``) define una variable ``q``. Cuando esta es
+   subida el valor de ``q`` es enviado mediante el metodo ``GET`` a la URL
+   ``/buscar/``.
 
-    Esto le indica al navegador que suministre los datos del
-    formulario a la URL ``/books/search/`` empleando el método GET.
+2. La vista de Django maneja la URL ``/buscar/`` y tiene acceso al valor de
+   ``q`` en la petición ``request.GET``.
 
-    Hay diferencias de semántica importantes entre el GET y el POST,
-    que no vamos a ver ahora mismo, pero diríjete a
-    http://www.w3.org/2001/tag/doc/whenToUseGet.html si quieres
-    aprender más.
+Una cosa  que es importante precisar aquí, es que explícitamente verificamos
+que ``'q'`` exista en  ``request.GET``. Como precisamos en la sección anterior
+con las peticiones ``request.META``, no deberías confiar en nada que sea subido
+por los usuarios o incluso asume que no subieron nada en primer lugar. Si no
+agregas esta verificación, los formularios vacios lanzaran un error del tipo
+``KeyError`` en la vista::
 
-Así que la línea::
+    # MAL!
+    def buscar_no_hagas_esto(request):
+        #¡Las siguientes lineas lanzan un error "KeyError" si no se envia 'q'!
+        mensaje = 'Estas buscando: %r' % request.GET['q']
+        return HttpResponse(mensaje)
 
-    query = request.GET.get('q', '')
+.. SL Tested ok
 
-busca un parámetro del GET llamado ``q`` y retorna una cadena de texto
-vacía si este parámetro no fue suministrado. Observa que estamos
-usando el método ``get()`` de ``request.GET``, algo potencialmente
-confuso. Este método ``get()`` es el mismo que posee cualquier
-diccionario de Python. Lo estamos usando aquí para ser precavidos:
-*no* es seguro asumir que ``request.GET`` tiene una clave ``'q'``, así
-que usamos ``get('q', '')`` para proporcionar un valor por omisión,
-que es ``''`` (el string vacío). Si hubiéramos intentado acceder a la
-variable simplemente usando ``request.GET['q']``, y ``q`` no hubiese
-estado disponible en los datos del GET, se habría lanzado un
-``KeyError``.
 
-Segundo, ¿qué es ese ``Q``? Los objetos ``Q`` se utilizan para ir
-construyendo consultas complejas -- en este caso, estamos buscando los
-libros que coincidan en el título o en el nombre con la
-consulta. Técnicamente, estos objetos ``Q`` consisten de un QuerySet,
-y puede leer más sobre esto en el apéndice C.
+.. admonition:: Parámetros de cadenas de consulta.
 
-En estas consultas, ``icontains`` es una búsqueda en la que no se
-distinguen mayúsculas de minúsculas (*case-insensitive*), y que
-internamente usa el operador ``LIKE`` de SQL en la base de datos.
+    Porque los datos ``GET`` se pasan en cadenas de  consultas  (por ejemplo:
+    ``/buscar/?q=django``) puedes usar ``request.GET`` para acceder a las
+    variables de las cadenas de consulta. En el capítulo 3,  "Introducción
+    a los patrones URLconfs de Django", comparamos las URL bonitas contra las
+    tradicionales URLs de PHP/Java tal como  ``/tiempo/mas?horas=3`` y dijimos
+    que te mostraríamos como hacerlo más adelante en el capítulo 7. Ahora
+    ya sabes cómo acceder a cadenas de parámetros en las vistas (tal como el
+    ejemplo ``horas=3``) --Solo usa ``request.GET``.
 
-Dado que estamos buscando en campos de muchos-a-muchos, es posible que
-un libro se obtenga más de una vez (por ej: un libro que tiene dos
-autores, y los nombres de ambos concuerdan con la consulta). Al
-agregar ``.distinct()`` en el filtrado, se eliminan los resultados
-duplicados.
+Los datos ``POST`` trabajan de la misma forma que lo datos ``GET`` -- solo usa
+``request.POST`` en lugar de ``request.GET``. ¿Entonces cual es la diferencia
+entre ``GET`` y ``POST``? Usa ``GET`` cuando el acto de subir un formulario
+solo sea para "pedir" datos. En cambio usa  ``POST`` siempre que el acto de
+subir el formulario tenga efectos secundarios -- *cambiando* datos, enviando
+un e-mail o algo que vaya más allá de simplemente *mostrar* datos. En el
+ejemplo de búsquedas de el ejemplo, estamos usando ``GET`` porque la consulta no
+cambia ningún dato en nuestro servidor. (Consulta
+http://www.w3.org/2001/tag/doc/whenToUseGet.html  si quieres aprender más sobre
+las peticiones ``GET`` and ``POST``.)
 
-Todavía no hay una plantilla para esta vista. Esto lo solucionará:
+Ahora que hemos verificado que el metodo ``request.GET`` es pasado apropiadamente,
+anclemos la consulta de búsquedas a la base de datos.(otra vez en ``views.py`` y
+rescribamos la funcion buscar)::
+
+    from django.http import HttpResponse
+    from django.shortcuts import render
+    from biblioteca.models import Libro
+
+    def buscar(request):
+        if 'q' in request.GET and request.GET['q']:
+            q = request.GET['q']
+            libros = Libro.objects.filter(titulo__icontains=q)
+            return render(request, 'resultados.html',
+                {'libros': libros, 'query': q})
+        else:
+            return HttpResponse('Por favor introduce un termino de búsqueda.')
+
+Un par de notas sobre lo que hicimos:
+
+* Aparte de checar que ``'q'`` exista en ``request.GET``,  nos aseguramos
+  que ``request.GET['q']`` no sea una cadena vacía antes de pasarle la
+  consulta a la base de datos.
+
+* Estamos  usando ``Libro.objects.filter(titulo__icontains=q)`` para consultar
+  en la tabla libros, todos los libros que incluyan en el titulo los datos
+  proporcionados en  la consulta, ``icontains`` es un tipo de búsqueda (como
+  explicamos en el capítulo 5 y el apéndice B) en la que no se distinguen
+  mayúsculas de minúsculas (*case-insensitive*), y que internamente usa el
+  operador ``LIKE`` de SQL en la base de datos. La declaración puede ser
+  traducida como "Obtener todos los libros que contengan ``q``"
+
+  Esta es una forma muy simple para buscar libros. No recomendamos usar
+  una simple consulta ``icontains`` en bases de datos muy grandes en producción
+  ya que esto puede ser muy lento. (En el mundo real,  es mejor usar un sistema
+  de búsqueda personalizado de cierto tipo. Busca en la web  *proyectos
+  libres de sistemas de búsquedas de texto* para que te des una idea de las
+  posibilidades.)
+
+* Pasamos ``libros``, como una lista de objetos ``Libro`` a la plantilla.
+  El código de la plantilla ``resultados.html``  debe incluir algo como esto:
 
 .. code-block:: html+django
 
-    <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
-    <html lang="en">
-    <head>
-        <title>Search{% if query %} Results{% endif %}</title>
-    </head>
-    <body>
-      <h1>Search</h1>
-      <form action="." method="GET">
-        <label for="q">Search: </label>
-        <input type="text" name="q" value="{{ query|escape }}">
-        <input type="submit" value="Search">
-      </form>
-    
-      {% if query %}
-        <h2>Results for "{{ query|escape }}":</h2>
-    
-        {% if results %}
-          <ul>
-          {% for book in results %}
-            <li>{{ book|escape }}</l1>
-          {% endfor %}
-          </ul>
-        {% else %}
-          <p>No books found</p>
-        {% endif %}
-      {% endif %}
-    </body>
-    </html>
+    <p>Estas buscado: <strong>{{ query }}</strong></p>
 
-A esta altura, lo que esto hace debería ser obvio. Sin embargo, hay
-unas pocas sutilezas que vale la pena resaltar:
+    {% if libros %}
+        <p>Libros encontrados: {{ libros|length }} libro{{ libros|pluralize }}.</p>
+        <ul>
+            {% for libros in libros %}
+            <li>{{ libros.titulo }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>Ningun libro coincide con el criterio de busqueda.</p>
+    {% endif %}
 
-*  *action* s ``.`` en el formulario, esto significa "la URL
-   actual". Esta es una buena práctica estándar: no utilices vistas
-   distintas para la página que contiene el formulario y para la
-   página con los resultados; usa una página única para las dos
-   cosas.
+Observa que estamos usando el filtro de plantillas ``pluralize``, el cual
+apropiadamente  agrega en la salida la "s", basado en el número de libros
+encontrados.
 
-* Volvemos a insertar el texto de la consulta en el
-  ``<input>``. Esto permite a los usuarios refinar fácilmente sus
-  búsquedas sin tener que volver a teclear todo nuevamente.
+Mejorando la forma de manejar un formulario
+===========================================
 
-* En todo lugar que aparece ``query`` y ``book``, lo pasamos por
-  el filtro ``escape`` para asegurarnos de que cualquier búsqueda
-  potencialmente maliciosa sea descartada antes de que se inserte
-  en la página
+En los capítulos anteriores te mostramos la forma más simple en la que podría
+trabajar un formulario. Ahora te mostraremos algunos problemas que pueden surgir
+y la manera de solucionarlos.
 
-  ¡Es *vital* hacer esto con todo el contenido suministrado por el
-  usuario! De otra forma el sitio se abre a ataques de cross-site
-  scripting (XSS). El :doc:`Capítulo 19<chapter19>` discute XSS y la
-  seguridad con  más detalle.
+Primero,  la forma en que la vista ``buscar()`` maneja las consultas vacías es
+pobre --solo mostramos un mensaje ``"Por favor introduce un termino de búsqueda."``
+lo que requiere que el usuario, tenga que dar clic de nuevo en el botón para
+regresar su navegador a la pagina de busquedas. Esto es horrible y poco profesional,
+si implementas algo así, tus privilegios Django serán revocados.
 
-* En cambio, no necesitamos preocuparnos por el contenido
-  malicioso en las búsquedas de la base de datos -- podemos pasar
-  directamente la consulta a la base de datos. Esto es posible
-  gracias a que la capa de base de datos de Django se encarga de
-  manejar este aspecto de la seguridad por ti.
+Sería mucho mejor volver a mostrar el formulario con los errores resaltados, para
+que el usuario pueda intentar nuevamente rellenarlo. La forma más fácil de hacer
+esto, es renderizando la plantilla otra vez, así:
 
-Ahora ya tenemos la búsqueda funcionando. Se podría mejorar más el
-sitio colocando el formulario de búsqueda en cada página (esto es, en
-la plantilla base). Dejaremos esto de tarea para el hogar.
+.. parsed-literal::
 
-A continuación veremos un ejemplo más complejo. Pero antes de hacerlo,
-discutamos un tópico más abstracto: el "formulario perfecto".
+    from django.http import HttpResponse
+    from django.shortcuts import render
+    from biblioteca.models import Libro
 
-El "formulario perfecto"
-========================
+    def formulario_buscar(request):
+        return render(request, 'formulario_buscar.html')
 
-Los formularios pueden ser a menudo una causa importante de
-frustración para los usuarios de tu sitio. Consideremos el
-comportamiento de un hipotético formulario perfecto:
-
-    * Debería pedirle al usuario cierta información, obviamente. La
-      accesibilidad y la usabilidad importan aquí. Así que es
-      importante el uso inteligente del elemento ``<label>`` de HTML,
-      y también lo es proporcionar ayuda contextual útil.
-
-    * Los datos suministrados deberían ser sometidos a una validación
-      extensiva. La regla de oro para la seguridad de una aplicación
-      web es *"nunca confíes en la información que ingresa"*. Así que la
-      validación es esencial.
-
-    * Si el usuario ha cometido algún error, el formulario debería
-      volver a mostrarse, junto a los mensajes de error detallados e
-      informativos. Los campos deberían rellenarse con los datos
-      previamente suministrados, para evitarle al usuario tener que
-      volver a tipear todo nuevamente.
-
-    * El formulario debería volver a mostrarse una y otra vez, hasta
-      que todos los campos se hayan rellenado correctamente.
-
-¡Construir el formulario perfecto pareciera llevar mucho trabajo! Por
-suerte, el *framework* de formularios de Django está diseñado para
-hacer la mayor parte del trabajo por ti. Se le proporciona una
-descripción de los campos del formulario, reglas de validación, y una
-simple plantilla, y Django hace el resto. El resultado es un
-"formulario perfecto" que requiere de muy poco esfuerzo.
-
-Creación de un formulario para comentarios
-==========================================
-
-La mejor forma de construir un sitio que la gente ame es atendiendo a
-sus comentarios. Muchos sitios parecen olvidar esto; ocultan los
-detalles de su contacto en *FAQs*, y parecen dificultar lo más posible
-el encuentro con las personas.
-
-Cuando tu sitio tiene millones de usuarios, esto puede ser una
-estrategia razonable. En cambio, cuando intentas formarte una
-audiencia, deberías pedir comentarios cada vez que se presente la
-oportunidad. Escribamos entonces un simple formulario para
-comentarios, y usémoslo para ilustrar al *framework* de Django en
-plena acción.
-
-Comenzaremos agregando ``(r'^contact/$',
-'mysite.books.views.contact')`` al URLconf, y luego definamos nuestro
-formulario. Los formularios en Django se crean de una manera similar a
-los modelos: declarativamente, empleando una clase de Python. He aquí
-la clase para nuestro simple formulario. Por convención, lo
-insertaremos en un nuevo archivo ``forms.py`` dentro del directorio de
-nuestra aplicación::
-
-    from django import newforms as forms
-
-    TOPIC_CHOICES = (
-        ('general', 'General enquiry'),
-        ('bug', 'Bug report'),
-        ('suggestion', 'Suggestion'),
-    )
-
-    class ContactForm(forms.Form):
-        topic = forms.ChoiceField(choices=TOPIC_CHOICES)
-        message = forms.CharField()
-        sender = forms.EmailField(required=False)
-
-.. admonition:: *¿"New" Forms?* ¿Qué?
-
-    Cuando Django fue lanzado al público por primera vez, poseía un
-    sistema de formularios complicado y confuso. Como hacía muy
-    dificultosa la producción de formularios, fue rescrito y ahora se
-    llama *"newforms"* (nuevos formularios). Sin embargo, como todavía
-    hay cierta cantidad de código que depende del "viejo" sistema de
-    formularios, Django actualmente viene con ambos paquetes.
-
-    Al momento de escribir ese libro, el viejo sistema de formularios
-    de Django sigue disponible como ``django.forms``, y el nuevo
-    paquete como ``django.newforms``. En algún momento esto va a
-    cambiar, y ``django.forms`` hará referencia al nuevo paquete de
-    formularios. Sin embargo, para estar seguros de que los ejemplos
-    de este libro funcionen lo más ampliamente posible, todos harán
-    referencia a ``django.newforms``.
-
-Un formulario de Django es una subclase de ``django.newforms.Form``,
-tal como un modelo de Django es una subclase de
-``django.db.models.Model``. El módulo ``django.newforms`` también
-contiene cierta cantidad de clases ``Field`` para los campos. Una
-lista completa de éstas últimas se encuentra disponible en la
-documentación de Django, en
-http://www.djangoproject.com/documentation/
-
-Nuestro ``ContactForm`` consiste de tres campos: un tópico, que se
-puede elegir entre tres opciones; un mensaje, que es un campo de
-caracteres; y un emisor, que es un campo de correo electrónico y es
-opcional (porque incluso los comentarios anónimos pueden ser
-útiles). Hay una cantidad de otros tipos de campos disponibles, y
-puedes escribir nuevos tipos si ninguno cubre tus necesidades.
-
-El objeto formulario sabe cómo hacer una cantidad de cosas útiles por
-sí mismo. Puede validar una colección de datos, puede generar sus
-propios *"widgets"* de HTML, puede construir un conjunto de mensajes
-de error útiles. Y si estás en perezoso, puede incluso dibujar el
-formulario completo por ti. Incluyamos esto en una vista y veámoslo en
-acción. En ``views.py``:
-
-.. code-block:: python
-
-    from django.db.models import Q
-    from django.shortcuts import render_to_response
-    from models import Book
-    **from forms import ContactForm**
-
-    def search(request):
-        query = request.GET.get('q', '')
-        if query:
-            qset = (
-                Q(title__icontains=query) |
-                Q(authors__first_name__icontains=query) |
-                Q(authors__last_name__icontains=query)
-            )
-            results = Book.objects.filter(qset).distinct()
+    def buscar(request):
+        if 'q' in request.GET and request.GET['q']:
+            q = request.GET['q']
+            libros = Libro.objects.filter(titulo__icontains=q)
+            return render(request, 'resultados.html',
+                {'libros': libros, 'query': q})
         else:
-            results = []
-        return render_to_response("books/search.html", {
-            "results": results,
-            "query": query
-        })
+            **return render(request, 'resultados.html', {'error': True})**
 
-    **def contact(request):**
-        **form = ContactForm()**
-        **return render_to_response('contact.html', {'form': form})**
+(Observa que hemos incluido la vista  ``formulario_buscar()``, para que puedas observar
+ambas vistas en un solo lugar.)
 
-y en ``contact.html``:
+También hemos mejorado la vista ``buscar()`` para  renderizar la plantilla
+``resultados.html`` otra vez, si la consulta está vacía. Ya que necesitamos
+mostrar los mensajes de errores en la plantilla, hemos pasado la variable ``error``
+a la plantilla. Ahora edita ``formulario_buscar.html`` y checa la variable
+``error`` que hemos agregado:
 
-.. code-block html
+.. parsed-literal::
 
-    <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
-    <html lang="en">
+    <html>
     <head>
-        <title>Contact us</title>
+        <title>Buscar</title>
     </head>
     <body>
-        <h1>Contact us</h1>
-        <form action="." method="POST">
-            <table>
-                {{ form.as_table }}
-            </table>
-            <p><input type="submit" value="Submit"></p>
+        **{% if error %}**
+            **<p style="color: red;">Por favor introduce un termino de busqueda.</p>**
+        **{% endif %}**
+        <form action="/buscar/" method="get">
+            <input type="text" name="q">
+            <input type="submit" value="Buscar">
         </form>
     </body>
     </html>
 
-La línea más interesante aquí es ``{{ form.as_table }}``. ``form`` es
-nuestra instancia de ContactForm, que fue pasada al
-``render_to_response``. ``as_table`` es un método de ese objeto que
-reproduce el formulario como una secuencia de renglones de una tabla
-(también pueden usarse ``as_ul`` y ``as_p``). El HTML generado se ve
-así:
+.. SL Tested ok
+
+Con este cambio en su lugar, tenemos una mejor aplicación, pero ahora nos
+preguntamos ¿Es realmente necesaria una vista dedicada ``formulario_buscar()``? Tal
+y como están las cosas, una petición a una URL ``/buscar/`` (sin parámetros
+``GET``) mostrara un formulario vacio (pero sin errores). Podemos remover la
+vista ``formulario_buscar()``, junto con los patrones URL asociados, a si como cambiar
+la vista ``buscar()`` para que esconda el mensaje de error cuando alguien visite
+``/buscar/`` sin parameters  ``GET``::
+
+    def buscar(request):
+        error = False
+        if 'q' in request.GET:
+            q = request.GET['q']
+            if not q:
+                error = True
+            else:
+                libros = Libro.objects.filter(titulo__icontains=q)
+                return render(request, 'resultados.html',
+                    {'libros': libros, 'query': q})
+        return render(request, 'formulario_buscar.html',
+            {'error': error})
+
+.. SL Tested ok
+
+Con esta vista actualizada, cuando un usuario visita ``/buscar/`` sin
+parámetros ``GET``, el formulario de búsqueda no mostrara los mensajes de error.
+Si un usuario trata de subir un formulario con un valor vacio para ``'q'``,
+el formulario de búsqueda mostrara el mensaje de error en letras rojas. Y
+finalmente si un usuario sube un formulario con una cadena de consulta -- es decir
+con valores no vacios para ``'q'``,  se mostraran los resultados de la búsqueda.
+
+Podemos realizar una mejora final para nuestra aplicación, removiendo un poco de
+redundancia. Ahora que hemos comenzado a refinar las dos vistas y las URLs en
+una sola llamada ``/buscar/``, que manejara el despliegue y el formulario de
+búsquedas y tambien mostrara los resultados, por lo que el formulario en HTML en
+la plantilla ``formulario_buscar.html`` no necesita que se incruste el código en
+la URL, en lugar de hacer esto::
+
+   <form action="/buscar/" method="get">
+
+Podemos cambiarlo por esto::
+
+    <form action="" method="get">
+
+``action=""`` significa "Envía el formulario con la misma URL a la pagina
+actual". Con este cambio realizado, no tienes que recordar cambiar ``action``
+cada vez que necesites enlazar la vista ``buscar()`` a otra URL.
+
+Validación Simple
+=================
+
+Nuestro ejemplo de búsquedas es razonablemente simple, especificamente hablando
+en términos de validación  de datos, ya que solamente nos aseguramos que las
+consultas en las búsquedas no estén vacías. Muchos formularios en HTML incluyen
+niveles de validación más complejos, que van más allá de asegurarse que los
+valores no estén  vacios. Todos hemos visto mensajes de error en sitios Web
+como estos.
+
+* "Por favor introduce una dirección de correo electrónica valida". 'foo' no es
+  una dirección de correo electrónica.
+* "Por favor introduce un código postal valido de 5 dígitos". '123 no es un
+  código postal valido'
+* "Por favor introduce una  fecha valida en el formato YYYY-MM-DD."
+* "Por favor introduce una contraseña que contenga al menos 8 caracteres y
+  que contenga al menos un numero".
+
+.. admonition:: Una nota sobre validación usando Java Script
+
+    Este tema va mas allá del alcance de este libro, pero puedes usar Java Script
+    para validar datos del lado del cliente, directamente en el navegador. Pero
+    ten cuidado: incluso si haces esto, también *debes* de validar los datos de
+    el lado del servidor.  Algunas personas pueden tener Java Script desactivado
+    y algunos usuarios maliciosos pueden subir en crudo, datos no validos
+    directamente al manejador de formularios, para ver que daños pueden causar
+    sus travesuras.
+
+    No hay nada que hacer en estos casos, con excepción de *siempre* validar
+    los datos enviados por los usuarios de el lado del servidor (Por ejemplo en
+    las vista de Django). Debes pensar en usar la validación en Java Script como
+    una característica extra de usabilidad, no como la única manera de
+    validación.
+
+Bien, ajustemos la vista ``buscar()`` para que valide términos de búsqueda que
+contengan como máximo 20 caracteres o menos. (Para efectos del ejemplo, digamos
+que los términos largos pueden hacer las consultas muy lentas.) ¿Cómo podemos
+hacer eso? La cosa más simple posible seria pensar en incrustar directamente la
+lógica en la vista, más o menos así:
+
+.. parsed-literal::
+
+    def buscar(request):
+        error = False
+        if 'q' in request.GET:
+            q = request.GET['q']
+            if not q:
+                error = True
+            **elif len(q) > 20:**
+                **error = True**
+            else:
+                libros = Libro.objects.filter(titulo__icontains=q)
+                return render(request, 'buscar_results.html',
+                    {'libros': libros, 'query': q})
+        return render(request, 'buscar_form.html',
+            {'error': error})
+
+Ahora, si tratamos de enviar una consulta que contenga más de 20 caracteres de
+longitud, no nos permitirá buscar, solo obtendremos un mensaje de error. Pero el
+mensaje de error actual en ``buscar_form.html`` dice: ``"Por favor introduce un
+termino de busqueda."`` Por lo que tendremos que cambiarlo para ser mas precisos
+en ambos casos.
+
+.. parsed-literal::
+
+    <html>
+    <head>
+        <title>Buscar</title>
+    </head>
+    <body>
+        {% if error %}
+            <p style="color: red;">Por favor introduce un termino de busqueda menor a 20 caracteres.</p>
+        {% endif %}
+        <form action="/buscar/" method="get">
+            <input type="text" name="q">
+            <input type="submit" value="Buscar">
+        </form>
+    </body>
+    </html>
+
+.. SL Tested ok
+
+Hay algo muy raro en esto. El único mensaje de error es potencialmente confuso.
+¿Por qué el mensaje para el envió de un formulario vacio menciona un límite de
+20 caracteres? Los mensajes de error deben ser específicos, no deben dar lugar
+a ambigüedades y no deben ser confusos.
+
+El problema está en el hecho de que estamos usando un simple valor booleano para
+``error``, mientras que deberíamos usar una *lista*  de cadenas para mostrar
+el mensaje de error. Esta es la forma en que podemos arreglarlo:
+
+.. parsed-literal::
+
+    def buscar(request):
+        **errors = []**
+        if 'q' in request.GET:
+            q = request.GET['q']
+            if not q:
+                **errors.append('Por favor introduce un termino de busqueda.')**
+            elif len(q) > 20:
+                **errors.append('Por favor introduce un termino de busqueda menor a 20 caracteres.')**
+            else:
+                libros = Libro.objects.filter(titulo__icontains=q)
+                return render(request, 'resultados.html',
+                    {'libros': libros, 'query': q})
+        return render(request, 'formulario_buscar.html',
+            {**'errors': errors**})
+
+Entonces,  necesitamos hacer algunos pequeños cambios a la plantilla
+``formulario_buscar.html`` para que refleje ahora la forma en que estamos
+pasando la lista de ``errors`` en lugar de un  valor booleano ``error``.
+
+.. parsed-literal::
+
+    <html>
+    <head>
+        <title>Buscar</title>
+    </head>
+    <body>
+        **{% if errors %}**
+            **<ul>**
+                **{% for error in errors %}**
+                **<li style="color: red;">{{ error }}</li>**
+                **{% endfor %}**
+            **</ul>**
+        **{% endif %}**
+        <form action="/buscar/" method="get">
+            <input type="text" name="q">
+            <input type="submit" value="Buscar">
+        </form>
+    </body>
+    </html>
+
+.. SL Tested ok
+
+De esta forma podemos validar de forma simple las cadenas de consultas:
+
+.. figure:: graphics/chapter07/ejemplo_validacion_cadenas.png
+   :alt: Captura de un formulario para validacion de cadenas en Django.
+
+   **Figura 7-2.** Ejemplo de un formulario para validar cadenas de datos.
+
+Construir un formulario para contactos
+======================================
+
+A pesar de que buscamos mejorar el formulario de busquedas en el ejemplo pasado,
+varias veces y lo mejoramos de forma elegante, sigue siendo fundamentalmente
+simple; ya que contiene únicamente  un campo ``'q'``. Debido a que era tan simple,
+no utilizamos la librería de formularios de Django, para tratar con ello. Pero los
+formularios más complejos, necesitan un tratamiento más complicado -- y ahora
+desarrollaremos algo más complicado: un formulario para un sitio de contactos.
+
+El formulario de contactos permitirá a los visitantes del sitio enviar un poco de
+retroalimentación junto con una dirección e-mail opcional. Después de que el
+formulario sea enviado y los datos validados, automáticamente enviara un mensaje
+vía e-email al personal del sitio.
+
+Empezamos con la plantilla, ``formulario-contactos.html``.
 
 .. code-block:: html
 
+    <html>
+    <head>
+        <title>Contactanos</title>
+    </head>
+    <body>
+        <h1>Contactanos</h1>
 
-    <tr>
-        <th><label for="id_topic">Topic:</label></th>
-        <td>
-            <select name="topic" id="id_topic">
-                <option value="general">General enquiry</option>
-                <option value="bug">Bug report</option>
-                <option value="suggestion">Suggestion</option>
-            </select>
-        </td>
-    </tr>
-    <tr>
-        <th><label for="id_message">Message:</label></th>
-        <td><input type="text" name="message" id="id_message" /></td>
-    </tr>
-    <tr>
-        <th><label for="id_sender">Sender:</label></th>
-        <td><input type="text" name="sender" id="id_sender" /></td>
-    </tr>
+        {% if errors %}
+            <ul>
+                {% for error in errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
 
-Observa que las etiquetas ``<table>`` y ``<form>`` no se han incluido;
-debes definirlas por tu cuenta en la plantilla. Esto te da control
-sobre el comportamiento del formulario al ser suministrado. Los
-elementos *label* sí se incluyen, y proveen a los formularios de
-accesibilidad "desde fábrica".
+        <form action="/contactos/" method="post">{% csrf_token %}
+            <p>Asunto: <input type="text" name="asunto"></p>
+            <p>E-mail (opcional): <input type="text" name="email"></p>
+            <p>Mensaje: <textarea name="mensaje" rows="10" cols="50"></textarea></p>
+            <input type="submit" value="Enviar">
+        </form>
+    </body>
+    </html>
 
-Nuestro formulario actualmente utiliza un *widget* ``<input
-type="text">`` para el campo del mensaje. Pero no queremos restringir
-a nuestros usuarios a una sola línea de texto, así que la cambiaremos
-por un *widget* ``<textarea>``:
+Definimos tres campos en la plantilla: el asunto, la dirección de correo
+electrónico y el mensaje. El segundo es opcional, pero los otros dos campos son
+obligatorios. Observa que estamos usando el ``metodo="post"`` en lugar de el
+``metodo="get"`` porque al enviar el formulario, este tiene efectos secundarios
+--envía un e-mail. También observa que copiamos la forma de mostrar los errores
+de el código, de la anterior plantilla ``formulario_buscar.html``.
 
-.. code-block:: python
+Si continuamos siguiendo el camino, que establecimos al crear la vista ``buscar()``
+de la sección anterior, una versión preliminar de la vista ``contactos()`` podría
+verse así::
+
+    from django.core.mail import send_mail
+    from django.http import HttpResponseRedirect
+    from django.shortcuts import render
+
+    def contactos(request):
+        errors = []
+        if request.method == 'POST':
+            if not request.POST.get('asunto', ''):
+                errors.append('Por favor introduce el  asunto.')
+            if not request.POST.get('mensaje', ''):
+                errors.append('Por favor introduce un mensaje.')
+            if request.POST.get('email') and '@' not in request.POST['email']:
+                errors.append('Por favor introduce una direccion de e-mail valida.')
+            if not errors:
+                send_mail(
+                    request.POST['asunto'],
+                    request.POST['mensaje'],
+                    request.POST.get('email', 'noreply@example.com'),
+                    ['siteowner@example.com'],
+                )
+                return HttpResponseRedirect('/contactos/gracias/')
+        return render(request, 'formulario-contactos.html',
+            {'errors': errors})
+
+.. Falta comprobar
+
+(Si continuas siguiendo los ejemplos, tal vez te preguntes, ¿Si debes poner la
+vista en el archivo ``libros/views.py``. Aunque este no tenga nada que ver con
+la aplicación libros, o debes de ponerla en otro lugar? Esta decisión es tuya;
+a Django no le importa, con tal de que la vista apunte a la URLconf. Aunque
+personalmente deberías crear un directorio separado, algo así como: ``contactos``,
+en el mismo nivel en el que esta ``libros`` en el árbol de directorios,
+conteniendo un archivo vacio ``__init__.py`` y una ``views.py``.
+
+Algunas novedades que pasan aquí:
+
+* Estamos comprobando que  ``request.method`` sea ``'POST'``. Esto únicamente
+  será verdadero en los casos en que se envié el formulario y no en el caso de
+  que  alguien simplemente mira el formulario de contactos (En este ultimo caso
+  ``request.method será fijado como  'GET'``, porque los   navegadores Web
+  normalmente exploran usando ``GET``, no ``POST``.) Esto hace más agradable
+  aislar "El formulario para mostrar" de los casos en que se necesite presentar
+  el  "Procesamiento de formularios".
+
+* En lugar de  usar ``request.GET``,  estamos usando ``request.POST`` para
+  acceder a los datos del formulario de envió. Esto es necesario porque el formulario
+  HTML en ``formulario-contactos.html``  usa ``method="post"``. Si la vista es
+  accedida vía  ``POST``,  en lugar de ``request.GET`` estara vacía.
+
+* Esta vez tenemos *dos* campos requeridos, ``asunto`` y ``mensaje``, así que
+  tenemos que validar ambos. Observa que utilizamos  ``request.POST.get()`` y
+  proveemos una cadena en blanco como el valor por omisión para el tercer campo;
+  esta es una manera agradable y corta de manejar ambos casos, para evitar que
+  falten claves y se pierdan datos.
+
+* Aunque el campo de ``email`` no es requerido, todavía podemos validarlo si nos
+  lo envían. Nuestro algoritmo de validación es frágil -- solo comprobamos que
+  la cadena contenga un carácter ``@``. En el mundo real, necesitamos una
+  validación más robusta (y Django nos la proveerá, en breve te mostraremos
+  como.)
+
+* Estamos usando la funcion  ``django.core.mail.send_mail`` para enviar un
+  e-mail. Esta funcion tiene cuatro argumentos obligatorios: el asunto y el
+  cuerpo del mensaje, la dirección del emisor, y una lista de direcciones del
+  destino. ``send_mail`` es un wrapper en torno a la clase ``EmailMessage``
+  de Django, la cual provee características avanzadas tales como archivos
+  adjuntos, mensajes multiparte y un control completo sobre los encabezados
+  del mensaje.
+
+  Ten en cuenta que para usar el envió de e-mail usando ``send_mail()``, tu
+  servidor  debe de estar configurado para enviar emails, y Django debe de
+  informar al servidor sobre la salida de e-mails. Mas adelante configuraremos
+  un servidor de correo que nos  permitira enviar emails en el proceso de
+  desarrollo.
+
+* Después de que el e-mail es enviado con "éxito", redirige al usuario a otra
+  página retornando un objeto  ``HttpResponseRedirect``. Te dejaremos la
+  implementación de la pagina "enviado con éxito" (ya que es una simple
+  vista/URLconf/plantilla) pero es necesario explicar que debes usar un
+  redirecionamiento para dirigir al usuario a otro lugar, en vez de por ejemplo,
+  simplemente llamar a ``render()``  con una plantilla allí mismo.
+
+  **Esta es la razón:** Si un usuario selecciona *actualizar* sobre una página
+  que muestra una consulta ``POST``, la consulta se repetirá. Esto probablemente
+  lleve a un comportamiento no deseado, por ejemplo, que el registro se agregue
+  dos veces a la base de datos. Redirigir luego del POST es un patrón útil que
+  puede ayudar a prevenir este escenario. Así que luego de que se haya
+  procesado el ``POST`` con éxito, *siempre* redirige al usuario a otra página
+  en lugar de retornar el HTML directamente. Esta es una buena práctica de
+  desarrollo  Web
+
+.. figure:: graphics/chapter07/contactos.png
+   :alt: Captura de un formulario para contactos en Django.
+
+   **Figura 7-3.** Ejemplo de un formulario para contactos.
+
+La vista trabaja, pero algunas funciones de validación son  "repetitivas" Imagina
+procesar un formulario con una docena de campos, ¿Realmente quieres escribir
+todas esas  declaraciones ``if``?
+
+Otro problema es si el usuario ha cometido algún error, *el formulario debería
+volver a mostrarse*, junto a los mensajes de error resaltados. Los campos
+deberían rellenarse con los datos previamente suministrados, para evitarle al
+usuario tener que volver a tipear todo nuevamente.(El formulario debería volver
+a mostrarse una y otra vez, hasta que todos los campos se hayan rellenado
+correctamente.) Podemos devolver *manualmente* los datos ``POST`` a la
+plantilla, pero tendríamos que corregir los campos en HTML para insertar el
+valor apropiado en el lugar apropiado.
+
+Finalmente esta es la vista y la plantilla final:
+
+.. snippet::
+   :filename: views.py
+
+    def contactos(request):
+        errors = []
+        if request.method == 'POST':
+            if not request.POST.get('asunto', ''):
+                errors.append('Por favor introduce el  asunto.')
+            if not request.POST.get('mensaje', ''):
+                errors.append('Por favor introduce un mensaje.')
+            if request.POST.get('email') and '@' not in request.POST['email']:
+                errors.append('Por favor introduce una direccion de e-mail valida.')
+            if not errors:
+                send_mail(
+                    request.POST['asunto'],
+                    request.POST['mensaje'],
+                    request.POST.get('email', 'noreply@example.com'),
+                    ['siteowner@example.com'],
+                )
+                return HttpResponseRedirect('/contactos/gracias/')
+        return render(request, 'formulario-contactos.html', {
+            'errors': errors,
+            'asunto': request.POST.get('asunto', ''),
+            'mensaje': request.POST.get('mensaje', ''),
+            'email': request.POST.get('email', ''),
+        })
+
+.. snippet:: html+django
+   :filename: formulario-contactos.html
+
+    <html>
+    <head>
+        <title>Contactanos</title>
+    </head>
+    <body>
+        <h1>Contactanos</h1>
+
+        {% if errors %}
+            <ul>
+                {% for error in errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <form action="/contactos/" method="post">{% csrf_token %}
+            <p>Asunto: <input type="text" name="asunto" value="{{ asunto }}"></p>
+            <p>E-mail (opcional): <input type="text" name="email" value="{{ email }}"></p>
+            <p>Mensaje: <textarea name="mensaje" rows="10" cols="50">{{ mensaje }}</textarea></p>
+            <input type="submit" value="Enviar">
+        </form>
+    </body>
+    </html>
+
+.. SL Tested ok
+
+Como seguramente te habras dado cuenta, el proceso de validacion de datos, no es
+una tarea sencilla, ya que introduce una buena cantidad de oportunidades para
+cometer errores humanos. Esperamos que comiences a ver la oportunidad que ofrecen
+algunas bibliotecas de alto nivel en Django, que manejan los trabajos relacionados
+con la validación, por ti.
+
+Tu primer formulario usando clases
+==================================
+
+Django posee una librería llamada ``django.forms``, que maneja muchos tipos de
+temas que hemos explorado en este capítulo --Formularios para validar y
+mostrar HTML --.  Sumerjámonos dentro de nuestra aplicación para formularios de
+contactos,  usando ahora los formularios del framework Django .
+
+.. admonition:: La librería "forms" de Django
+
+    A través de la comunidad de Django, puedes haber escuchado alguna
+    conversación sobre algo llamado ``django.newforms``. Cuando la gente
+    pregunta sobre  ``django.newforms``, ellos se refieren ahora a  ``django.forms``
+    -- la librería que cubriremos en este capítulo --.
+
+    La razón del cambio de nombre es histórico. Cuando Django fue lanzado al
+    público por primera vez, poseía un sistema de formularios complicado y
+    confuso, ``django.forms``. Como hacía muy dificultosa la producción de
+    formularios, fue rescrito y llevo por nombre ``django.newforms``. Sin
+    embargo algunas personas siguieron usando el viejo sistema. Cuando Django
+    1.0 fue lanzado, el  viejo  ``django.forms`` se fue y ``django.newforms`` se
+    convirtió en ``django.forms``.
+
+Lo primero que necesitas para usar el framework de formularios es definir una
+clase ``Form`` para cada ``formulario`` HTML que quieras crear,  En este caso
+únicamente queremos un ``formulario``, así que solo necesitamos tener una clase
+``Form``. Esta clase puede localizarse en cualquier lugar -- incluso podemos
+ponerla directamente en el archivo de vistas ``views.py`` -- pero entre la
+comunidad la convención es ponerla en un archivo separado llamado ``forms.py``.
+Crea este archivo en el mismo directorio  que ``views.py`` e introduce lo
+siguiente::
+
+    from django import forms
+
+    class FormularioContactos(forms.Form):
+        asunto = forms.CharField()
+        email = forms.EmailField(required=False)
+        mensaje = forms.CharField()
+
+Esto es bastante intuitivo y muy similar a la sintaxis de modelos de Django.
+Cada campo en el formulario es representado por un tipo de clase  ``Field`` --
+``CharField`` y ``EmailField`` son únicamente los tipos de campos usados como
+atributos de la clase ``Form``. Cada campo es requerido por defecto, para
+hacer que el campos ``email`` sea opcional, necesitas especificar
+``required=False``.
+
+Saltemos al intérprete interactivo de Python y veamos lo que esta clase puede
+hacer (``usando manage.py shell``).
+
+La primer cosa que puede hacer es mostrarse a sí misma como HTML::
+
+    >>> from contactos.forms import FormularioContactos
+    >>> f = FormularioContactos()
+    >>> print (f)
+    <tr><th><label for="id_asunto">Asunto:</label></th><td><input type="text"
+        name="asunto" id="id_asunto" /></td></tr>
+    <tr><th><label for="id_email">Email:</label></th><td><input type="text"
+        name="email" id="id_email" /></td></tr>
+    <tr><th><label for="id_mensaje">Mensaje:</label></th><td><input type="text"
+        name="mensaje" id="id_mensaje" /></td></tr>
+
+Para mayor accesibilidad, Django agrega una etiqueta ``<label>`` a cada campo,
+La ideas es hacer el comportamiento predeterminado tan optimo como sea posible.
+
+La salida predeterminada se da en forma de tabla, usando una ``<table>`` en
+formato HTML, pero existen algunas otros tipos de salidas, por ejemplo::
+
+    >>> print f.as_ul()
+    <li><label for="id_asunto">Subject:</label> <input type="text"
+        name="asunto" id="id_asunto" /></li>
+    <li><label for="id_email">Email:</label> <input type="text"
+        name="email" id="id_email" /></li>
+    <li><label for="id_mensaje">Message:</label> <input type="text"
+        name="mensaje" id="id_mensaje" /></li>
+    >>> print f.as_p()
+    <p><label for="id_asunto">Subject:</label> <input type="text"
+        name="asunto" id="id_asunto" /></p>
+    <p><label for="id_email">Email:</label> <input type="text"
+        name="email" id="id_email" /></p>
+    <p><label for="id_mensaje">Mensaje:</label> <input type="text"
+        name="mensaje" id="id_mensaje" /></p>
+
+.. SL Tested ok
+
+Observa que las etiquetas ``<table>``, ``<ul>`` and ``<form>``  no se han
+incluido; debes definirlas por tu cuenta en la plantilla. Esto te da control
+sobre el comportamiento del formulario al ser suministrado. Los elementos
+``label`` sí se incluyen, y proveen a los formularios de accesibilidad
+“desde fábrica”.
+
+Estos métodos son solo atajos para los casos comunes, en los que es necesario
+"mostrar el formulario completo". Sin embargo también puedes mostrar un campo
+en particular::
+
+    >>> print f['asunto']
+    <input type="text" name="asunto" id="id_asunto" />
+    >>> print f['mensaje']
+    <input type="text" name="mensaje" id="id_mensaje" />
+
+.. SL Tested ok
+
+La segunda cuestion sobre los objetos ``Form`` es como hacer algo de validación de
+datos. Para validar datos, crea un nuevo objeto ``Form`` y pásale un diccionario
+de datos que vincule los nombres de los campos con los datos::
+
+  >>> f = FormularioContactos({'asunto': 'Hola', 'email': 'adrian@example.com',
+      'mensaje': '¡Buen sitio!'})
+
+Una vez que asocias datos, con una instancia de  ``Form``, haz creado un
+formulario "vinculado" ::
+
+    >>> f.is_bound
+    True
+
+.. SL Tested ok
+
+Una instancia de formulario puede estar en uno de dos estados: bound (vinculado)
+o unbound (no vinculado). Una instancia bound se construye con un diccionario
+(o un objeto que funcione como un diccionario) y sabe cómo validar y volver a
+representar sus datos. Un formulario no vinculado (unbound) no tiene datos
+asociados y simplemente sabe cómo representarse a sí mismo.
+
+Llama al método ``is_valid()`` en un cualquier formulario vinculado para saber
+si lo datos son validos. En el ejemplo hemos pasado un valor valido a cada campo
+de la clase ``Form``, así que  es completamente valido.::
+
+    >>> f.is_valid()
+    True
+
+Aun si no pasamos el campo  ``email``, el formulario sigue siendo válido, porque
+hemos especificado que el campo sea opcional con ``required=False`` ::
+
+    >>> f = FormularioContactos({'asunto': 'Hola', 'mensaje': '¡Buen sitio!'})
+    >>> f.is_valid()
+    True
+
+Pero si dejamos ya sea ``asunto`` o ``mensaje``, el ``Formulario`` ya no será
+válido::
+
+    >>> f = FormularioContactos({'asunto': 'Hola'})
+    >>> f.is_valid()
+    False
+    >>> f = FormularioContactos({'asunto': 'Hola', 'mensaje': ''})
+    >>> f.is_valid()
+    False
+
+.. SL Tested ok
+
+También puedes obtener un mensaje más especifico sobre los errores de un campo
+en particular, de esta forma::
+
+    >>> f = FormularioContactos({'asunto': 'Hola', 'mensaje': ''})
+    >>> f['mensaje'].errors
+    [u'Este campo es obligatorio.']
+    >>> f['asunto'].errors
+    []
+    >>> f['email'].errors
+    []
+
+.. SL Tested ok
+
+Cada ``Formulario`` vinculado que instanciemos contiene un atributo con  una
+variable llamada ``errors`` en forma de diccionario que asocia los nombres de
+los campos con la lista de mensajes de errores a mostrar.::
+
+    >>> f = FormularioContactos({'asunto': 'Hola', 'mensaje': ''})
+    >>> f.errors
+    {'mensaje': [u'Este campo es obligatorio.']}
+
+.. SL Tested ok
+
+Finalmente, cuando instanciemos un ``Formulario``  que contenga datos que han
+sido encontrados validos, tendremos disponible un atributo llamado ``cleaned_data``.
+El cual es un diccionario de datos enviados "Limpiamente". Sin embargo el framework
+de formularios hace más que validar los datos, también los convierte a tipos de
+datos Python.::
+
+    >>> f = FormularioContactos({'asunto': 'Hola', 'email':'adrian@example.com',
+        'mensaje': 'Buen sitio!'})
+    >>> f.is_valid()
+    True
+    >>> f.cleaned_data
+    {'mensaje': u'Buen sitio!', 'email': u'adrian@example.com', 'asunto': u'Hola'}
+
+.. SL Tested ok
+
+Nuestro formulario de contactos únicamente trata con cadena, las cuales
+convierte "limpiamente" en objetos Unicode --pero si utilizáramos
+``IntegerField`` o ``DateField``, el framework de formularios se aseguraría
+de usar ``cleaned_data`` apropiadamente para tratar con enteros en Python o  con
+objetos ``datetime.date`` para los campos dados.
+
+Ligando formularios a vistas
+============================
+
+Con un básico conocimiento sobre la forma en que trabajan las clases ``Form``,
+ahora puedes ver cómo usar esta infraestructura para remplazar algo de código
+repetitivo en la vista ``contactos()`` que creamos anteriormente.  Esta es
+la forma en que podemos rescribir la vista ``contactos()``, para usar el
+framework de formularios de Django:
+
+.. snippet::
+   :filename: views.py
+
+    from django.shortcuts import render
+    from contactos.forms import FormularioContactos
+
+    def contactos(request):
+        if request.method == 'POST':
+            form = FormularioContactos(request.POST)
+            if form.is_valid():
+                cd = form.cleaned_data
+                send_mail(
+                    cd['asunto'],
+                    cd['mensaje'],
+                    cd.get('email', 'noreply@example.com'),
+                    ['siteowner@example.com'],
+                )
+                return HttpResponseRedirect('/contactos/gracias/')
+        else:
+            form = FormularioContactos()
+        return render(request, 'formulario-contactos.html', {'form': form})
+
+
+.. snippet:: html+django
+   :filename: formulario-contactos.html
+
+    <html>
+    <head>
+        <title>Contactanos</title>
+    </head>
+    <body>
+        <h1>Contactanos</h1>
+
+        {% if form.errors %}
+            <p style="color: red;">
+                Por favor corrige lo siguiente:
+            </p>
+        {% endif %}
+
+        <form action="" method="post">{% csrf_token %}
+            <table>
+                {{ form.as_table }}
+            </table>
+            <input type="submit" value="Enviar">
+        </form>
+    </body>
+    </html>
+
+.. SL Tested ok
+
+Trata de ejecutar esto localmente. Carga el formulario, envíalo sin datos, ahora
+introduce una dirección de correo electrónica no valida, y finalmente envíalo
+con los datos correctamente.
+
+.. figure:: graphics/chapter07/formulario-contactos.png
+   :alt: Captura de un formulario para contactos usando la clase form.
+
+   **Figura 7-4.** Ejemplo de un formulario para contactos usando la clase form.
+
+¡Observa cuanto código repetitivo  hemos quitado!. El framework de formularios
+maneja la forma de mostrar el HTML, la validación, la limpieza de datos y se
+encarga de volver a mostrar el formulario con los errores.
+
+.. figure:: graphics/chapter07/formulario-contactos_validacion.png
+   :alt: Captura de un formulario para contactos usando la clase form y la validacion.
+
+   **Figura 7-5.** Formulario para contactos usando la clase form y la validacion automaticas.
+
+.. warning::
+
+    Aunque dependiendo de la configuración de tu servidor de email, puedes
+    obtener un mensaje de error cuando llames a ``send_mail()``, pero ese es
+    otro asunto.
+
+Enviar Emails usando Django
+============================
+
+Aunque Python hace relativamente fácil el envió de email, usando el módulo
+``smtplib``, Django ofrece un par de envolturas livianas sobre él. Estos
+wrappers hacen que el envió de emails se extraordinariamente rápido,
+especialmente en el desarrollo de tu proyecto, cuando necesitas probar el
+envió correcto de emails, por lo que Django provee soporte a plataformas que no
+pueden utilizar SMPT.
+
+El código se localiza en el modulo ``django.core.mail``.
+
+Configurar el servidor de correo en Django
+-------------------------------------------
+
+En Django puedes enviar un email en dos líneas, usando el metodo ``send_mail()``:
+
+Primero inicia el interprete interactivo con el comando ```manage.py shell``::
+
+  from django.core.mail import send_mail
+
+  send_mail('Este es el argumento', 'Aquí va el mensaje.', 'administrador@example.com',
+      ['para@example.com'], fail_silently=False)
+
+El correo se envía usando el servidor SMPT, con el puerto y el host especificado
+en el archivo de configuración ``setting.py``, mediante ``EMAIL_HOST`` y
+``EMAIL_PORT``,  mientras que las variables ``EMAIL_HOST_USER`` y
+``EMAIL_HOST_PASSWORD`` se usan para autentificarte con el servidor SMPT si así
+se requiere, por otra parte ``EMAIL_USE_TLS`` y ``EMAIL_USE_SSL`` se utilizan
+para controlar las conexiones seguras y por ultimo ``EMAIL_BACKEND`` se utiliza
+para configurar el servidor de correo a utilizar.
+
+Por omisión Django utiliza SMTP, como la configuración por defecto. Si quieres
+especificarla explícitamente usa lo siguiente en el archivo de configuraciones::
+
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+Un servidor de correo usando la terminal
+----------------------------------------
+
+La manera más fácil de configurar el envió de email de forma local es utilizando
+la consola. De esta forma el servidor de correo dirige todo el email a la salida
+estándar, permitiéndote revisar el contenido del correo en la terminal.
+
+Solo necesitas especificar el manejador de correo, usando la siguiente
+configuration::
+
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+Des esta forma los emails son redirigidos a la salida estandar de la terminal,
+para que los puedas visualizar.
+
+Un servidor de correo bobo
+--------------------------
+
+Así como se pueden recibir correos mediante la terminal, es posible también
+configurar un servidor de correo "bobo", que como su nombre sugiere solo simula
+el envió de correos de verdad.
+
+Para especificarlo, solo usa la siguiente configuración::
+
+    EMAIL_BACKEND = 'django.core.mail.backends.dummy.EmailBackend'
+
+Este servidor de correo, no está diseñado para su uso en producción --ya que
+solo provee una forma conveniente de enviar emails que puede ser usado en
+desarrollo de forma local.
+
+Otra forma de utilizar un servidor SMPT "tonto" que reciba los emails
+localmente y puedas visualizarlos en la terminal, es usando una clase
+incorporada en Python que inicia un servidor de correo con un solo comando::
+
+    python -m smtpd -n -c DebuggingServer localhost:1025
+
+Este comando inicia el servidor de correo en el puerto 1025, en el host
+``localhost``. Simplemente imprime en la salida estándar las cabeceras y el
+cuerpo de los emails, así que solo necesitas configurar ``EMAIL_HOST`` y
+``EMAIL_PORT`` respectivamente en el archivo```settings.py``.
+
+Cambiando la forma en que los campos son renderizados
+=====================================================
+
+Probablemente la primer cosa que notaras cuando renderices el formulario
+localmente sea  que el campo ``mensaje`` se visualiza como un
+``<input type="text">``, y quisieras que fuera un ``<textarea>``. Podemos
+arreglar esto, configurando el *widget* del campo.
+
+.. parsed-literal::
+
+    from django import forms
 
     class ContactForm(forms.Form):
-        topic = forms.ChoiceField(choices=TOPIC_CHOICES)
-        message = forms.CharField(**widget=forms.Textarea()**)
-        sender = forms.EmailField(required=False)
+        asunto = forms.CharField()
+        email = forms.EmailField(required=False)
+        mensaje = forms.CharField(**widget=forms.Textarea**)
 
-El *framework* de formularios divide la lógica de presentación para
-cada campo, en un conjunto de *widgets*. Cada tipo de campo tiene un
-*widget* por defecto, pero puedes sobreescribirlo fácilmente, o
-proporcionar uno nuevo de tu creación.
+.. SL Tested ok
 
-Por el momento, si se suministra el formulario, no sucede
-nada. Agreguemos nuestras reglas de validación::
+El framework de formularios separa la lógica de la presentación, para cada
+campo  en un conjunto de widgets. Cada tipo de campo tiene un widget por
+defecto, pero puedes sobrescribirlo fácilmente, o proporcionar uno nuevo de tu
+creación.
 
-    def contact(request):
+.. figure:: graphics/chapter07/sobrescribir_un_widget.png
+   :alt: Captura de un formulario, sobreescribiendo un widget con textarea.
+
+   **Figura 7-6.** Formulario usando un widget ``textarea``.
+
+Piensa en las clases **Field**  como las encargadas de la *lógica de validación*,
+mientras que los **widgets** se encargan de la *lógica de presentación*.
+
+Configurar una longitud máxima
+==============================
+
+Una de las necesidades mas comunes en cuanto a validación es comprobar que un
+campo tenga un cierto tamaño, es decir que acepte un maximo de caracteres. Como
+seguimos perfeccionando nuestro ``Formulario de contactos``, seria bueno limitar el
+``asunto`` a 100 caracteres.  Todo lo que tenemos que hacer es agregarle un valor
+maximo a la opcion ``max_length`` de un campo  ``CharField`` así:
+
+.. parsed-literal::
+
+    from django import forms
+
+    class FormularioContactos(forms.Form):
+        asunto = forms.CharField(**max_length=100**)
+        email = forms.EmailField(required=False)
+        mensaje = forms.CharField(widget=forms.Textarea)
+
+Un argumento opcional ``min_length`` (mínimo requerido), también está disponible.
+
+Especificar valores iníciales
+=============================
+
+Como una mejora mas para nuestro formulario, vamos a agregarle *valores iníciales*
+a el campo ``asunto`` algo asi como; ``"¡Adoro este sitio!"`` (Un poco de sugestión
+mental, no le hará daño a nadie.) Para hacer esto, usamos  un argumento ``initial``
+en la  definición misma de la instancia del ``formulario``;
+
+.. parsed-literal::
+
+    def contactos(request):
         if request.method == 'POST':
-            form = ContactForm(request.POST)
-        else:
-            form = ContactForm()
-        return render_to_response('contact.html', {'form': form})
-
-Una instancia de formulario puede estar en uno de dos estados: *bound*
-(vinculado) o *unbound* (no vinculado). Una instancia *bound* se
-construye con un diccionario (o un objeto que funcione como un
-diccionario) y sabe cómo validar y volver a representar sus datos. Un
-formulario *unbound* no tiene datos asociados y simplemente sabe cómo
-representarse a sí mismo.
-
-Intenta hacer clic en *Submit* en el formulario vacío. La página se
-volverá a cargar, mostrando un error de validación que informa que
-nuestro campo de mensaje es obligatorio.
-
-Intenta también ingresar una dirección de correo electrónico
-inválida. El ``EmailField`` sabe cómo validar estas direcciones, por
-lo menos a un nivel razonable.
-
-.. admonition:: Cómo especificar datos iniciales
-
-    Al pasar datos directamente al constructor del formulario, estos
-    se vinculan, y se indica que la validación debe ser efectuada. A
-    menudo, necesitamos mostrar un formulario inicial con algunos
-    campos previamente rellenados -- por ejemplo, en un formulario
-    "editar". Podemos hacerlo con el argumento de palabras claves
-    ``initial``::
-
-        form = CommentForm(initial={'sender': 'user@example.com'})
-
-    Si nuestro formulario *siempre* usará los mismos valores por
-    defecto, podemos configurarlos en la definición misma del
-    formulario:
-
-    .. code-block:: python 
-
-        message = forms.CharField(widget=forms.Textarea(),
-                                  **initial="Replace with your feedback"**)
-
-Procesamiento de los datos suministrados
-========================================
-
-Una vez que el usuario ha llenado el formulario al punto de que pasa
-nuestras reglas de validación, necesitamos hacer algo útil con los
-datos. En este caso, deseamos construir un correo electrónico que
-contenga los comentarios del usuario, y enviarlo. Para esto, usaremos
-el paquete de correo electrónico de Django.
-
-Pero antes, necesitamos saber si los datos son en verdad válidos, y si
-lo son, necesitamos una forma de accederlos. El *framework* de
-formularios hace más que validar los datos, también los convierte a
-tipos de datos de Python. Nuestro formulario para comentarios sólo
-trata con texto, pero si estamos usando campos como ``IntegerField`` o
-``DateTimeField``, el *framework* de formularios se encarga de que se
-devuelvan como un valor entero de Python, o como un objeto
-``datetime``, respectivamente.
-
-Para saber si un formulario está vinculado (*bound*) a datos válidos,
-llamamos al método ``is_valid()``::
-
-    form = ContactForm(request.POST)
-    if form.is_valid():
-        # Process form data
-
-Ahora necesitamos acceder a los datos. Podríamos sacarlos directamente
-del ``request.POST``, pero si lo hiciéramos, no nos estaríamos
-beneficiando de la conversión de tipos que realiza el *framework* de
-formularios. En cambio, usamos ``form.clean_data``::
-
-    if form.is_valid():
-        topic = form.clean_data['topic']
-        message = form.clean_data['message']
-        sender = form.clean_data.get('sender', 'noreply@example.com')
-        # ...
-
-Observa que dado que ``sender`` no es obligatorio, proveemos un valor
-por defecto por si no fue proporcionado. Finalmente, necesitamos
-registrar los comentarios del usuario. La manera más fácil de hacerlo
-es enviando un correo electrónico al administrador del sitio. Podemos
-hacerlo empleando la función::
-
-    from django.core.mail import send_mail
-
-    # ...
-
-    send_mail(
-        'Feedback from your site, topic: %s' % topic,
-        message, sender,
-        ['administrator@example.com']
-    )
-
-La función ``send_mail`` tiene cuatro argumentos obligatorios: el
-asunto y el cuerpo del mensaje, la dirección del emisor, y una lista
-de direcciones destino. ``send_mail`` es un código conveniente que
-envuelve a la clase ``EmailMessage`` de Django. Esta clase provee
-características avanzadas como adjuntos, mensajes multiparte, y un
-control completo sobre los encabezados del mensaje.
-
-Una vez enviado el mensaje con los comentarios, redirigiremos a
-nuestro usuario a una página estática de confirmación. La función de
-la vista finalizada se ve así::
-
-    from django.http import HttpResponseRedirect
-    from django.shortcuts import render_to_response
-    from django.core.mail import send_mail
-    from forms import ContactForm
-
-    def contact(request):
-        if request.method == 'POST':
-            form = ContactForm(request.POST)
+            form = FormularioContactos(request.POST)
             if form.is_valid():
-                topic = form.clean_data['topic']
-                message = form.clean_data['message']
-                sender = form.clean_data.get('sender', 'noreply@example.com')
+                cd = form.cleaned_data
                 send_mail(
-                    'Feedback from your site, topic: %s' % topic,
-                    message, sender,
-                    ['administrator@example.com']
+                    cd['asunto'],
+                    cd['mensaje'],
+                    cd.get('email', 'noreply@example.com'),
+                    ['siteowner@example.com'],
                 )
-                return HttpResponseRedirect('/contact/thanks/')
+                return HttpResponseRedirect('/contactos/gracias/')
         else:
-            form = ContactForm()
-        return render_to_response('contact.html', {'form': form})
+             form = FormularioContactos(**initial={'asunto': '¡Adoro tu sitio!'}**)
+        return render(request, 'formulario-contactos.html', {'form': form})
 
-.. admonition:: Redirigir luego del POST
+.. SL Tested ok
 
-    Si un usuario selecciona actualizar sobre una página que muestra una
-    consulta POST, la consulta se repetirá. Esto probablemente lleve a
-    un comportamiento no deseado, por ejemplo, que el registro se
-    agregue dos veces a la base de datos. Redirigir luego del POST es
-    un patrón útil que puede ayudar a prevenir este escenario. Así que
-    luego de que se haya procesado el POST con éxito, redirige al
-    usuario a otra página en lugar de retornar HTML directamente.
+Ahora el formulario inicial mostrara un mensaje en el campo ``asunto``, cada vez
+que el formulario sea cargado.
+
+.. figure:: graphics/chapter07/valores_iniciales.png
+   :alt: Captura de un formulario mostrando valores iniciales.
+
+   **Figura 7-7.** Formulario mostrando valores iniciales.
+
+Observa que existe una diferencia entre pasar datos *iníciales* y pasar datos
+*vinculados* a un formulario. La gran diferencia es que solo estamos pasando
+datos *iníciales* , entonces el formulario *no está vinculado*, lo cual da a
+entender que no existen mensajes de error.
 
 Nuestras propias reglas de validación
 =====================================
 
-Imagina que hemos lanzado al público a nuestro formulario de
-comentarios, y los correos electrónicos han empezado a llegar. Nos
-encontramos con un problema: algunos mensajes vienen con sólo una o
-dos palabras, es poco probable que tengan algo interesante. Decidimos
-adoptar una nueva póliza de validación: cuatro palabras o más, por
-favor.
+Imagina que hemos lanzado al público nuestro formulario de comentarios, y los
+correos electrónicos han empezado a llegar a montones, y nos encontramos con
+un problema:  algunos mensajes vienen con sólo una o dos palabras, es poco
+probable que tengan algo interesante que decir. Por lo que decidimos adoptar
+una nueva politica de validación: cuatro palabras o más, por favor.
 
-Hay varias formas de insertar nuestras propias validaciones en un
-formulario de Django. Si vamos a usar nuestra regla una y otra vez,
-podemos crear un nuevo tipo de campo. Sin embargo, la mayoría de las
-validaciones que agreguemos serán de un solo uso, y pueden agregarse
-directamente a la clase del formulario.
+Hay varias formas de insertar nuestras propias reglas de validacion en un
+formulario de  Django. Si vamos a usar nuestra regla una y otra vez, podemos
+crear un nuevo tipo de campo. Sin embargo, la mayoría de las validaciones que
+agreguemos serán de un solo uso, y pueden agregarse directamente en el propio
+``formulario``.
 
-En este caso, necesitamos validación adicional sobre el campo
-``message``, así que debemos agregar un método ``clean_message`` a
-nuestro formulario::
+En este caso, necesitamos validación adicional sobre el campo ``mensaje``, así
+que debemos agregar un método ``clean_mensaje()`` a nuestro formulario:
+
+.. parsed-literal::
+
+    from django import forms
 
     class ContactForm(forms.Form):
-        topic = forms.ChoiceField(choices=TOPIC_CHOICES)
-        message = forms.CharField(widget=forms.Textarea())
-        sender = forms.EmailField(required=False)
+        asunto = forms.CharField(max_length=100)
+        email = forms.EmailField(required=False)
+        mensaje = forms.CharField(widget=forms.Textarea)
 
-        def clean_message(self):
-            message = self.clean_data.get('message', '')
-            num_words = len(message.split())
-            if num_words < 4:
-                raise forms.ValidationError("Not enough words!")
-            return message
+        def clean_mensaje(self):
+          mensaje = self.cleaned_data['mensaje']
+          num_palabras = len(mensaje.split())
+          if num_palabras < 4:
+              raise forms.ValidationError("¡Se requieren minimo 4 palabras!")
+          return mensaje
 
-Este nuevo método será llamado después del validador que tiene el
-campo por defecto (en este caso, el validador de un ``CharField``
-obligatorio). Dado que los datos del campo ya han sido procesados
-parcialmente, necesitamos obtenerlos desde el diccionario
-``clean_data`` del formulario.
+.. SL Tested ok
 
-Usamos una combinación de ``len()`` y ``split()`` para contar la
-cantidad de palabras. Si el usuario ha ingresado muy pocas palabras,
-lanzamos un error ``ValidationError``. El texto que lleva esta
-excepción se mostrará al usuario como un elemento de la lista de
-errores.
+El sistema de formularios de Django, automáticamente busca cualquier método que
+empiece con ``clean_`` y termine con el nombre del campo. Si cualquiera de estos
+métodos existe, este será llamado durante la validación.
 
-Es importante que retornemos explícitamente el valor del campo al
-final del método. Esto nos permite modificar el valor (o convertirlo a
-otro tipo de Python) dentro de nuestro método de validación. Si nos
-olvidamos de retornarlo, se retornará ``None`` y el valor original
-será perdido.
+Específicamente, el  método ``clean_mensaje()`` es llamado *después* de
+la validación lógica para el campo por defecto (en este caso, la validación
+lógica de el campo ``CharField`` es obligatoria). Dado que los datos del campo
+ya han sido parcialmente procesados, necesitamos obtenerlos desde el diccionario
+``self.cleaned_data`` del formulario. Por lo que no debemos preocuparnos
+por comprobar que el valor exista y que no esté vacio; ya que el validador
+se encargara de realizar este trabajo por defecto.
 
-Una presentación personalizada
-==============================
+Usamos una combinación de len() y split() para contar la cantidad de palabras.
+Si el usuario ha ingresado pocas palabras (menos de 4), lanzamos un error
+``forms.ValidationError``. El texto que lleva esta excepción se mostrará al
+usuario como un elemento mas de la lista de errores.
 
-La forma más rápida de personalizar la presentación de un formulario
-es mediante CSS. En particular, la lista de errores puede dotarse de
-mejoras visuales, y el elemento ``<ul>`` tiene asignada la clase
-``errorlist`` para ese propósito. El CSS a continuación hace que
-nuestros errores salten a la vista:
+Es importante que retornemos explícitamente el valor limpio del campo al final del
+método. Esto nos permite modificar el valor (o convertirlo a otro tipo de Python)
+dentro de nuestro método de validación. Si nos olvidamos de retornarlo,
+se retornará ``None``  y el valor original ser perdera.
 
-.. code-block html
+Como especificar Etiquetas
+==========================
 
-    <style type="text/css">
+Por defecto las etiquetas HTML autogeneradas por los formularios, son creadas
+para remplazar los guiones bajos con espacios y con mayúsculas la primera letra.
+-- Así por ejemplo la etiqueta para el campo ``email`` es ``"Email"`` (¿Te suena
+familiar? es el mismo algoritmo que Django usa en los modelos, para calcular los
+valores predeterminados de cada campo usando ``verbose_name``.  Los cuales
+cubrimos en el :doc:`capítulo 5<chapter05>` )
+
+Así como personalizamos los modelos en Django, tambien podemos personalizar las
+etiquetas para un campo determinado. Usando para ello la etiqueta ``label``, así:
+
+.. parsed-literal::
+
+    class ContactForm(forms.Form):
+        asunto = forms.CharField(max_length=100)
+        email = forms.EmailField(required=False, **label='E-mail**)
+        mensaje = forms.CharField(widget=forms.Textarea)
+
+.. SL Tested ok
+
+.. figure:: graphics/chapter07/etiquetas_personalizadas.png
+   :alt: Captura de un formulario mostrando etiquetas personalizadas.
+
+   **Figura 7-8.** Formulario mostrando etiquetas personalizadas.
+
+Diseño de formularios personalizados
+====================================
+
+La plantilla que usamos ``formulario-contactos.html`` usa  el
+formato para tablas ``{{ form.as_table }}`` para mostrar el formulario, pero podemos
+visualizar el  formulario de otras maneras, para tener un control más especifico
+sobre la presentacion.
+
+La forma más rápida de personalizar la presentación de un formulario es usando
+CSS. En particular, la lista de errores puede dotarse de mejoras visuales, y el
+elemento ``<ul class="errorlist">``  tiene asignada una clase para ese propósito.
+El CSS a continuación hace que nuestros errores salten a la vista, agrega lo siguiente
+a ``formulario-contactos.html``:
+
+.. code-block:: html
+
+     <style type="text/css">
         ul.errorlist {
             margin: 0;
             padding: 0;
@@ -600,140 +1411,101 @@ nuestros errores salten a la vista:
         }
     </style>
 
-Si bien es conveniente que el HTML del formulario sea generado por
-nosotros, en muchos casos la disposición por defecto no quedaría bien
-en nuestra aplicación. ``{{ form.as_table }}`` y similares son atajos
-útiles que podemos usar mientras desarrollamos nuestra aplicación,
-pero todo lo que concierne a la forma en que nuestro formulario es
-representado puede ser sobreescrito, casi siempre desde la plantilla
-misma.
+.. figure:: graphics/chapter07/resaltado_de_errores.png
+   :alt: Captura de un formulario mostrando el resaltado de errores.
 
-Cada *widget* de un campo (``<input type="text">``, ``<select>``,
-``<textarea>``, o similares) puede generarse individualmente
-accediendo a ``{{ form.fieldname }}``. Cualquier error asociado con un
-campo está disponible como ``{{ form.fieldname.errors }}``.  Podemos
-usar estas variables para construir nuestra propia plantilla para el
-formulario:
+   **Figura 7-9.** Formulario mostrando el resaltado de errores.
 
-.. code-block html+django
+Si bien es conveniente que el HTML del formulario sea generado por nosotros, en
+muchos casos la disposición por defecto no queda bien en nuestra aplicación.
+``{{ form.as_table }}`` y similares son atajos útiles que podemos usar mientras
+desarrollamos nuestra aplicación, pero todo lo que concierne a la forma en que
+nuestro formulario es representado puede ser sobreescrito, casi siempre desde
+la plantilla misma.
 
-    <form action="." method="POST">
-        <div class="fieldWrapper">
-            {{ form.topic.errors }}
-            <label for="id_topic">Kind of feedback:</label>
-            {{ form.topic }}
-        </div>
-        <div class="fieldWrapper">
-            {{ form.message.errors }}
-            <label for="id_message">Your message:</label>
-            {{ form.message }}
-        </div>
-        <div class="fieldWrapper">
-            {{ form.sender.errors }}
-            <label for="id_sender">Your email (optional):</label>
-            {{ form.sender }}
-        </div>
-        <p><input type="submit" value="Submit"></p>
-    </form>
+Cada widget de un campo (``<input type="text">``, ``<select>``, ``<textarea>``,
+o similares) puede generarse individualmente accediendo a ``{{ form.fieldname }}``
+en la plantilla y cualquier error asociado con un campo está disponible mediante
+``{{ form.fieldname.errors }}``. Con esto en mente,  podemos construir nuestra
+propia plantillas personalizada para  nuestro formulario de contactos, con el
+siguiente código:
 
-``{{ form.message.errors }}`` se muestra como un ``<ul
-class="errorlist">`` si se presentan errores y como una cadena de
-caracteres en blanco si el campo es válido ( o si el formulario no
-está vinculado). También podemos tratar a la variable
-``form.message.errors`` como a un booleano o incluso iterar sobre la
-misma como en una lista, por ejemplo:
+.. code-block:: html+django
 
-.. code-block html+django
+    <html>
+    <head>
+        <title>Contactanos</title>
+    </head>
+    <body>
+        <h1>Contactanos</h1>
 
-    <div class="fieldWrapper{% if form.message.errors %} errors{% endif %}">
-        {% if form.message.errors %}
-            <ol>
-            {% for error in form.message.errors %}
-                <li><strong>{{ error|escape }}</strong></li>
-            {% endfor %}
-            </ol>
+        {% if form.errors %}
+            <p style="color: red;">
+                Por favor corrige lo siguiente:
+            </p>
         {% endif %}
-        {{ form.message }}
+
+        <form action="" method="post">{% csrf_token %}
+            <div class="field">
+                {{ form.asunto.errors }}
+                <label for="id_asunto">Asunto:</label>
+                {{ form.asunto }}
+            </div>
+            <div class="field">
+                {{ form.email.errors }}
+                <label for="id_email">E-mail:</label>
+                {{ form.email }}
+            </div>
+            <div class="field">
+                {{ form.mensaje.errors }}
+                <label for="id_mensaje">Mensaje:</label>
+                {{ form.mensaje }}
+            </div>
+            <input type="submit" value="Enviar">
+        </form>
+    </body>
+    </html>
+
+``{{ form.mensaje.errors }}`` muestra un ``<ul class="errorlist">`` si se
+presentan errores y muestra una cadena de caracteres en blanco si el campo
+es válido (o si el formulario no está vinculado). También podemos tratar a la
+variable ``form.mensaje.errors`` como a un booleano o incluso iterar sobre el
+mismo como una lista, por ejemplo:
+
+.. code-block:: html+django
+
+    <div class="field{% if form.mensaje.errors %} errors{% endif %}">
+        {% if form.mensaje.errors %}
+            <ul>
+            {% for error in form.mensaje.errors %}
+                <li><strong>{{ error }}</strong></li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        <label for="id_mensaje">Mensaje:</label>
+        {{ form.mensaje }}
     </div>
 
-En caso de que hubieran errores de validación, se agrega la clase
-"errors" al ``<div>`` contenedor y se muestran los errores en una
-lista ordenada.
+.. SL Tested ok
 
-Creando formularios a partir de Modelos
-=======================================
-
-Construyamos algo un poquito más interesante: un formulario que
-suministre los datos de un nuevo publicista a nuestra aplicación de
-libros del :doc:`Capítulo 5<chapter05>`.
-
-Una regla de oro que es importante en el desarrollo de software, a la
-que Django intenta adherirse, es: no te repitas (del inglés *Don't
-Repeat Yourself*, abreviado DRY). Andy Hunt y Dave Thomas la definen
-como sigue, en *The Pragmatic Programmer*:
-
-Cada pieza de conocimiento debe tener una representación única, no
-ambigua, y de autoridad, dentro de un sistema.
-
-Nuestro modelo de la clase ``Publisher`` dice que un publicista tiene
-un nombre, un domicilio, una ciudad, un estado o provincia, un país, y
-un sitio web. Si duplicamos esta información en la definición del
-formulario, estaríamos quebrando la regla anterior. En cambio, podemos
-usar este útil atajo: ``form_for_model()``::
-
-    from models import Publisher
-    from django.newforms import form_for_model
-
-    PublisherForm = form_for_model(Publisher)
-
-``PublisherForm`` es una subclase de ``Form``, tal como la clase
-``ContactForm`` que creamos manualmente con anterioridad. Podemos
-usarla de la misma forma::
-
-    from forms import PublisherForm
-
-    def add_publisher(request):
-        if request.method == 'POST':
-            form = PublisherForm(request.POST)
-            if form.is_valid():
-                form.save()
-                return HttpResponseRedirect('/add_publisher/thanks/')
-        else:
-            form = PublisherForm()
-        return render_to_response('books/add_publisher.html', {'form': form})
-
-El archivo ``add_publisher.html`` es casi idéntico a nuestra plantilla
-``contact.html`` original, así que la omitimos. Recuerda además
-agregar un nuevo patrón al URLconf: ``(r'^add_publisher/$',
-'mysite.books.views.add_publisher')``.
-
-Ahí se muestra un atajo más. Dado que los formularios derivados de
-modelos se emplean a menudo para guardar nuevas instancias del modelo
-en la base de datos, la clase del formulario creada por
-``form_for_model`` incluye un conveniente método ``save()``. Este
-método trata con el uso común; pero puedes ignorarlo si deseas hacer
-algo más que tenga que ver con los datos suministrados.
-
-``form_for_instance()`` es un método que está relacionado con el
-anterior, y puede crear formularios preinicializados a partir de la
-instancia de un modelo. Esto es útil al crear formularios "editar".
+En caso de errores de validación, esto agrega a la clase “errors” el
+contenedor ``<div>`` y muestra los errores en una lista ordenada.
 
 ¿Qué sigue?
-===========
+============
 
-Este capítulo concluye con el material introductorio de este
-libro. Los próximos trece capítulos tratan con varios tópicos
-avanzados, incluyendo la generación de contenido que no es HTML
-(:doc:`Capítulo 11<chapter11>`), seguridad (:doc:`Capítulo19<chapter19>`), 
-y entrega del servicio (:doc:`Capítulo 20<chapter20>`).
+Este capítulo concluye con el material introductorio de este libro.
+-- el también denominado **"curriculum base"**. La siguiente sección del libro,
+en especial los capítulos 8 al 12 tratan con más detalle sobre el uso avanzado
+de Django, incluyendo como desplegar una aplicación Django.
+(:doc:`capítulo 12<chapter12>`).
 
-Luego de estos primeros siete capítulos, deberías saber lo suficiente
-como para comenzar a escribir tus propios proyectos en Django. El
-resto del material de este libro te ayudará a completar las piezas
-faltantes a medida que las vayas necesitando.
+Luego de estos primeros siete capítulos, deberías saber lo suficiente como para
+comenzar a escribir tus propios proyectos en Django. El resto del material de
+este libro te ayudará a completar las piezas faltantes a medida que las vayas
+necesitando.
 
-Comenzaremos el :doc:`Capítulo 8<chapter08>` yendo hacia atrás, volviendo para darle
-una mirada más de cerca a las vistas y a los URLconfs (introducidos
-por primera vez en el :doc:`Capítulo 3<chapter03>`).
-
+Comenzaremos el :doc:`capítulo 8<chapter08>`  retrocediendo un poco, volviendo para
+darle una mirada más de cerca a las vistas y a los URLconfs (introducidos por
+primera vez en el :doc:`capítulo 3<chapter03>`.
 

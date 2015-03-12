@@ -1,1595 +1,2036 @@
-=================================================
-Apéndice C: Referencia de la API de base de datos
-=================================================
-
-La API de base de datos de Django es la otra mitad de la API de modelos
-discutido en el Apéndice B. Una vez que hayas definido un modelo, usarás esta
-API en cualquier momento que necesites acceder a la base de datos. Has visto
-ejemplos del uso de esta API a través del libro; este apéndice explica todas las
-varias opciones detalladamente.
-
-De manera similar a lo que ocurre con las APIs de modelos descriptos en el
-apéndice B, estas APIs son considerados muy estables, aunque los desarrolladores
-de Django constantemente añaden nuevos atajos y conveniencias. Es buena idea
-consultar siempre la documentación en línea más actual que está disponible en
-http://www.djangoproject.com/documentation/0.96/db-api/.
-
-A lo largo de este apéndice, vamos a hacer referencia a los siguientes modelos,
-los cuales pueden formar una simple aplicación de blog::
-
-    from django.db import models
-
-    class Blog(models.Model):
-        name = models.CharField(max_length=100)
-        tagline = models.TextField()
-
-        def __str__(self):
-            return self.name
-
-    class Author(models.Model):
-        name = models.CharField(max_length=50)
-        email = models.EmailField()
-
-        def __str__(self):
-            return self.name
-
-    class Entry(models.Model):
-        blog = models.ForeignKey(Blog)
-        headline = models.CharField(max_length=255)
-        body_text = models.TextField()
-        pub_date = models.DateTimeField()
-        authors = models.ManyToManyField(Author)
-
-        def __str__(self):
-            return self.headline
-
-Creando Objetos
-===============
-
-Para crear un objeto, crea una instancia de la clase modelo usando argumentos
-de palabra clave y luego llama a ``save()`` para grabarlo en la base de datos::
-
-    >>> from mysite.blog.models import Blog
-    >>> b = Blog(name='Beatles Blog', tagline='All the latest Beatles news.')
-    >>> b.save()
-
-Esto, detrás de escena, ejecuta una sentencia SQL ``INSERT``. Django no accede a
-la base de datos hasta que tú explícitamente invoques a ``save()``.
-
-El método ``save()`` no retorna nada.
-
-Para crear un objeto y grabarlo todo en un paso revisa el método ``create`` de
-la clase ``Manager`` que describiremos en breve.
-
-Qué pasa cuando grabas?
------------------------
-
-Cuando grabas un objeto, Django realiza los siguientes pasos:
-
-#. **Emitir una señal pre_save.** Esto provee una notificación de que un
-   objeto está a punto de ser grabado. Puedes registrar un ***listener***
-   que será invocado en cuanto esta señal sea emitida. Estas señales
-   todavía están en desarrollo y no estaban documentadas cuando este libro
-   fue a impresión; revisa la documentación en línea para obtener la
-   información más actual.
+﻿==============================================
+Apéndice C: Referencia de las vistas genéricas
+==============================================
+
+Él :doc:`capítulo 11<chapter11>` es una introducción a las vistas genéricas
+basadas en clases, pero pasa por alto algunos detalles importantes. Este
+apéndice describe todas las vistas genéricas, junto con las opciones que cada
+una de ellas puede aceptar. Antes de intentar entender este material de
+referencia es muy conveniente leer el :doc:`capítulo 11<chapter11>` . Tampoco
+viene mal un  repaso a los modelos ``Libro``, ``Editor`` y ``Autor`` definidos
+en dicho capítulo, ya que serán usados en los ejemplo incluidos en esta apéndice.
+
+Argumentos comunes a las vistas genéricas basadas en clases
+===========================================================
+
+La mayoría de las vistas genéricas basadas en clases, aceptan algunos argumentos
+que pueden modificar su  comportamiento. Muchos de esos argumentos funcionan
+igual para la mayoría de  las vistas (hay sus excepciones). La tabla C-1 describe
+algunos de  estos argumentos comunes; cada vez que veas  uno de estos argumentos
+en la lista de parámetros admitidos por una vista  genérica, su comportamiento
+será tal y como se describe en esta tabla.
+
+.. table:: Tabla C-1. Argumentos comunes a la mayoría de vistas genéricas.
+
+  ==========================  ===============================================
+    Argumento                   Descripción
+  ==========================  ===============================================
+  ``allow_empty``             Un valor booleano que indica cómo debe
+                              comportarse la vista si no hay objetos
+                              disponibles. Si vale ``False`` y no hay
+                              objetos, la vista elevará un error 404 en vez
+                              de mostrar una página vacía. Su valor por
+                              defecto es ``Falsa``.
+
+  ``context_object_name``     El nombre de la variable principal en el
+                              contexto de la plantilla. Por defecto, es
+                              ``'object'``. Para las listas que
+                              utilizan más de objeto (por ejemplo, las
+                              vistas de listados o de archivos por
+                              fechas), se añade el sufijo ``'_list'``
+                              al valor de este parámetro, así que si
+                              no se indica nada y la vista utiliza
+                              varios objetos, estos estarán accesibles
+                              mediante una variable llamada
+                              ``object_list``.
+
+  ``context_processors``      Es una lista de procesadores de contexto
+                              adicionales (además de los incluidos por
+                              el sistema), que se aplican a la plantilla
+                              de la vista.
+
+  ``model``                   El modelo del cual la vista mostrara los datos.
+                              Especificar ``model = Foo`` es tan efectivo como
+                              especificar ``queryset = Foo.objects.all()``
+
+  ``mimetype``                El tipo MIME a usar para el documento
+                              resultante. Por defecto utiliza el tipo
+                              definido en la variable de configuración
+                              ``DEFAULT_MIME_TYPE``, cuyo valor inicial
+                              es ``text/html``.
 
-#. **Pre-procesar los datos.** Se le solicita a cada campo del objeto
-   implementar cualquier modificación automatizada de datos que pudiera
-   necesitar realizar.
+  ``queryset``                Un objeto de tipo ``QuerySet`` (por ejemplo,
+                              ``Autor.objects.all()``) del cual se
+                              leerán los objetos a utilizar por la vista.
+                              En el apéndice C hay más información acerca
+                              de los objetos ``QuerySet``. La mayoría de
+                              las vistas genéricas necesitan este argumento.
 
-   La mayoría de los campos *no* realizan pre-procesamiento -- los datos
-   del campo se guardan tal como están. Sólo se usa pre-procesamiento
-   en campos que tienen comportamiento especial, como campos de archivo.
-
-#. **Preparar los datos para la base de datos.** Se le solicita a cada
-   campo que provea su valor actual en un tipo de dato que puede ser
-   grabado en la base de datos.
+  ``paginate_by``             El numero máximo de objetos para paginar
+                              permitidos en una plantilla (Disponible solo en
+                              listas de objetos).
 
-   La mayoría de los campos no requieren preparación de los datos. Los
-   tipos de datos simples, como enteros y cadenas, están
-   "listos para escribir" como un objeto de Python. Sin embargo,
-   tipo de datos más complejos requieren a menudo alguna modificación. Por
-   ejemplo, ``DateFields`` usa un objeto ``datetime`` Python para almacenar
-   datos. Las bases de datos no almacenan objetos ``datetime``, de manera
-   que el valor del campo debe ser convertido en una cadena de fecha que
-   cumpla con la norma ISO correspondiente para la inserción en la base de
-   datos.
+  ``template_name``           El nombre completo de la plantilla a usar
+                              para representar la página. Este argumento
+                              se puede usar si queremos modificar el
+                              nombre que se genera automáticamente a
+                              partir del ``QuerySet``.
+  ==========================  ===============================================
 
-#. **Insertar los datos en la base.**  Los datos pre-procesados y preparados
-   son entonces incorporados en una sentencia SQL para su inserción en la
-   base de datos.
+Vistas genéricas basadas en clases-base
+=======================================
 
-#. **Emitir una señal post_save.** Como con la señal ``pre_save``, esta es
-   utilizada para proporcionar notificación de que un objeto ha sido
-   grabado satisfactoriamente. De nuevo, estas señales todavía no han sido
-   documentadas.
+Dentro del módulo ``django.views.generic`` hay varias vistas sencillas que
+manejan unos cuantos problemas frecuentes: mostrar una plantilla que no
+necesita una vista lógica ``TemplateView``, hacer una redirección de una
+página ``RedirectView`` y la más importante de todas, la  clase base maestra,
+de la cual todas las demás clases genéricas heredan llamada ``View``. Estas
+tres clases implementan muchas de las funcionalidades necesitadas para crear
+vistas en Django, puedes pensar en ellas como ```vistas padres`` que pueden
+usarse en sí mismas o heredando sus atributos dependiendo de la complejidad
+y las necesidades  de tu proyecto.
 
-Claves primarias autoincrementales
-----------------------------------
+Muchas de las características incorporadas en la vistas basadas en clases,
+heredan de otras clases o de varias clases usando mixins. Debido a que
+la cadena de herencia es muy importante, las clases ancestro están documentadas
+debajo del título de cada sección de sus ancestros (MRO). MRO es un acrónimo
+para el orden de resolución de un método.
 
-Por conveniencia, a cada modelo se le da una clave primaria autoincremental
-llamada ``id`` a menos que explícitamente especifiques ``primary_key=True`` en
-el campo (ver la sección titulada "`AutoField`_" en el Apéndice B).
+Vista base: View
+----------------
 
-Si tu modelo tiene un ``AutoField``, ese valor incrementado automáticamente
-será calculado y grabado como un atributo de tu objeto la primera vez que
-llames a ``save()``::
+.. class:: django.views.generic.base.View
 
-    >>> b2 = Blog(name='Cheddar Talk', tagline='Thoughts on cheese.')
-    >>> b2.id     # Returns None, because b doesn't have an ID yet.
-    None
+  La clase-base maestra de todas las vistas genéricas. Todas las vistas basadas
+  en clases genéricas heredan de esta clase base.
 
-    >>> b2.save()
-    >>> b2.id     # Returns the ID of your new object.
-    14
+  **Flujo de métodos:**
 
-No hay forma de saber cual será el valor de un identificador antes que llames a
-``save()`` esto se debe a que ese valor es calculado por tu base de datos, no
-por Django.
+  1. :meth:`dispatch()`
+  2. :meth:`http_method_not_allowed()`
+  3. :meth:`options()`
 
-Si un modelo tiene un ``AutoField`` pero quieres definir el identificador de un
-nuevo objeto explícitamente cuando grabas, solo defínelo explícitamente antes
-de grabarlo en vez de confiar en la asignación automática de valor del
-identificador::
+  **Ejemplo:**
 
-    >>> b3 = Blog(id=3, name='Cheddar Talk', tagline='Thoughts on cheese.')
-    >>> b3.id
-    3
-    >>> b3.save()
-    >>> b3.id
-    3
+  Para crear el famoso ``hola mundo`` usando una clase genérica, creamos una vista
+  ``View`` importándola del modulo ``django.views.generic`` de la siguiente forma:
 
-Si asignas manualmente valores de claves primarias autoincrementales ¡Asegúrate
-de no usar un valor de clave primaria que ya existe!. Si creas un objeto con
-un valor explícito de clave primaria que ya existe en la base de datos, Django
-asumirá que estás cambiando el registro existente en vez de crear uno nuevo.
+  .. snippet::
+     :filename: views.py
 
-Dado el ejemplo precedente de blog ``'Cheddar Talk'``, este ejemplo
-sobrescribiría el registro previo en la base de datos::
+     from django.http import HttpResponse
+     from django.views.generic import View
 
-    >>> b4 = Blog(id=3, name='Not Cheddar', tagline='Anything but cheese.')
-    >>> b4.save()  # Overrides the previous blog with ID=3!
+     class MiVista(View):
 
-El especificar explícitamente valores de claves primarias autoincrementales es
-más útil cuando se están grabando objetos en lotes, cuando estás seguro de que
-no tendrás colisiones de claves primarias.
+         def get(self, request, *args, **kwargs):
+             return HttpResponse('¡Hola, Mundo!')
 
-Grabando cambios de objetos
-===========================
+  Luego la enlazamos directamente en la URL:
 
-Para grabar los cambios hechos a un objeto que existe en la base de datos, usa
-``save()``.
+  .. snippet::
+     :filename: urls.py
 
-Dada la instancia de ``Blog`` ``b5`` que ya ha sido grabada en la base de
-datos, este ejemplo cambia su nombre y actualiza su registro en la base::
+     from django.conf.urls import url
+     from aplicacion.views import MiVista
 
-    >>> b5.name = 'New name'
-    >>> b5.save()
+     urlpatterns = [
+         url(r'^hola/$', MiVista.as_view(), name='mi-vista'),
+     ]
 
-Detrás de escena, esto ejecuta una sentencia SQL ``UPDATE``. De nuevo: Django no
-accede a la base de datos hasta que llamas explícitamente a ``save()``.
+  **Atributos**
 
-.. admonition:: Como sabe Django cuando usar ``UPDATE`` y cuando usar ``INSERT``
+  .. attribute:: http_method_names
 
-    Habrás notado que los objetos de base de datos de Django usan el mismo
-    método ``save()`` para crear y cambiar objetos. Django abstrae la necesidad
-    de usar sentencias SQL ``INSERT`` o ``UPDATE``.  Específicamente, cuando
-    llamas a ``save()``, Django sigue este algoritmo:
+    La lista de nombre de métodos HTTP, que esa vista acepta son:
 
-    * Si el atributo clave primaria del objeto tiene asignado un valor que
-      evalúa ``True`` (esto es, un valor distinto a ``None`` o a la cadena
-      vacía) Django ejecuta una consulta ``SELECT`` para determinar si
-      existe un registro con la clave primaria especificada.
+    Default::
 
-    * Si el registro con la clave primaria especificada ya existe, Django
-      ejecuta una consulta ``UPDATE``.
+        ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace']
 
-    * Si el atributo clave primaria del objeto *no* tiene valor o si lo
-      tiene pero no existe un registro, Django ejecuta un ``INSERT``.
+  **Metodos**
 
-Debido a esto, debes tener cuidado de no especificar un valor explícito para
-una clave primaria cuando grabas nuevos objetos si es que no puedes
-garantizar que el valor de clave primaria está disponible para ser usado.
+  .. classmethod:: as_view(**initkwargs)
 
-La actualización de campos ``ForeignKey`` funciona exactamente de la misma
-forma; simplemente asigna un objeto del tipo correcto al campo en cuestión::
+    Retorna una vista llamable que toma una petición y retorna una respuesta::
 
-    >>> joe = Author.objects.create(name="Joe")
-    >>> entry.author = joe
-    >>> entry.save()
+        response = MiVista.as_view()(request)
 
-Django se quejará si intentas asignar un objeto del tipo incorrecto.
+  .. method:: dispatch(request, *args, **kwargs)
 
-Recuperando objetos
-===================
+    La ``view`` la vista -- el método que acepta un argumento ``request`` mas
+    los argumentos pasados y devuelve una respuesta HTTP.
 
-A través del libro has visto cómo se recuperan objetos usando código como el
-siguiente::
+    La implementación predeterminada inspecciona el método HTTP y trata de delegarlo
+    a el método que coincida con la petición HTTP; una petición ``GET`` será delegada
+    a un método ``get()``, una ``POST`` a un ``post()`` y así sucesivamente.
 
-    >>> blogs = Blog.objects.filter(author__name__contains="Joe")
+    Por omisión una petición a ``HEAD`` será delegada al método ``get()``. Si
+    necesitas manejar peticiones ``HEAD`` de diferentes formas usa ``GET`` para
+    sobrescribir el método ``head()``.
 
-Hay bastantes partes móviles detrás de escena aquí: cuando recuperas objetos de
-la base de datos, estás construyendo realmente un ``QuerySet`` usando el
-``Manager`` del modelo. Este ``QuerySet`` sabe como ejecutar SQL y retornar los
-objetos solicitados.
+  .. method:: http_method_not_allowed(request, *args, **kwargs)
 
-El Apéndice B trató ambos objetos desde el punto de vista de la definición del
-modelo; ahora vamos a ver cómo funcionan.
+    Si la vista es llamada mediante un método HTTP  no soportado, este método
+    es llamado en su lugar.
 
-Un ``QuerySet`` representa una colección de objetos de tu base de datos. Puede
-tener cero, uno, o muchos filtros -- criterios que limitan la colección basados
-en parámetros provistos. En términos de SQL un ``QuerySet`` se compara a una
-declaración ``SELECT`` y un filtro es una cláusula de limitación como por
-ejemplo ``WHERE`` o ``LIMIT``.
+    La implementación predeterminada devuelve ``HttpResponseNotAllowed`` con
+    una lista de métodos permitidos en texto plano.
 
-Consigues un ``QuerySet`` usando el ``Manager`` del modelo. Cada modelo tiene
-por lo menos un ``Manager`` y tiene, por omisión, el nombre ``objects``. Accede
-al mismo directamente a través de la clase del modelo, así::
+  .. method:: options(request, *args, **kwargs)
 
-    >>> Blog.objects
-    <django.db.models.manager.Manager object at 0x137d00d>
+    Maneja la respuesta a las peticiones para los verbos OPTIONS HTTP. Devuelve
+    una lista de nombres de métodos HTTP permitidos para las vistas.
 
-Los ``Manager``\s solo son accesibles a través de las clases de los modelos, en
-vez desde una instancia de un modelo, para así hacer cumplir con la separación
-entre las operaciones a "nivel de tabla" y las operaciones a "nivel de
-registro"::
+Renderizar una plantilla con TemplateView
+-----------------------------------------
 
-    >>> b = Blog(name='Foo', tagline='Bar')
-    >>> b.objects
-    Traceback (most recent call last):
-      File "<stdin>", line 1, in <module>
-    AttributeError: Manager isn't accessible via Blog instances.
+.. class:: django.views.generic.base.TemplateView
 
-El ``Manager`` es la principal fuente de ``QuerySet``\s para un modelo. Actúa
-como un ``QuerySet`` "raíz" que describe todos los objetos de la tabla de base
-de datos del modelo.  Por ejemplo, ``Blog.objects`` es el ``QuerySet``\s inicial
-que contiene todos los objetos ``Blog`` en la base de datos.
+  Renderiza una plantilla dada, con el contexto que contiene los parámetros
+  capturados en la URL.
 
-Caching y QuerySets
-===================
+  **Ancestros (MRO)**
 
-Cada ``QuerySet`` contiene un cache, para minimizar el acceso a la base de
-datos. Es importante entender como funciona, para escribir código mas eficiente.
+  Esta vista hereda métodos y atributos de las siguientes vistas:
 
-En un ``QuerySet`` recién creado, el cache esta vacío. La primera vez que un
-``QuerySet`` es evaluado -- y, por lo tanto, ocurre un acceso a la base de datos
--- Django graba el resultado de la consulta en el cache del ``QuerySet`` y
-retorna los resultados que han sido solicitados explícitamente (por ejemplo, el
-siguiente elemento, si se está iterando sobre el ``QuerySet``). Evaluaciones
-subsecuentes del ``QuerySet`` re-usan los resultados alojados en el cache.
+  * :class:`django.views.generic.base.TemplateResponseMixin`
+  * :class:`django.views.generic.base.ContextMixin`
+  * :class:`django.views.generic.base.View`
 
-Ten presente este comportamiento de caching, porque puede morderte si no usas
-tus ``QuerySet``\s correctamente. Por ejemplo, lo siguiente creará dos
-``QuerySet``\s, los evaluará, y los descartará::
+  **Flujo de métodos**
 
-    print [e.headline for e in Entry.objects.all()]
-    print [e.pub_date for e in Entry.objects.all()]
+  1. :meth:`~django.views.generic.base.View.dispatch()`
+  2. :meth:`~django.views.generic.base.View.http_method_not_allowed()`
+  3. :meth:`~django.views.generic.base.ContextMixin.get_context_data()`
 
-Eso significa que la consulta sera ejecutada dos veces en la base de datos,
-duplicando la carga sobre la misma.  También existe una posibilidad de que las dos
-listas pudieran no incluir los mismos registros de la base de datos, porque se
-podría haber agregado o borrado un ``Entry`` durante el pequeñísimo período
-de tiempo entre ambas peticiones.
+  **Ejemplo:**
 
-Para evitar este problema, simplemente graba el ``QuerySet`` y re-úsalo::
+  Para mostrar una página de bienvenida que muestre los últimos 5 libros
+  publicados en la base de datos, usamos la clase ``TemplateView``
+  directamente para crear la vista así:
 
-    queryset = Poll.objects.all()
-    print [p.headline for p in queryset] # Evaluate the query set.
-    print [p.pub_date for p in queryset] # Reuse the cache from the evaluation.
+  .. snippet::
+     :filename: views.py
 
-Filtrando objetos
-=================
+      from django.views.generic.base import TemplateView
+      from biblioteca.models import Libro
 
-La manera mas simple de recuperar objetos de una tabla es conseguirlos todos.
-Para hacer esto, usa el método ``all()`` en un ``Manager``::
+      class PaginaBienvenida(TemplateView):
 
-    >>> Entry.objects.all()
+          template_name = "bienvenida.html"
 
-El método ``all()`` retorna un ``QuerySet`` de todos los objetos de la base de
-datos.
+          def get_context_data(self, **kwargs):
+              context = super(PaginaBienvenida, self).get_context_data(**kwargs)
+              context['ultimos_libros'] = Libro.objects.all()[:5]
+              return context
 
-Sin embargo, usualmente solo necesitarás seleccionar un subconjunto del conjunto
-completo de objetos. Para crear tal subconjunto, refinas el ``QuerySet``
-inicial, añadiendo condiciones con filtros. Usualmente harás esto usando los
-métodos ``filter()`` y/o ``exclude()``::
+  Después solo la enlazamos a su respectiva URL:
 
-    >>> y2006 = Entry.objects.filter(pub_date__year=2006)
-    >>> not2006 = Entry.objects.exclude(pub_date__year=2006)
+  .. snippet::
+     :filename: urls.py
 
-Tanto ``filter()`` como ``exclude()`` toman argumentos de *patrones de
-búsqueda*, los cuales se discutirán detalladamente en breve.
+      from django.conf.urls import url
+      from biblioteca.views import PaginaBienvenida
 
-Encadenando filtros
--------------------
+      urlpatterns = [
+          url(r'^$', PaginaBienvenida.as_view(), name='bienvenidos'),
+      ]
 
-El resultado de refinar un ``QuerySet`` es otro ``QuerySet`` así que es posible
-enlazar refinamientos, por ejemplo::
+  **Contexto**
 
-    >>> qs = Entry.objects.filter(headline__startswith='What')
-    >>> qs = qs.exclude(pub_date__gte=datetime.datetime.now())
-    >>> qs = qs.filter(pub_date__gte=datetime.datetime(2005, 1, 1))
+  * Rellena (A través de la clase :class:`~django.views.generic.base.ContextMixin`)
+    con los argumentos clave,  capturados de el patrón URL que sirve la vista.
 
-Esto toma el ``QuerySet`` inicial de todas las entradas en la base de datos,
-agrega un filtro, luego una exclusión, y luego otro filtro. El resultado final
-es un ``QuerySet`` conteniendo todas las entradas con un título que empieza con
-"What" que fueron publicadas entre Enero 1, 2005, y el día actual.
 
-Es importante precisar aquí que los ``QuerySet`` son perezosos -- el acto de
-crear un ``QuerySet`` no implica ninguna actividad en la base de datos. De
-hecho, las tres líneas precedentes no hacen *ninguna* llamada a la base de
-datos; puedes enlazar/encadenar filtros todo el día y Django no ejecutará
-realmente la consulta hasta que el ``QuerySet`` sea *evaluado*.
-
-Puedes evaluar un ``QuerySet`` en cualquiera de las siguientes formas:
-
-* *Iterando*: Un ``QuerySet`` es iterable, y ejecuta su consulta en la base
-  de datos la primera vez que iteras sobre el. Por ejemplo, el siguiente
-  ``QuerySet`` no es evaluado hasta que se iterado sobre él en el bucle
-  ``for``::
-
-          qs = Entry.objects.filter(pub_date__year=2006)
-          qs = qs.filter(headline__icontains="bill")
-          for e in qs:
-              print e.headline
-
-  Esto imprime todos los títulos desde el 2006 que contienen "bill" pero
-  genera solo un acceso a la base de datos.
-
-* *Imprimiéndolo*: Un ``QuerySet`` es evaluado cuando ejecutas ``repr()``
-  sobre el mismo. Esto es por conveniencia en el interprete interactivo
-  Python, así puedes ver inmediatamente tus resultados cuando usas el API
-  interactivamente.
-
-* *Rebanado*: Según lo explicado en la próxima sección "`Limitando
-  QuerySets`_", un ``QuerySet`` puede ser rebanado usando la sintaxis de
-  rebanado de arreglos de Python. Usualmente el rebanar un ``QuerySet``
-  retorna otro ``QuerySet`` (no evaluado), pero Django ejecutará la consulta
-  a la base de datos si usas el parámetro "step" de la sintaxis de rebanado.
-
-* *Convirtiendo a una lista*: Puedes forzar la evaluación de un ``QuerySet``
-  ejecutando ``list()`` sobre el mismo, por ejemplo::
-
-          >>> entry_list = list(Entry.objects.all())
-
-Sin embargo, quedas advertido de que esto podría significar un gran
-impacto en la memoria porque Django cargará cada elemento de la lista en
-memoria.  En cambio, el iterar sobre un ``QuerySet`` sacará ventaja de tu
-base de datos para cargar datos e inicializar objetos solo a medida que
-vas necesitando los mismos.
-
-.. admonition:: Los QuerySets filtrados son únicos
-
-    Cada vez que refinas un ``QuerySet`` obtienes un nuevo ``QuerySet`` que no
-    está de ninguna manera atado al `QuerySet`` anterior. Cada refinamiento
-    crea un ``QuerySet`` separado y distinto que puede ser almacenado, usado
-    y re-usado::
-
-        q1 = Entry.objects.filter(headline__startswith="What")
-        q2 = q1.exclude(pub_date__gte=datetime.now())
-        q3 = q1.filter(pub_date__gte=datetime.now())
-
-Estos tres ``QuerySets`` son separados. El primero es un ``QuerySet`` base
-que contiene todas las entradas que contienen un título que empieza con
-"What". El segundo es un sub-conjunto del primero, con un criterio adicional
-que excluye los registros cuyo ``pub_date`` es mayor que el día de hoy. El
-tercero es un sub-conjunto del primero, con un criterio adicional que
-selecciona solo los registros cuyo ``pub_date`` es mayor que el día de hoy.
-El ``QuerySet`` inicial (``q1``) no es afectado por el proceso de
-refinamiento.
-
-Limitando QuerySets
--------------------
-
-Usa la sintaxis de rebanado de arreglos de Python para limitar tu ``QuerySet``
-a un cierto número de resultados. Esto es equivalente a las clausulas de SQL
-de ``LIMIT`` y ``OFFSET``.
-
-Por ejemplo, esto retorna las primeras cinco entradas (``LIMIT 5``)::
-
-    >>> Entry.objects.all()[:5]
-
-Esto retorna las entradas desde la sexta hasta la décima
-(``OFFSET 5 LIMIT 5``)::
-
-    >>> Entry.objects.all()[5:10]
-
-Generalmente, el rebanar un ``QuerySet`` retorna un nuevo ``QuerySet`` -- no
-evalúa la consulta. Una excepción es si usas el parámetro "step" de la sintaxis
-de rebanado de Python. Por ejemplo, esto realmente ejecutaría la consulta con el
-objetivo de retornar una lista, objeto de por medio de los primeros diez::
-
-    >>> Entry.objects.all()[:10:2]
-
-Para recuperar *un* solo objeto en vez de una lista (por ej.
-``SELECT foo FROM bar LIMIT 1``) usa un simple índice en vez de un rebanado.
-Por ejemplo, esto retorna el primer ``Entry`` en la base de datos, después de
-ordenar las entradas alfabéticamente por título::
-
-    >>> Entry.objects.order_by('headline')[0]
-
-y es equivalente a lo siguiente::
-
-    >>> Entry.objects.order_by('headline')[0:1].get()
-
-Nota, sin embargo, que el primero de estos generará ``IndexError`` mientras el
-segundo generará ``DoesNotExist`` si ninguno de los objetos coincide con el
-criterio dado.
-
-Métodos de consulta que retornan nuevos QuerySets
--------------------------------------------------
-
-Django provee una variedad de métodos de refinamiento de ``QuerySet`` que
-modifican ya sea los tipos de resultados retornados por el ``QuerySet`` o la
-forma como se ejecuta su consulta SQL.  Estos métodos se describen en las
-secciones que siguen. Algunos de estos métodos reciben argumentos de patrones
-de búsqueda, los cuales se discuten en detalle mas adelante.
-
-filter(\*\*lookup)
-~~~~~~~~~~~~~~~~~~
-
-Retorna un nuevo ``QuerySet`` conteniendo objetos que son iguales a los
-parámetros de búsqueda provistos.
-
-exclude(\*\*kwargs)
-~~~~~~~~~~~~~~~~~~~
-
-Retorna un nuevo ``QuerySet`` conteniendo objetos que *no* son iguales a los
-parámetros de búsqueda provistos.
-
-order_by(\*campos)
-~~~~~~~~~~~~~~~~~~
-
-Por omisión, los resultados retornados por un ``QuerySet`` están ordenados por
-la tupla de ordenamiento indicada por la opción ``ordering`` en los metadatos
-del modelo (ver Apéndice B). Puedes sobrescribir esto para una consulta
-particular usando el método ``order_by()``::
-
-    >>> Entry.objects.filter(pub_date__year=2005).order_by('-pub_date', 'headline')
-
-Este resultado será ordenado por ``pub_date`` de forma descendente, luego por
-``headline`` de forma ascendente. El signo negativo en frente de ``"-pub_date"``
-indica orden *descendiente*. Si el  ``-`` esta ausente se asume un orden
-ascendente. Para ordenar aleatoriamente, usa ``"?"``, así::
-
-    >>> Entry.objects.order_by('?')
-
-distinct()
-~~~~~~~~~~
-
-Retorna un nuevo ``QuerySet`` que usa ``SELECT DISTINCT`` en su consulta SQL.
-Esto elimina filas duplicadas en el resultado de la misma.
-
-Por omisión, un ``QuerySet`` no eliminará filas duplicadas. En la práctica esto
-raramente es un problema porque consultas simples como ``Blog.objects.all()`` no
-introducen la posibilidad de registros duplicados.
-
-Sin embargo, si tu consulta abarca múltiples tablas, es posible obtener
-resultados duplicados cuando un ``QuerySet`` es evaluado. Esos son los casos en
-los que usarías ``distinct()``.
-
-values(\*campos)
-~~~~~~~~~~~~~~~~
-
-Retorna un ``QuerySet`` especial que evalúa a una lista de diccionarios en
-lugar de objetos instancia de modelo. Cada uno de esos diccionarios representa
-un objeto, con las las claves en correspondencia con los nombre de los atributos
-de los objetos modelo::
-
-    # This list contains a Blog object.
-    >>> Blog.objects.filter(name__startswith='Beatles')
-    [Beatles Blog]
-
-    # This list contains a dictionary.
-    >>> Blog.objects.filter(name__startswith='Beatles').values()
-    [{'id': 1, 'name': 'Beatles Blog', 'tagline': 'All the latest Beatles news.'}]
-
-``values()`` puede recibir argumentos posicionales opcionales, ``*campos``, los
-cuales especifican los nombres de campos a los cuales debe limitarse el
-``SELECT``. Si especificas los campos, cada diccionario contendrá solamente las
-claves/valores de campos para los campos que especifiques. Si no especificas los
-campos, cada diccionario contendrá una clave y un valor para todos los campos en
-la table de base de datos::
-
-    >>> Blog.objects.values()
-    [{'id': 1, 'name': 'Beatles Blog', 'tagline': 'All the latest Beatles news.'}],
-    >>> Blog.objects.values('id', 'name')
-    [{'id': 1, 'name': 'Beatles Blog'}]
-
-Este método es útil cuando sabes de antemano que solo vas a necesitar valores de
-un pequeño número de los campos disponibles y no necesitarás la funcionalidad de
-un objeto instancia de modelo. Es más eficiente el seleccionar solamente los
-campos que necesitas usar.
-
-dates(campo, tipo, orden)
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Retorna un ``QuerySet`` especial que evalúa a una lista de
-objetos ``datetime.datetime`` que representan todas las fechas disponibles de un
-cierto tipo en el contenido de la ``QuerySet``.
-
-El argumento ``campo`` debe ser el nombre de un ``DateField`` o de un
-``DateTimeField`` de tu modelo. El argumento ``tipo`` debe ser ya sea ``year``,
-``month`` o ``day``. Cada objeto ``datetime.datetime`` en la lista de resultados
-es truncado de acuerdo al ``tipo`` provisto:
-
-* ``"year"`` retorna una lista de todos los valores de años distintos entre
-  sí para el campo.
-
-* ``"month"`` retorna una lista de todos los valores de años/mes distintos
-  entre sí para el campo.
-
-* ``"day"`` retorna una lista de todos los valores de años/mes/día distintos
-  entre sí para el campo.
-
-``orden``, cuyo valor por omisión es ``'ASC'``, debe ser ``'ASC'`` o
-``'DESC'``. El mismo especifica cómo ordenar los resultados.
-
-Aquí tenemos algunos ejemplos::
-
-    >>> Entry.objects.dates('pub_date', 'year')
-    [datetime.datetime(2005, 1, 1)]
-
-    >>> Entry.objects.dates('pub_date', 'month')
-    [datetime.datetime(2005, 2, 1), datetime.datetime(2005, 3, 1)]
-
-    >>> Entry.objects.dates('pub_date', 'day')
-    [datetime.datetime(2005, 2, 20), datetime.datetime(2005, 3, 20)]
-
-    >>> Entry.objects.dates('pub_date', 'day', order='DESC')
-    [datetime.datetime(2005, 3, 20), datetime.datetime(2005, 2, 20)]
-
-    >>> Entry.objects.filter(headline__contains='Lennon').dates('pub_date', 'day')
-    [datetime.datetime(2005, 3, 20)]
-
-select_related()
-~~~~~~~~~~~~~~~~
-
-Retorna un ``QuerySet`` que seguirá automáticamente relaciones de clave foránea,
-seleccionando esos datos adicionales de objetos relacionados cuando ejecuta su
-consulta. Esto contribuye a la mejora de rendimiento que resulta en consultas
-(aveces mucho) más grandes pero significan que el uso posterior de relaciones de
-clave foránea no requerirán consultas a la base de datos.
-
-Los siguientes ejemplos ilustran la diferencia entre búsquedas normales y
-búsquedas ``select_related()``. Esta es una búsqueda normal::
-
-    # Hits the database.
-    >>> e = Entry.objects.get(id=5)
-
-    # Hits the database again to get the related Blog object.
-    >>> b = e.blog
-
-Esta es una búsqueda ``select_related``::
-
-    # Hits the database.
-    >>> e = Entry.objects.select_related().get(id=5)
-
-    # Doesn't hit the database, because e.blog has been prepopulated
-    # in the previous query.
-    >>> b = e.blog
-
-``select_related()`` sigue claves foráneas tan lejos como le sea posible. Si
-tienes los siguientes modelos::
-
-    class City(models.Model):
-        # ...
-
-    class Person(models.Model):
-        # ...
-        hometown = models.ForeignKey(City)
-
-    class Book(models.Model):
-        # ...
-        author = models.ForeignKey(Person)
-
-entonces una llamada a ``Book.objects.select_related().get(id=4)`` colocará en
-el cache la ``Person`` relacionada *y* la ``City`` relacionada::
-
-    >>> b = Book.objects.select_related().get(id=4)
-    >>> p = b.author         # Doesn't hit the database.
-    >>> c = p.hometown       # Doesn't hit the database.
-
-    >>> b = Book.objects.get(id=4) # No select_related() in this example.
-    >>> p = b.author         # Hits the database.
-    >>> c = p.hometown       # Hits the database.
-
-Notar que ``select_related`` no sigue claves foráneas que tienen ``null=True``.
-
-Usualmente, el usar ``select_related()`` puede mejorar muchísimo el desempeño
-porque tu aplicación puede puede entonces evitar muchas llamadas a la base de
-datos. Sin embargo, en siuaciones con conjuntos de relaciones profundamente
-anidadas, ``select_related()`` puede en algunos casos terminar siguiendo
-"demasiadas" relaciones y puede generar consultas tan grandes que terminan
-siendo lentas.
-
-extra()
-~~~~~~~
-
-A veces, el lenguaje de consulta de Django no puede expresar facilmente
-cláusulas ``WHERE`` complejas.  Para estos casos extremos, Django provee un
-modificador de ``QuerySet`` llamado ``extra()`` -- una forma de inyectar
-cláusulas especificas dentro del SQL generado por un ``QuerySet``.
-
-Por definición, estas consultas especiales pueden no ser portables entre los
-distintos motores de bases de datos (debido a que estás escribiendo código SQL
-explícito) y violan el principio DRY, así que deberías evitarlas de ser posible.
-
-Se puede especificar uno o más de ``params``, ``select``, ``where``, o
-``tables``.  Ninguno de los argumentos es obligatorio, pero deberías indicar al
-menos uno.
-
-El argumento ``select`` permite indicar campos adicionales en una cláusula de
-``SELECT``.  Debe contener un diccionario que mapee nombres de atributo a
-cláusulas SQL que se utilizarán para calcular el atributo en cuestión::
-
-    >>> Entry.objects.extra(select={'is_recent': "pub_date > '2006-01-01'"})
-
-Como resultado, cada objeto ``Entry`` tendrá en este caso un atributo adicional,
-``is_recent``, un booleano que representará si el atributo ``pub_date`` del
-entry es mayor que el 1 de Enero de 2006.
-
-El siguiente ejemplo es más avanzado; realiza una subconsulta para darle a cada
-objeto ``Blog`` resultante un atributo ``entry_count``, un entero que indica la
-cantidad de objetos ``Entry`` asociados al blog::
-
-    >>> subq = 'SELECT COUNT(*) FROM blog_entry WHERE blog_entry.blog_id = blog_blog.id'
-    >>> Blog.objects.extra(select={'entry_count': subq})
-
-(En este caso en particular, estamos aprovechando el hecho de que la consulta
-ya contiene la tabla ``blog_blog`` en su cláusula ``FROM``.)
-
-También es posible definir cláusulas ``WHERE`` explícitas -- quizás para
-realizar joins implícitos -- usando el argumento ``where``.  Se puede agregar
-tablas manualmente a la cláusula ``FROM`` del SQL usando el argumento
-``tables``.
-
-Tanto ``where`` como ``tables`` reciben una lista de cadenas.  Todos los
-argumentos de ``where`` son unidos con AND a cualquier otro criterio de
-búsqueda::
-
-    >>> Entry.objects.extra(where=['id IN (3, 4, 5, 20)'])
-
-Los parámetros ``select`` y ``where`` antes descriptos pueden utilizar los
-comodines normales para bases de datos en Python: ``'%s'`` para indicar
-parámetros que deberían ser escapados automáticamente por el motor de la base de
-datos.  El argumento ``params`` es una lista de los parámetros que serán
-utilizados para realizar la sustitución::
-
-    >>> Entry.objects.extra(where=['headline=%s'], params=['Lennon'])
-
-Siempre se debe utilizar ``params`` en vez de utilizar valores directamente en
-``select`` o ``where`` ya que ``params`` asegura que los valores serán escapados
-correctamente de acuerdo con tu motor de base de datos particular.
-
-Este es un ejemplo de lo que está incorrecto::
-
-    Entry.objects.extra(where=["headline='%s'" % name])
-
-Este es un ejemplo de lo que es correcto::
-
-    Entry.objects.extra(where=['headline=%s'], params=[name])
-
-Metodos de ``QuerySet`` que no devuelven un ``QuerySet``
---------------------------------------------------------
-
-Los métodos de ``QuerySet`` que se describen a continuación evaluan el
-``QuerySet`` y devuelven algo *que no es* un ``QuerySet`` -- un objeto, un
-valor, o algo así.
-
-get(\*\*lookup)
-~~~~~~~~~~~~~~~
-
-Devuelve el objeto que matchee el parámetro de búsqueda provisto.  El
-parámetro debe proveerse de la manera descripta en la sección
-"`Patrones de búsqueda`_".  Este método levanta ``AssertionError`` si más de un
-objecto concuerda con el patrón provisto.
-
-Si no se encuentra ningún objeto que coincida con el patrón de búsqueda provisto
-``get()`` levanta una excepción de ``DoesNotExist``.  Esta excepción es un
-atributo de la clase del modelo, por ejemplo::
-
-    >>> Entry.objects.get(id='foo') # levanta Entry.DoesNotExist
-
-La excepción ``DoesNotExist`` hereda de
-``django.core.exceptions.ObjectDoesNotExist``, así que puedes protegerte de
-múltiples excepciones ``DoesNotExist``::
-
-    >>> from django.core.exceptions import ObjectDoesNotExist
-    >>> try:
-    ...     e = Entry.objects.get(id=3)
-    ...     b = Blog.objects.get(id=1)
-    ... except ObjectDoesNotExist:
-    ...     print "Either the entry or blog doesn't exist."
-
-create(\*\*kwargs)
-~~~~~~~~~~~~~~~~~~
-
-Este método sirve para crear un objeto y guardarlo en un mismo paso.  Te
-permite abreviar dos pasos comunes::
-
-    >>> p = Person(first_name="Bruce", last_name="Springsteen")
-    >>> p.save()
-
-en una sola línea::
-
-    >>> p = Person.objects.create(first_name="Bruce", last_name="Springsteen")
-
-get_or_create(\*\*kwargs)
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Este método sirve para buscar un objeto y crearlo si no existe.  Devuelve una
-tupla ``(object, created)``, donde ``object`` es el objecto encontrado o creado,
-y ``created`` es un booleano que indica si el objeto fue creado.
-
-Está pensado como un atajo para el caso de uso típico y es más que nada útil
-para scripts de importación de datos, por ejemplo::
-
-    try:
-        obj = Person.objects.get(first_name='John', last_name='Lennon')
-    except Person.DoesNotExist:
-        obj = Person(first_name='John', last_name='Lennon', birthday=date(1940, 10, 9))
-        obj.save()
-
-Este patrón se vuelve inmanejable a medida que aumenta el número de campos en el
-modelo.  El ejemplo anterior puede ser escrito usando ``get_or_create`` así::
-
-    obj, created = Person.objects.get_or_create(
-        first_name = 'John',
-        last_name  = 'Lennon',
-        defaults   = {'birthday': date(1940, 10, 9)}
-    )
-
-Cualquier argumento que se le pase a ``get_or_create()`` -- *excepto* el
-argumento opcional ``defaults`` -- será utilizado en una llamada a ``get()``.
-Si se encuentra un objecto, ``get_or_create`` devolverá una tupla con ese objeto
-y ``False``.  Si *no* se encuentra un objeto, ``get_or_create()`` instanciará y
-guardará un objeto nuevo, devolviendo una tupla con el nuevo objeto y ``True``.
-El nuevo objeto será creado de acuerdo con el siguiente algoritmo::
-
-    defaults = kwargs.pop('defaults', {})
-    params = dict([(k, v) for k, v in kwargs.items() if '__' not in k])
-    params.update(defaults)
-    obj = self.model(**params)
-    obj.save()
-
-Esto es, se comienza con los argumentos que no sean ``'defaults'`` y que no
-contengan doble guión bajo (lo cual indicaría una búsqueda no exacta).
-Luego se le agrega el contenido de ``defaults``, sobreescribiendo cualquier
-valor que ya estuviera asignado, y se usa el resultado como claves para
-el constructor del modelo.
-
-Si el modelo tiene un campo llamado ``defaults`` y es necesario usarlo para
-una búsqueda exacta en ``get_or_create()``, simplemente hay que utilizar
-``'defaults__exact'`` así::
-
-    Foo.objects.get_or_create(
-        defaults__exact = 'bar',
-        defaults={'defaults': 'baz'}
-    )
-
-.. admonition:: Nota:
-
-    Como ya se mencionó, ``get_or_create`` es utilizado más que nada en scripts
-    que necesiten procesar datos y crear nuevos campos si los que existen no
-    están disponibles.
-    Si necesitas utilizar ``get_or_create()`` en una vista, por favor asegurate
-    de utilizarlo solo en pedidos ``POST`` salvo que tengas una buena razón para
-    no hacerlo.  Los pedidos ``GET`` no deberían afectar los datos de ninguna
-    manera; se debe utilizar ``POST`` en cualquier pedido a una página que pueda
-    tener como efecto secundario una modificación a tus datos.
-
-count()
-~~~~~~~
-
-Devuelve un entero representando el número de objetos en la base de datos que
-coincidan con el ``QuerySet``.  ``count()`` nunca levanta excepciones.  He aquí
-un ejemplo::
-
-    # Returns the total number of entries in the database.
-    >>> Entry.objects.count()
-    4
-
-    # Returns the number of entries whose headline contains 'Lennon'
-    >>> Entry.objects.filter(headline__contains='Lennon').count()
-    1
-
-``count()`` en el fondo realiza un ``SELECT COUNT(*)``, así que deberías siempre
-utilizar ``count()`` en vez de cargar todos los registros en objetos Python y
-luego invocar ``len()`` sobre el resultado.
-
-Dependiendo de la base de datos que estés utilizando (e.g., PostgreSQL o MySQL),
-``count()`` podría devolver un entero largo en vez de un entero normal de
-Python.  Esto es una característica particular de la implementación subyacente
-que no debería ser ningún problema en la vida real.
-
-in_bulk(id_list)
-~~~~~~~~~~~~~~~~
-
-Este método toma una lista de claves primarias y devuelve un diccionario que
-mapea cada clave primaria en una instancia con el ID dado, por ejemplo::
-
-    >>> Blog.objects.in_bulk([1])
-    {1: Beatles Blog}
-    >>> Blog.objects.in_bulk([1, 2])
-    {1: Beatles Blog, 2: Cheddar Talk}
-    >>> Blog.objects.in_bulk([])
-    {}
-
-Si no se encuentra un objeto en la base para un ID en particular, este id no
-aparecerá en el diccionario resultante.  Si le pasas una lista vacía a
-``in_bulk()``, obtendrás un diccionario vacío.
-
-latest(field_name=None)
-~~~~~~~~~~~~~~~~~~~~~~~
-
-Devuelve el último objeto de la tabla, ordenados por fecha, utilizando el campo
-que se provea en el argumento ``field_name`` como fecha.  Este ejemplo devuelve
-el ``Entry`` más reciente en la tabla, de acuerdo con el campo ``pub_date``::
-
-    >>> Entry.objects.latest('pub_date')
-
-Si el ``Meta`` de tu modelo especifica ``get_latest_by``, se puede omitir el
-argumento ``field_name``.  Django utilizará el campo indicado en
-``get_latest_by`` por defecto.
-
-Al igual que ``get()``, ``latest()`` levanta ``DoesNotExist`` si no existe
-un objeto con los parámetros provistos.
-
-Patrones de búsqueda
-====================
-
-Los patrones de búsqueda son la manera en que se especifica la carne de una
-cláusula ``WHERE`` de SQL.  Consisten de argumentos de palabra clave para los
-métodos ``filter()``, ``exclude()`` y ``get()`` de ``QuerySet``.
-
-Los parámetros básicos de búsqueda toman la forma de
-``campo__tipodebusqueda=valor`` (notar el doble guión bajo).  Por ejemplo::
-
-    >>> Entry.objects.filter(pub_date__lte='2006-01-01')
-
-se traduce (aproximadamente) al siguiente comando SQL::
-
-    SELECT * FROM blog_entry WHERE pub_date <= '2006-01-01';
-
-Si se suministra un argumento de palabra clave inválido, la función levantará
-una excepción de ``TypeError``.
-
-A continuación se listan los tipos de búsqueda que existen.
-
-exact
------
-
-Realiza una búsqueda por coincidencias exactas::
-
-    >>> Entry.objects.get(headline__exact="Man bites dog")
-
-Esto busca objetos que tengan en el campo headline la frase exacta
-"Man bites dog".
-
-Si no se suministra un tipo de búsqueda -- O sea, si tu argumento de palabra
-clave no contiene un doble guión bajo -- el tipo de búsqueda se asume como
-``exact``.
-
-Por ejemplo, las siguientes dos sentencias son equivalentes::
-
-    >>> Blog.objects.get(id__exact=14) # Explicit form
-    >>> Blog.objects.get(id=14) # __exact is implied
-
-Esto es por conveniencia, dado que las búsquedas con tipo de búsqueda ``exact``
-son las más frecuentes.
-
-iexact
-------
-
-Realiza una búsqueda por coincidencias exactas sin distinguir mayúsculas de
-minúsculas::
-
-    >>> Blog.objects.get(name__iexact='beatles blog')
-
-Traerá objetos con nombre ``'Beatles Blog'``, ``'beatles blog'``,
-``'BeAtLes BLoG'``, etcétera.
-
-contains
---------
-
-Realiza una búsqueda de subcadenas, distinguiendo mayúsculas y minúsculas::
-
-    Entry.objects.get(headline__contains='Lennon')
-
-Esto coincidirá con el titular ``'Today Lennon honored'`` pero no con
-``'today lennon honored'``.
-
-SQLite no admite sentencias ``LIKE`` distinguiendo mayúsculas y minúsculas;
-cuando se utiliza SQLite, ``contains`` se comporta como ``icontains``.
-
-.. admonition:: Escapado de porciento y guión bajo en sentencias ``LIKE``
-
-    Los patrones de búsqueda que resulten en sentencias SQL ``LIKE``
-    (``iexact``, ``contains``, ``icontains``, ``startswith``, ``istartswith``,
-    ``endswith``, y ``iendswith``) escaparán automáticamente los dos caracteres
-    especiales utilizados en sentencias ``LIKE`` -- el porciento y el guión
-    bajo.  (En una sentencia ``LIKE``, el símbolo de porciento indica una
-    secuencia de caracteres cualesquiera, y el guión bajo indica un solo
-    caracter cualquiera).
-
-    Esto significa que las cosas deberían funcionar de manera intuitiva, por
-    que la abstracción funciona bien.  Por ejemplo, para obtener todos los
-    Entries que contengan un símbolo de porciento, simplemente hace falta
-    utilizar el símbolo de porcentaje como cualquier otro caracter::
-
-        Entry.objects.filter(headline__contains='%')
-
-    Django se hace cargo del escapado.  El SQL resultante será algo similar a
-    esto::
-
-        SELECT ... WHERE headline LIKE '%\%%';
-
-Lo mismo vale para el guión bajo.  Tanto el símbolo de porcentaje como el
-guión bajo se deberían manejar de manera transparente.
-
-
-icontains
----------
-
-Realiza una búsqueda de subcadenas, sin distinguir mayúsculas y minúsculas::
-
-    >>> Entry.objects.get(headline__icontains='Lennon')
-
-A diferencia de ``contains``, ``icontains`` *sí* trerá ``today lennon honored``.
-
-gt, gte, lt, and lte
---------------------
-
-Estos representan los operadores de mayor a, mayor o igual a, menor a, y
-menor o igual a, respectivamente::
-
-    >>> Entry.objects.filter(id__gt=4)
-    >>> Entry.objects.filter(id__lt=15)
-    >>> Entry.objects.filter(id__gte=1)
-
-Estas consultas devuelven cualquier objeto con un ID mayor a 4, un ID menor a
-15, y un ID mayor o igual a 1, respectivamente.
-
-Por lo general estos operadores se utilizarán con campos numéricos.  Se debe
-tener cuidado con los campos de caracteres, ya que el orden no siempre es el que
-uno se esperaría (i.e., la cadena "4" resulta ser *mayor* que la cadena "10").
-
-in
---
-
-Aplica un filtro para encontrar valores en una lista dada::
-
-    Entry.objects.filter(id__in=[1, 3, 4])
-
-Esto devolverá todos los objetos que tengan un ID de 1, 3 o 4.
-
-startswith
-----------
-
-Busca coincidencias de prefijos distinguiendo mayúsculas y minúsculas::
-
-    >>> Entry.objects.filter(headline__startswith='Will')
-
-Esto encontrará los titulares "Will he run?" y "Willbur named judge", pero no
-"Who is Will?" o "will found in crypt".
-
-istartswith
------------
-
-Realiza una búsqueda por prefijos, sin distinguir mayúsculas y minúsculas::
-
-    >>> Entry.objects.filter(headline__istartswith='will')
-
-Esto devolverá los titulares "Will he run?", "Willbur named judge", y
-"will found in crypt", pero no "Who is Will?"
-
-endswith and iendswith
-----------------------
-
-Realiza búsqueda de sufijos, distinguiendo y sin distinguir mayúsculas de
-minúsculas, respectivamente::
-
-    >>> Entry.objects.filter(headline__endswith='cats')
-    >>> Entry.objects.filter(headline__iendswith='cats')
-
-range
------
-
-Realiza una búsqueda por rango::
-
-    >>> start_date = datetime.date(2005, 1, 1)
-    >>> end_date = datetime.date(2005, 3, 31)
-    >>> Entry.objects.filter(pub_date__range=(start_date, end_date))
-
-Se puede utilizar ``range`` en cualquier lugar donde podrías utilizar
-``BETWEEN`` en SQL -- para fechas, números, e incluso cadenas de caracteres.
-
-year, month, and day
---------------------
-
-Para campos ``date`` y ``datetime``, realiza búsqueda exacta por año, mes o
-día::
-
-    # Búsqueda por año
-    >>>Entry.objects.filter(pub_date__year=2005)
-
-    # Búsqueda por mes -- toma enteros
-    >>> Entry.objects.filter(pub_date__month=12)
-
-    # Búsqueda por día
-    >>> Entry.objects.filter(pub_date__day=3)
-
-    # Combinación: devuelve todas las entradas de Navidad de cualquier año
-    >>> Entry.objects.filter(pub_date__month=12, pub_date__day=25)
-
-isnull
-------
-
-Toma valores ``True`` o ``False``, que corresponderán a consultas SQL de
-``IS NULL``y ``IS NOT NULL``, respectivamente::
-
-    >>> Entry.objects.filter(pub_date__isnull=True)
-
-.. admonition:: ``__isnull=True`` vs. ``__exact=None``
-
-    Hay una diferencia importante entre ``__isnull=True`` y ``__exact=None``.
-    ``__exact=None`` *siempre* devolverá como resultado un conjunto vacío, ya
-    que SQL requiere que ningún valor sea igual a ``NULL``.
-    ``__isnull`` determina si el campo actualmente contiene un valor ``NULL``
-    sin realizar la comparación.
-
-search
-------
-
-Un booleano que realiza búsquedas ``full-text``, que aprovecha el indexado
-``full-text``.  Esto es como ``contains`` pero significativamente más rápido
-debido al indexado ``full-text``.
-
-Nótese que este tipo de búsqueda sólo está disponible en MySQL y requiere de
-manipulación directa de la base de datos para agregar el índice ``full-text``.
-
-El patrón de búsqueda pk
-------------------------
-
-Por conveniencia, Django provee un patrón de búsqueda ``pk``, que realiza una
-búsqueda sobre la clave primaria del modelo (``pk`` por ``primary key``, del
-inglés).
-
-En el modelo de ejemplo ``Blog``, la clave primaria es el campo ``id``, así que
-estas sentencias serían equivalentes::
-
-    >>> Blog.objects.get(id__exact=14) # Forma explícita
-    >>> Blog.objects.get(id=14) # __exact implícito
-    >>> Blog.objects.get(pk=14) # pk implica id__exact
-
-El uso de ``pk`` no se limita a búsquedas ``__exact`` -- cualquier patrón de
-búsqueda puede ser combinado con ``pk`` para realizar una búsqueda sobre la
-clave primaria de un modelo::
-
-    # Buscar entradas en blogs con id 1, 4, o 7
-    >>> Blog.objects.filter(pk__in=[1,4,7])
-
-    # Buscar entradas en blogs con id > 14
-    >>> Blog.objects.filter(pk__gt=14)
-
-Las búsquedas ``pk`` también funcionan con joins.  Por ejemplo, estas tres
-sentencias son equivalentes::
-
-    >>> Entry.objects.filter(blog__id__exact=3) # Forma explícita
-    >>> Entry.objects.filter(blog__id=3) # __exact implícito
-    >>> Entry.objects.filter(blog__pk=3) # __pk implica __id__exact
-
-Búsquedas complejas con Objetos Q
-=================================
-
-Los argumentos de palabras clave en las búsquedas -- en ``filter()`` por
-ejemplo -- son unidos con AND.  Si necesitas realizar búsquedas más complejas
-(e.g., búsquedas con sentencias ``OR``), puedes utilizar objetos ``Q``.
-
-Un objeto ``Q`` (``django.db.models.Q``) es un objeto que se utiliza para
-encapsular una colección de argumentos de palabra clave.  Estos argumentos de
-palabra clave son especificados como se indica en la sección
-"`Patrones de búsqueda`_".
-
-Por ejemplo, este objeto ``Q`` encapsula una consulta con un único ``LIKE``:
-
-    Q(question__startswith='What')
-
-Los objetos ``Q`` pueden ser combinados utilizando los operadores ``&`` y ``|``.
-Cuando se utiliza un operador sobre dos objetos, se obtiene un nuevo objeto
-``Q``.  Por ejemplo, un ``OR`` de dos consultas ``question__startswith`` sería::
-
-    Q(question__startswith='Who') | Q(question__startswith='What')
-
-Esto será equivalente a la siguiente cláusula ``WHERE`` en SQL::
-
-    WHERE question LIKE 'Who%' OR question LIKE 'What%'
-
-Puede componer sentencias de complejidad arbitraria combinando objetos ``Q`` con
-los operadores ``&`` y ``|``.  También se pueden utilizar paréntesis para
-agrupar.
-
-Cualquier función de búsqueda que tome argumentos de palabra clave (e.g.,
-``filter()``, ``exclude()``, ``get()``) puede recibir también uno o más objetos
-``Q`` como argumento posicional (no nombrado).  Si se proveen multiples objetos
-``Q`` como argumentos a una función de búsqueda, los argumentos serán unidos
-con AND, por ejemplo::
-
-    Poll.objects.get(
-        Q(question__startswith='Who'),
-        Q(pub_date=date(2005, 5, 2)) | Q(pub_date=date(2005, 5, 6))
-    )
-
-se traduce aproximadamente al siguiente SQL::
-
-    SELECT * from polls WHERE question LIKE 'Who%'
-        AND (pub_date = '2005-05-02' OR pub_date = '2005-05-06')
-
-Las funciones de búsqueda pueden además mezclar el uso de objetos ``Q`` y de
-argumentos de palabra clave.  Todos los argumentos provistos a una función de
-búsqueda (sean argumentos de palabra clave u objetos ``Q``) son unidos con AND.
-Sin embargo, si se provee un objeto ``Q`` debe preceder la definición de
-todos los argumentos de palabra clave.  Por ejemplo, lo siguiente::
-
-    Poll.objects.get(
-        Q(pub_date=date(2005, 5, 2)) | Q(pub_date=date(2005, 5, 6)),
-        question__startswith='Who')
-
-es una consulta válida, equivalente al ejemplo anterior, pero esto::
-
-    # CONSULTA INVALIDA
-    Poll.objects.get(
-        question__startswith='Who',
-        Q(pub_date=date(2005, 5, 2)) | Q(pub_date=date(2005, 5, 6)))
-
-no es válido.
-
-Hay algunos ejemplos disponibles online en
-http://www.djangoproject.com/documentation/0.96/models/or_lookups/ .
-
-Objetos Relacionados
-====================
-
-Cuando defines una relación en un modelo (i.e. un ``ForeignKey``,
-``OneToOneField``, or ``ManyToManyField``), las instancias de ese modelo
-tendrán una API conveniente para acceder a estos objetos relacionados.
-
-Por ejemplo, si ``e`` es un objeto ``Entry``, puede acceder a su ``Blog``
-asociado accediendo al atributo ``blog``, esto es ``e.blog``.
-
-Django también crea una API para acceder al "otro" lado de la relación --
-el vínculo del modelo relacionado al modelo que define la relación.
-Por ejemplo, si ``b`` es un objeto ``Blog``, tiene acceso a la lista de todos
-los objetos ``Entry`` a través del atributo ``entry_set``:
-``b.entry_set.all()``.
-
-Todos los ejemplos en esta sección utilizan los modelos de ejemplo ``Blog``,
-``Author`` y ``Entry`` que se definen al principio de esta sección.
-
-Consultas Que Cruzan Relaciones
--------------------------------
-
-Django ofrece un mecanismo poderoso e intuitivo para "seguir" relaciones cuando
-se realizan búsquedas, haciéndose cargo de los ``JOIN``\s de SQL de manera
-automática.  Para cruzar una relación simplemente hace falta utilizar el nombre
-de campo de los campos relacionados entre modelos, separados por dos guiones
-bajos, hasta que llegues al campo que necesitabas.
-
-Este ejemplo busca todos los objetos ``Entry`` que tengan un ``Blog`` cuyo
-``nombre`` sea ``'Beatles Blog'``::
-
-    >>> Entry.objects.filter(blog__name__exact='Beatles Blog')
-
-Este camino puede ser tan largo como quieras.
-
-También Funciona en la otra dirección.  Para referirse a una relación "inversa",
-simplemente hay que utilizar el nombre en minúsculas del modelo.
-
-Este ejemplo busca todos los objetos ``Blog`` que tengan al menos un ``Entry``
-cuyo ``headline`` contenga ``'Lennon'``::
-
-    >>> Blog.objects.filter(entry__headline__contains='Lennon')
-
-Relaciones de Clave Foránea
----------------------------
-
-Si un modelo contiene un ``ForeignKey``, las instancias de ese modelo tendrán
-acceso al objeto relacionado (foráneo) vía un simple atributo del modelo, por
-ejemplo::
-
-    e = Entry.objects.get(id=2)
-    e.blog # Devuelve el objeto Blog relacionado
-
-Se puede acceder y asignar el valor de la clave foránea vía el atributo.  Como
-sería de esperar, los cambios a la clave foránea no se guardan en el modelo
-hasta que invoques el método ``save()``, por ejemplo::
-
-    e = Entry.objects.get(id=2)
-    e.blog = some_blog
-    e.save()
-
-Si un campo ``ForeignKey`` tiene la opción ``null=True`` seteada (i.e. permite
-valores ``NULL``), se le puede asignar ``None``::
-
-    e = Entry.objects.get(id=2)
-    e.blog = None
-    e.save() # "UPDATE blog_entry SET blog_id = NULL ...;"
-
-El acceso a relaciones uno-a-muchos se almacena la primera vez que se accede
-al objeto relacionado.  Cualquier acceso subsiguiente a la clave foránea del
-mismo objeto son cacheadas, por ejemplo::
-
-    e = Entry.objects.get(id=2)
-    print e.blog  # Busca el Blog asociado en la base de datos.
-    print e.blog  # No va a la base de datos; usa la versión cacheada.
-
-Notar que el método de ``QuerySet`` ``select_related()`` busca inmediatamente
-todos los objetos de relaciones uno-a-muchos de la instancia::
-
-    e = Entry.objects.select_related().get(id=2)
-    print e.blog  # No va a la base de datos; usa la versión cacheada.
-    print e.blog  # No va a la base de datos; usa la versión cacheada.
-
-``select_related()`` está documentada en la sección
-"`Métodos de consulta que retornan nuevos QuerySets`_".
-
-Relaciones de Clave Foreánea "Inversas"
----------------------------------------
-
-Las relaciones de clave foránea son automáticamente simétricas -- se infiere
-una relación inversa de la presencia de un campo ``ForeignKey`` que apunte a
-otro modelo.
-
-Si un modelo tiene una ``ForeignKey``, las instancias del modelo de la clave
-foránea tendrán acceso a un ``Manager`` que devuelve todas las instancias del
-primer modelo.  Por defecto, este ``Manager`` se llama ``FOO_set``, donde
-``FOO`` es el nombre modelo que contiene la clave foránea, todo en minúsculas.
-Este ``Manager`` devuelve ``QuerySets``, que pueden ser filtradas y manipuladas
-como se describe en la sección "`Recuperando objetos`_".
-
-Aquí se muestra un ejemplo::
-
-    b = Blog.objects.get(id=1)
-    b.entry_set.all() # Encontrar todos los objetos Entry relacionados a b.
-
-    # b.entry_set es un Manager que devuelve QuerySets.
-    b.entry_set.filter(headline__contains='Lennon')
-    b.entry_set.count()
-
-Se puede cambiar el nombre del atributo ``FOO_set`` indicando el parámetro
-``related_name`` en la definición del ``ForeignKey()``.  Por ejemplo, si el
-modelo ``Entry`` fuera cambiado por
-``blog = ForeignKey(Blog, related_name='entries')``, el ejemplo anterior pasaría
-a ser así::
-
-    b = Blog.objects.get(id=1)
-    b.entries.all() # Encontrar todos los objetos Entry relacionados a b.
-
-    # b.entries es un Manager que devuelve QuerySets.
-    b.entries.filter(headline__contains='Lennon')
-    b.entries.count()
-
-No se puede acceder al ``Manager`` de ``ForeignKey`` inverso desde la clase
-misma; debe ser accedido desde una instancia::
-
-    Blog.entry_set # Raises AttributeError: "Manager must be accessed via instance".
-
-Además de los metodos de ``QuerySet`` definidos en la sección
-"`Recuperando Objetos`_", el ``Manager`` de ``ForeignKey`` tiene los siguientes
-métodos adicionales:
-
-
-* ``add(obj1, obj2, ...)``: Agrega los objetos del modelo indicado al
-  conjunto de objetos relacionados, por ejemplo::
-
-          b = Blog.objects.get(id=1)
-          e = Entry.objects.get(id=234)
-          b.entry_set.add(e) # Associates Entry e with Blog b.
-
-* ``create(**kwargs)``: Crea un nuevo objeto, lo guarda, y lo deja en el
-  conjunto de objetos relacionados.  Devuelve el objeto recién creado::
-
-          b = Blog.objects.get(id=1)
-          e = b.entry_set.create(headline='Hello', body_text='Hi', pub_date=datetime.date(2005, 1, 1))
-          # No hace falta llamar a e.save() acá -- ya ha sido guardado
-
-  Esto es equivalente a (pero más simple que) lo siguiente::
-
-          b = Blog.objects.get(id=1)
-          e = Entry(blog=b, headline='Hello', body_text='Hi', pub_date=datetime.date(2005, 1, 1))
-          e.save()
-
-   Notar que no es necesario especificar el argumento de palabra clave
-   correspondiente al modelo que define la relación.  En el ejemplo anterior,
-   no le pasamos el parámetro ``blog`` a ``create()``.  Django deduce que el
-   campo ``blog`` del nuevo ``Entry``  debería ser ``b``.
-
-* ``remove(obj1, obj2, ...)``: Quita los objetos indicados del conjunto de
-  objetos relacionados::
-
-          b = Blog.objects.get(id=1)
-          e = Entry.objects.get(id=234)
-          b.entry_set.remove(e) # Desasociar al Entry e del Blog b.
-
-   Para evitar inconsistencias en la base de datos, este método sólo existe
-   para objetos ``ForeignKey`` donde ``null=True``.  Si el campo relacionado
-   no puede pasar ser ``None`` (``NULL``), entonces un objeto no puede ser
-   quitado de una relación sin ser agregado a otra.  En el ejemplo anterior,
-   el quitar a ``e`` de ``b.entry_set()`` es equivalente a hacer
-   ``e.blog = None``, y dado que la definición del campo ``ForeignKey``
-   ``blog`` (en el modelo ``Entry``) no indica ``null=True``, esto es una
-   acción inválida.
-
-* ``clear()``: Quita todos los objetos del conjunto de objetos
-  relacionados::
-
-          b = Blog.objects.get(id=1)
-          b.entry_set.clear()
-
-   Notar que esto no borra los objetos relacionados -- simplemente los
-   desasocia.
-
-   Al igual que ``remove()``, ``clear`` solo está disponible para campos
-   ``ForeignKey`` donde ``null=True``.
-
-Para asignar todos los miembros de un conjunto relacionado en un solo paso,
-simplemente se le asigna al conjunto un objeto iterable, por ejemplo::
-
-    b = Blog.objects.get(id=1)
-    b.entry_set = [e1, e2]
-
-Si el método ``clear()`` está definido, todos los objetos pre-existentes serán
-quitados del ``entry_set`` antes de que todos los objetos en el iterable (en
-este caso, la lista) sean agregados al conjunto.  Si el método ``clear()`` *no*
-está disponible, todos los objetos del iterable son agregados al conjunto sin
-quitar antes los objetos pre-existentes.
-
-Todas las operaciones "inversas" definidas en esta sección tienen efectos
-inmediatos en la base de datos.  Toda creación, borradura y agregado son
-inmediata y automáticamente grabados en la base de datos.
-
-Relaciones muchos-a-muchos
---------------------------
-
-Ambos extremos de las relaciones muchos-a-muchos obtienen una API de acceso
-automáticamente.  La API funciona igual que las funciones "inversas" de las
-relaciones uno-a-muchos (descriptas en la sección anterior).
-
-La única diferencia es el nombrado de los atributos: el modelo que define el
-campo ``ManyToManyField`` usa el nombre del atributo del campo mismo, mientras
-que el modelo "inverso" utiliza el nombre del modelo original, en minúsculas,
-con el sufijo ``'_set'`` (tal como lo hacen las relaciones uno-a-muchos).
-
-Un ejemplo de esto lo hará más fácil de entender::
-
-    e = Entry.objects.get(id=3)
-    e.authors.all() # Devuelve todos los objetos Author para este Entry.
-    e.authors.count()
-    e.authors.filter(name__contains='John')
-
-    a = Author.objects.get(id=5)
-    a.entry_set.all() # Devuelve todos los obejtos Entry para este Author.
-
-Al igual que los campos ``ForeignKey``, los ``ManyToManyField`` pueden indicar
-un ``related_name``.  En el ejemplo anterior, si el campo ``ManyToManyField``
-en el modelo ``Entry`` indicara ``related_name='entries'``, cualquier instancia
-de ``Author`` tendría un atributo ``entries`` en vez de ``entry_set``.
-
-.. admonition:: Cómo son posibles las relaciones inversas?
-
-    El mapeador objeto-relacional requiere que definas relaciones en ambos
-    extremos.  Los desarrolladores Django creen que esto es una violación del
-    principio DRY (Don't Repeat Yourself), así que Django sólo te exige que
-    definas la relación en uno de los extremos.  Pero cómo es esto posible, dado
-    que una clase modelo no sabe qué otros modelos se relacionan con él hasta
-    que los otros modelos sean cargados?
-
-    La respuesta yace en la variable ``INSTALLED_APPS``.  La primera vez que
-    se carga cualquier modelo, Django itera sobre todos los modelos en
-    ``INSTALLED_APPS`` y crea las relaciones inversas en memoria como sea
-    necesario.  Esencialmente, una de las funciones de ``INSTALLES_APPS`` es
-    indicarle a Django el dominio completo de modelos que se utiliza.
-
-Consultas que Abarcan Objetos Relacionados
+Redirigir a otra URL mediante RedirectView
 ------------------------------------------
 
-Las consultas que involucran objetos relacionados siguen las mismas reglas que
-las consultas que involucran campos normales.  Cuando se indica el valor que
-se requiere en una búsqueda, se puede utilizar tanto una instancia del modelo
-o bien el valor de la clave primaria del objeto.
+.. class:: django.views.generic.base.RedirectView
 
-Por ejemplo, si ``b`` es un objeto ``Blog`` con ``id=5``, las tres siguientes
-consultas son idénticas::
+  Esta vista redirige a otra URL.
 
-    Entry.objects.filter(blog=b) # Query using object instance
-    Entry.objects.filter(blog=b.id) # Query using id from instance
-    Entry.objects.filter(blog=5) # Query using id directly
+  La URL dada puede contener un formato de estilo tipo diccionario, que será
+  intercalado contra los parámetros capturados en la URL. Ya que el intercalado
+  de palabras claves se hace *siempre*  (incluso si no se le pasan argumentos),
+  por lo que cualquier carácter como "%" (un marcador de posición en Python)
+  en la  URL debe ser escrito como "%%" de modo que Python lo convierta en un
+  simple signo de porcentaje en la salida.
 
-Borrando Objectos
-=================
+  Si la URL pasada como parámetro es ``None``, Django retornará un mensaje
+  de error 410 ("Gone" según el estándar HTTP).
 
-El métodos para borrar se llama ``delete()``.  Este método inmediatamente borra
-el objeto y no tiene ningún valor de retorno::
+  **Ancestros (MRO)**
 
-    e.delete()
+  Esta vista hereda métodos y atributos de las siguientes vistas:
 
-También se puede borrar objetos en grupo.  Todo objeto ``QuerySet`` tiene un
-método ``delete()`` que borra todos los miembros de ese ``QuerySet``.  Por
-ejemplo, esto borra todos los objetos ``Entry`` que tengan un año de
-``pub_date`` igual a 2005::
+  * :class:`django.views.generic.base.View`
 
-    Entry.objects.filter(pub_date__year=2005).delete()
+  **Flujo de métodos**
 
-Cuando Django borra un objeto, emula el comportamiento de la restricción de SQL
-``ON DELETE CASCADE`` -- en otras palabras, todos los objetos que tengan una
-clave foránea que apunte al objeto que está siendo borrado serán borrados
-también, por ejemplo::
+  1. :meth:`~django.views.generic.base.View.dispatch()`
+  2. :meth:`~django.views.generic.base.View.http_method_not_allowed()`
+  3. :meth:`get_redirect_url()`
 
-    b = Blog.objects.get(pk=1)
-    # Esto borra el Blog y todos sus objetos Entry.
-    b.delete()
+  **Ejemplo**
 
-Notar que ``delete()`` es el único método de ``QuerySet`` que no está expuesto
-en el ``Manager`` mismo.  Esto es un mecanismo de seguridad para evitar que
-accidentalmente solicites ``Entry.objects.delete()`` y borres *todos* los Entry.
-Si *realmente* quieres borrar todos los objetos, hay que pedirlo explícitamente
-al conjunto completo de objetos::
+  Supongamos que queremos redirecionar a nuestros usuarios a una pagina
+  que actualiza un ficticio contador de libros, después de que visiten
+  una página de detalles:
 
-    Entry.objects.all().delete()
+  .. snippet::
+   :filename: views.py
 
-Métodos de Instancia Adicionales
-================================
+      from django.shortcuts import get_object_or_404
+      from django.views.generic.base import RedirectView
 
-Además de ``save()`` y ``delete()``, un objeto modelo puede tener
-cualquiera o todos de los siguientes métodos.
+      from biblioteca.models import Article
 
-get_FOO_display()
------------------
+      class RedirecionarDeContadorLibros(RedirectView):
 
-Por cada campo que indica la opción ``choices``, el objeto tendrá un método
-``get_FOO_display()``, donde ``FOO`` es el nombre del campo.  Este método
-devuelve el valor "humanamente legible" del campo.  Por ejemplo, en el
-siguiente modelo::
+          permanent = False
+          query_string = True
+          pattern_name = 'detalles-libro'
 
-    GENDER_CHOICES = (
-        ('M', 'Male'),
-        ('F', 'Female'),
-    )
-    class Person(models.Model):
-        name = models.CharField(max_length=20)
-        gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
+          def get_redirect_url(self, *args, **kwargs):
+              libro = get_object_or_404(Libro, pk=kwargs['pk'])
+              libro.update_counter()
+              return super(RedirecionarDeContadorLibros,
+                  self).get_redirect_url(*args, **kwargs)
 
-cada instancia de ``Person`` tendrá un método ``get_gender_display``::
+  .. snippet::
+   :filename: urls.py
 
-    >>> p = Person(name='John', gender='M')
-    >>> p.save()
-    >>> p.gender
-    'M'
-    >>> p.get_gender_display()
-    'Male'
+      from django.conf.urls import url
+      from django.views.generic.base import RedirectView
 
-get_next_by_FOO(\**kwargs) y get_previous_by_FOO(\**kwargs)
------------------------------------------------------------
+      from biblioteca.views import RedirecionarDeContadorLibros, DetalleLibros
 
-Por cada campo ``DateField`` y ``DateTimeField`` que no tenga ``null=True``,
-el objeto tendrá dos métodos ``get_next_by_FOO()`` y ``get_previous_by_FOO()``,
-donde ``FOO`` es el nombre del campo.  Estos métodos devuelven el objeto
-siguiente y anterior en orden cronológico respecto del campo en cuestión,
-respectivamente, levantando la excepción ``DoesNotExist`` cuando no exista tal
-objeto.
+      urlpatterns = [
+          url(r'^contador/(?P<pk>[0-9]+)/$', RedirecionarDeContadorLibros.as_view(),
+              name='contador-libros'),
+          url(r'^detalles/(?P<pk>[0-9]+)/$', DetalleLibros.as_view(),
+              name='detalles-libro'),
+          url(r'^go-to-django/$', RedirectView.as_view(url='http://djangoproject.com'),
+              name='go-to-django'),
+      ]
 
-Ambos métodos aceptan argumentos de palabra clave opcionales, que deberían ser
-de la forma descripta en la sección "`Patrones de búsqueda`_".
+  **Atributos**
 
-Notar que en el caso de valores de fecha idénticos, estos métodos utilizarán
-el ID como un chequeo secundario.  Esto garantiza que no se saltearán registros
-ni aparecerán duplicados.  Hay un ejemplo completo en los ejemplos de la API de
-búsqueda, en
-http://www.djangoproject.com/documentation/0.96/models/lookup/.
+  .. attribute:: url
 
-get_FOO_filename()
-------------------
+      La URL a redirecionar, como una cadena o string. O ``None`` para lanzar un
+      error 410(Gone).
 
-Todo campo ``FileField`` le dará al objeto un método ``get_FOO_filename()``,
-donde ``FOO`` es el nombre del campo.  Esto devuelve el nombre de archivo
-completo en el sistema de archivos, de acuerdo con la variable ``MEDIA_ROOT``.
+  .. attribute:: pattern_name
 
-Notar que el campo ``ImageField`` es técnicamente una subclase de ``FileField``,
-así que todo modelo que tenga un campo ``ImageField`` obtendrá también este
-método.
+      El nombre de el patrón URL para redireccionamiento. El redireccionamiento
+      puede hacerse usando los mismos argumentos: ``args`` y ``kwargs`` que son
+      pasados en la vistas.
 
-get_FOO_url()
--------------
+  .. attribute:: permanent
 
-Por todo campo ``FileField`` el objeto tendrá un método ``get_FOO_url()``,
-donde ``FOO`` es el nombre del campo.  Este método devuelve la URL al archivo,
-de acuerdo con tu variable ``MEDIA_URL``.  Si esta variable está vacía, el
-método devolverá una cadena vacía.
+      Indica si el redireccionamiento debería ser permanente, La única diferencia
+      aquí es el código del estatus HTTP que devuelve. Si es ``True``, el
+      redirecionamiento usara un código de estatus 301. Si es ``False``, el código
+      de estatus será 302. El valor predeterminado para ``permanent`` es ``True``.
 
-get_FOO_size()
---------------
+  .. attribute:: query_string
 
-Por cada campo ``FileField`` el objeto tendrá un método ``get_FOO_size()``,
-donde ``FOO`` es el nombre del campo.  Este método devuelve el tamaño del
-archivo, en bytes.  (La implementación de este método utiliza
-``os.path.getsize``.)
+      Indica si se le pasa la cadena de consulta GET a la nueva localización. Si
+      es ``True``, la cadena de consulta es agregada a la URL. Si es ``False`` la
+      cadena de consulta es descartada. El valor predeterminado para
+      ``query_string`` es ``False``.
 
-save_FOO_file(filename, raw_contents)
+  **Metodos**
+
+  .. method:: get_redirect_url(*args, **kwargs)
+
+      Construye la URL del objetivo, para el cambio de dirección.
+
+      La implementación predeterminada usa el atributo ``url`` cuando comienza
+      como una cadena y optimiza la expansión de los nombres de parámetros ``%``
+      capturados en la cadena, usando los nombres de grupos capturados en la URL.
+
+      Si él :attr:`url` no está establecido, ``get_redirect_url()``  trata de usar
+      el inverso de :attr:`pattern_name` usando los valores capturados en la URL
+      (usando nombres y nombres de grupos)
+
+      Si la petición de :attr:`query_string`, es agregada a la cadena de consulta
+      para general la URL.
+      La subclase puede implementar cualquier comportamiento que desee, mientras
+      que el método devuelva un redireccionamiento listo para una cadena de una URL.
+
+Vistas de listado/detalle
+=========================
+
+Las vistas genéricas basadas en clases de listados/detalle (que residen en el
+módulo ``django.views.generic``) se encargan de la habitual tarea de mostrar una
+lista de elementos por un lado (el listado) y una vista individual para cada uno
+de  los elementos (el detalle).
+
+Listas de objetos: ListView
+---------------------------
+
+.. class:: django.views.generic.list.ListView
+
+    Una página que representa una lista de objetos.
+
+    Mientras esta vista es ejecutada con ``self.object_list`` contiene una lista
+    de objetos (usualmente, pero no necesariamente un ``queryset``) sobre los
+    que la vista está operando.
+
+    **Ancestros (MRO)**
+
+    Esta vista hereda métodos y atributos de las siguientes vistas:
+
+    * :class:`django.views.generic.list.MultipleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * :class:`django.views.generic.list.BaseListView`
+    * :class:`django.views.generic.list.MultipleObjectMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Flujo de métodos**
+
+    1. :meth:`~django.views.generic.base.View.dispatch()`
+    2. :meth:`~django.views.generic.base.View.http_method_not_allowed()`
+    3. :meth:`~django.views.generic.base.TemplateResponseMixin.get_template_names()`
+    4. :meth:`~django.views.generic.list.MultipleObjectMixin.get_queryset()`
+    5. :meth:`~django.views.generic.list.MultipleObjectMixin.get_context_object_name()`
+    6. :meth:`~django.views.generic.list.MultipleObjectMixin.get_context_data()`
+    7. ``get()``
+    8. :meth:`~django.views.generic.base.TemplateResponseMixin.render_to_response()`
+
+.. class:: django.views.generic.list.BaseListView
+
+    Una vista base para mostrar una lista de objetos, No está pensada para ser
+    usada directamente, pero puede usarse como una clase padre para
+    :class:`django.views.generic.list.ListView` u otras vistas que representen
+    una lista de objetos.
+
+    **Ancestros (MRO)**
+
+    Esta vista hereda métodos y atributos de las siguientes vistas:
+
+    * :class:`django.views.generic.list.MultipleObjectMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Metodos**
+
+    .. method:: get(request, *args, **kwargs)
+
+        Agrega ``object_list`` al contexto. Si el atributo
+        :attr:`~django.views.generic.list.MultipleObjectMixin.allow_empty`
+        es ``True`` muestra una lista vacía. Si el atributo
+        :attr:`~django.views.generic.list.MultipleObjectMixin.allow_empty` es
+        ``False`` lanza un error 404.
+
+    **Ejemplo**
+
+    Si consideramos el objeto ``Autor`` tal y como se definió en el capítulo
+    5, podemos usar la vista ``ListView`` para obtener un listado sencillo de todos
+    los autores usando la siguiente vista genérica (usando una clase ) y su
+    respectiva  URLconf:
+
+    .. snippet::
+     :filename: biblioteca/views.py
+
+        from django.views.generic import ListView
+        from biblioteca.models import Autor
+
+        # El único requerimiento es un queryset o modelo.
+        class ListaAutores(ListView):
+            model = Autor
+
+    .. snippet::
+     :filename: biblioteca/urls.py
+
+        from django.conf.urls import url
+        from biblioteca.views import ListaAutores
+
+        # Enlazamos la vista usando el método as_view()
+        urlpatterns = [
+            url(r'^autores/$', ListaAutores.as_view()),
+        ]
+
+    Y la plantilla: 'autor_list.html'
+
+    .. code-block:: html+django
+
+       <h1>Lista de Autores</h1>
+
+        <ul>
+        {% for autor in object_list %}
+            <li><a href="{% url 'detalles-autores' autor.id %}">{{ autor.nombre }}
+                {{ autor.apellidos }}</li>
+        {% empty %}
+            <li>No hay autores registrados.</li>
+        {% endfor %}
+        </ul>
+
+    La vista ``ListView`` usa el método interno ``get_absolute_url()`` de el
+    modelo para enlazar la url y la vista detallada de un objeto ``DetailView``,
+    de la siguiente forma:
+
+    .. snippet:: python
+     :filename: biblioteca/models.py
+
+        from django.core.urlresolvers import reverse
+        from django.db import models
+
+        # La clase que define al modelo autor
+        class Autor(models.Model):
+        nombre = models.CharField(max_length=30)
+        # ...
+
+            def get_absolute_url(self):
+                return reverse('detalles-autores', args=[self.pk])
+
+    **Argumentos obligatorios**
+
+    * ``queryset``: Un ``QuerySet`` de los objetos a listar (Véase la table C-1) o
+      ``model``: El modelo del cual la vista mostrara los datos, como en el ejemplo
+      anterior, ``model = Autor`` es equivalente a usar ``queryset = Autor.objects.all()``
+
+    **Argumentos opcionales**
+
+    * ``paginate_by``: es un número entero que especifica cuantos
+      objetos se deben mostrar en cada página. Según se especifique
+      en este parámetro, los resultados serán paginados, de forma
+      que se distribuirán por varias páginas de resultado. La vista
+      determinará que página de resultados debe mostrar o bien
+      desde un parámetro ``page`` incluido en la URL (vía ``Get``)
+      o mediante una variable ``page`` especificada en el URLconf. En
+      cualquiera de los dos casos, el índice comienza en cero. En la
+      siguiente sección hay una nota sobre paginación donde se explica
+      con un poco más de detalle este sistema.
+
+    **Nombre de la plantilla**
+
+    Si no se ha especificado el parámetro opcional ``template_name``, la vista
+    usará una plantilla llamada ``<app_label>/<model_name>_list.html``. Tanto
+    la etiqueta de la aplicación como la etiqueta del modelo se obtienen
+    del parámetro ``queryset``. La etiqueta de aplicación es el
+    nombre de la aplicación en que se ha definido el modelo, y la etiqueta
+    de modelo es el nombre, en minúsculas, de la clase del modelo.
+
+    En el ejemplo anterior, tendriamos que el ``queryset`` sería ``Autor.objects.all()``,
+    por lo que la etiqueta de la aplicación será ``biblioteca`` y el nombre del
+    modelo es ``autor``. Con esos datos, el nombre de la plantilla a utilizar por
+    defecto será ``biblioteca/autor_list.html``.
+
+    **Contexto de plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto, la plantilla
+    tendrá los siguientes valores:
+
+    * ``object_list``: La lista de los objetos. El nombre de la variable
+      viene determinado por el parámetro ``template_object_name``, y vale
+      ``'object'`` por defecto. Si se definiera ``template_object_name``
+      como ``'foo'``, el nombre de esta variable sería ``foo_list``.
+
+    * ``is_paginated``: Un valor booleano que indicará si los resultados
+      serán paginados o no. Concretamente, valdrá ``False`` si el
+      número de objetos disponibles es inferior o igual a ``paginate_by``.
+
+    Si los resultados están paginados, el contexto dispondrá también de estas variables:
+
+    * ``results_per_page``: El número de objetos por página. (Su valor es el mismo
+      que el del parámetro ``paginate_by``).
+
+    * ``has_next``: Un valor booleano indicando si hay una siguiente página.
+
+    * ``has_previous``: Un valor booleano indicando si hay una página previa.
+
+    * ``page``: El número de la página actual, siendo 1 la primera página.
+
+    * ``next``: El número de la siguiente página. Incluso si no hubiera
+      siguiente página, este valor seguirá siendo un numero entero que
+      apuntaría a una hipotética siguiente página. También utiliza
+      un índice basado en 1, no en cero.
+
+    * ``previous``: El número de la anterior página, usando un índice
+      basado en 1, no en cero.
+
+    * ``pages``: El número total de páginas.
+
+    * ``hits``: El número total de objetos en *todas* las páginas, no sólo
+      en la actual.
+
+    .. admonition:: Una nota sobre paginación
+
+      Si se utiliza el parámetro ``paginate_by``, Django paginará los resultados.
+      Puedes indicar qué pagina visualizar usando dos métodos diferentes:
+
+      * Usar un parámetro ``page`` en el URLconf.
+      * Pasar el número de la página mediante un parámetro ``page`` en la URL.
+
+      En ambos casos, ``page`` es un índice basado en 1, lo que significa que la primera
+      página siempre será la número 1, no la número 0.
+
+Vista de detalle: DetailView
+----------------------------
+
+.. class:: django.views.generic.detail.DetailView
+
+    Esta vista proporciona una representación individual de los "detalles" de un
+    objeto.
+
+    Cuando esta vista es ejecutada ``self.object`` contiene un objeto sobre el que
+    la vista opera.
+
+    **Ancestros (MRO)**
+
+    Esta vista hereda métodos y atributos de las siguientes vistas:
+
+    * :class:`django.views.generic.detail.SingleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * ``django.views.generic.detail.BaseDetailView``
+    * :class:`django.views.generic.detail.SingleObjectMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Flujo de métodos**
+
+    1. :meth:`~django.views.generic.base.View.dispatch()`
+    2. :meth:`~django.views.generic.base.View.http_method_not_allowed()`
+    3. :meth:`~django.views.generic.base.TemplateResponseMixin.get_template_names()`
+    4. :meth:`~django.views.generic.detail.SingleObjectMixin.get_slug_field()`
+    5. :meth:`~django.views.generic.detail.SingleObjectMixin.get_queryset()`
+    6. :meth:`~django.views.generic.detail.SingleObjectMixin.get_object()`
+    7. :meth:`~django.views.generic.detail.SingleObjectMixin.get_context_object_name()`
+    8. :meth:`~django.views.generic.detail.SingleObjectMixin.get_context_data()`
+    9. ``get()``
+    10. :meth:`~django.views.generic.base.TemplateResponseMixin.render_to_response()`
+
+    **Ejemplo**
+
+    Siguiendo con el ejemplo anterior, podemos añadir una vista de detalle de
+    cada autor modificando el URLconf y pasándole un contexto extra ``ahora``,
+    de la  siguiente manera:
+
+    .. snippet::
+     :filename: biblioteca/views.py
+
+        from django.views.generic.detail import DetailView
+        from django.utils import timezone
+
+        from biblioteca.models import Autor
+
+        class DetalleAutores(DetailView):
+            model = Autor
+
+            # Le agregamos un contexto extra 'ahora', que muestra la fecha actual.
+            def get_context_data(self, **kwargs):
+                context = super(DetalleAutores, self).get_context_data(**kwargs)
+                context['ahora'] = timezone.now()
+                return context
+
+    .. snippet::
+      :filename: biblioteca/urls.py
+
+        from django.conf.urls import url
+
+        from biblioteca.views import DetalleAutores
+
+        urlpatterns = [
+            url(r'^detalle/autores/(?P<pk>[0-9]+)/$', DetalleAutores.as_view(),
+                name='detalles-autores' ),
+        ]
+
+    Y la plantilla: 'biblioteca/autor_detail.html'
+
+    .. code-block:: html+django
+
+        {% extends "base.html" %}
+
+        {% block content %}
+          <h1>{{ object.nombre }}{{ object.apellidos}}</h1>
+            <ul>
+              <li>Email: {{ object.email }}</li>
+              <li>Ultimo acceso: {{ object.ultimo_acceso }}</li>
+              <li>Fecha: {{ ahora|date }}</li>
+           </ul>
+        {% endblock %}
+
+    **Argumentos obligatorios**
+
+    * ``queryset``: Un ``QuerySet`` que será usado para localizar el objeto a
+      mostrar o un ``model`` (véase la Tabla C-1).
+
+    y luego hace falta un:
+
+    * ``object_id``: El valor de la clave primaria del objeto a mostrar. En el
+      ejemplo  anterior usamos ``pk`` para capturar la clave primaria del objeto
+      en la URL, para pasársela a la clase vista.
+
+    o bien:
+
+    * ``slug``: La etiqueta o *slug* del objeto en cuestión. Si se usa este sistema de
+      identificación, hay que emplear obligatoriamente el argumento ``slug_field`` (que
+      se explica en la siguiente sección).
+
+    **Argumentos opcionales**
+
+    * ``slug_field``: El nombre del atributo del objeto que contiene el *slug*. Es
+      obligatorio si estás usando el argumento ``slug``, y no se debe usar si estás
+      usando el argumento ``object_id``.
+
+    * ``template_name_field``: El nombre de un atributo del objeto cuyo valor
+      se usará como el nombre de la plantilla a utilizar. De esta forma, puedes
+      almacenar en tu objeto la plantilla a usar.
+
+      En otras palabras, si tu objeto tiene un atributo ``'the_template'`` que
+      contiene la cadena de texto ``'foo.html'``, y defines ``template_name_field``
+      para que valga ``'the_template'``, entonces la vista genérica de este
+      objeto usará como plantilla ``'foo.html'``.
+
+      Si el atributo indicado por ``template_name_field`` no existe, se usaría
+      el indicado por el argumento ``template_name``. Es un mecanismo
+      un poco enmarañado, pero puede ser de mucha ayuda en algunos casos.
+
+    **Nombre de la plantilla**
+
+    Si no se especifican ``template_name`` ni ``template_name_field``, se
+    usará la plantilla ``<app_label>/<model_name>_detail.html``.
+
+    **Contexto de plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto,  la
+    plantilla tendrá los siguientes valores:
+
+    * ``object``: El objeto. El nombre de esta variable puede ser
+      distinto si se ha especificado el argumento ``context_object_name``, cuyo
+      valor es ``'object'`` por defecto. Si definimos ``context_object_name``
+      como ``'foo'``, el nombre de la variable será ``foo``.
+
+
+Vistas genéricas para Crear/Modificar/Borrar
+============================================
+
+.. class:: django.views.generic.dates
+
+El módulo :mod:`django.views.generic.edit`, contiene una serie de funciones
+para crear, modificar y borrar objetos.
+
+Las vistas son las siguientes:
+
+* :class:`django.views.generic.edit.FormView`
+* :class:`django.views.generic.edit.CreateView`
+* :class:`django.views.generic.edit.UpdateView`
+* :class:`django.views.generic.edit.DeleteView`
+
+Todas estas vistas presenta formularios si se acceden con ``GET`` y
+realizan la operación solicitada (crear/modificar/borrar) si se acceden
+con ``POST``.
+
+Estas vistas tienen un concepto muy simple de la seguridad. Aunque
+aceptan un argumento llamado ``login_required``, que restringe el
+acceso sólo a usuarios identificados, no hacen nada más. Por ejemplo,
+no comprueban que el usuario que está modificando un objeto sea
+el  mismo usuario que lo creo, ni validarán ningún tipo de
+permisos.
+
+En cualquier caso, la mayor parte de las veces se puede conseguir esta
+funcionalidad simplemente escribiendo un pequeño recubrimiento alrededor de
+la vista genérica. Para más información sobre esta técnica, véase el
+:doc:`capítulo 11<chapter11>`.
+
+Mostrar formularios con: FormView
+---------------------------------
+
+.. class:: django.views.generic.edit.FormView
+
+    Una vista que muestra un formulario. Si existen errores vuelve a mostrar
+    el formulario con los errores de validación;  si esta tiene éxito
+    redirecciona a la nueva URL.
+
+    **Ancestros (MRO)**
+
+    Esta vista hereda métodos y atributos de las siguientes vistas:
+
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * ``django.views.generic.edit.BaseFormView``
+    * :class:`django.views.generic.edit.FormMixin`
+    * :class:`django.views.generic.edit.ProcessFormView`
+    * :class:`django.views.generic.base.View`
+
+    **Ejemplo**
+
+    Supongamos que queremos mostrar un sencillo formulario de contactos:
+
+    .. snippet::
+     :filename: forms.py
+
+        from django import forms
+
+        class FormularioContactos(forms.Form):
+            nombre = forms.CharField()
+            mensaje = forms.CharField(widget=forms.Textarea)
+
+            def send_email(self):
+                # envia el email usando el diccionario self.cleaned_data
+                pass
+
+    .. snippet::
+     :filename: views.py
+
+        from django.views.generic.edit import FormView
+        from biblioteca.forms import FormularioContactos
+
+        class VistaContactos(FormView):
+            template_name = 'contactos.html'
+            form_class = FormularioContactos
+            success_url = '/gracias/'
+
+            def form_valid(self, form):
+                # Este método es llamado cuando el formulario valida los datos
+                # a enviar. Debe devolver un HttpResponse
+                form.send_email()
+                return super(VistaContactos, self).form_valid(form)
+
+    .. snippet:: html+django
+     :filename: contactos.html
+
+        <form action="" method="post">{% csrf_token %}
+            {{ form.as_p }}
+            <input type="enviar" value="Enviar mensaje" />
+        </form>
+
+Vista de creación de objetos: CreateView
+----------------------------------------
+
+.. class:: django.views.generic.edit.CreateView
+
+    Esta vista presenta un formulario que permite la creación de un objeto. Cuando
+    se envían los datos del formulario, la vista se vuelve a mostrar si se produce
+    algún error de validación (incluyendo, por supuesto, los mensajes pertinentes)
+    o, en  caso de que no se produzca ningún error de validación, guarda el objeto
+    en la base de datos.
+
+    **Ancestros (MRO)**
+
+    Esta vista hereda los métodos y atributos de las siguientes vistas:
+
+    * :class:`django.views.generic.detail.SingleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * ``django.views.generic.edit.BaseCreateView``
+    * :class:`django.views.generic.edit.ModelFormMixin`
+    * :class:`django.views.generic.edit.FormMixin`
+    * :class:`django.views.generic.detail.SingleObjectMixin`
+    * :class:`django.views.generic.edit.ProcessFormView`
+    * :class:`django.views.generic.base.View`
+
+    **Atributos**
+
+    .. attribute:: template_name_suffix
+
+        La pagina ``CreateView``  a mostrar, mediante una petición ``GET``
+        que usa como ``template_name_suffix`` a ``_form``. Por ejemplo
+        cambiando este atributo por ``_create_form`` para una vista
+        para crear objetos, por ejemplo para el modelo ``Autor``
+        ocasionara que el valor predeterminado de  ``template_name``  sea
+        "biblioteca/autor_create_form.html".
+
+    .. attribute:: object
+
+        Cuando se usa  ``CreateView`` se tiene acceso a ``self.object``, el cual
+        es el objeto creado. Si el objeto no ha sido creado, el valor será
+        ```None``.
+
+    **Ejemplo**
+
+    Si quisiéramos permitir al usuario que creara nuevos autores en la
+    base de datos, podríamos hacer algo como esto:
+
+    .. snippet::
+     :filename: views.py
+
+        from django.views.generic.edit import CreateView
+        from biblioteca.models import Autor
+
+        class CrearAutor(CreateView):
+            model = Autor
+            fields = ['nombre, apellidos']
+
+    Plantilla:'biblioteca/author_form.html'
+
+    .. code-block:: html+django
+
+        <form action="" method="post">{% csrf_token %}
+            {{ form.as_p }}
+            <input type="enviar" value="Crear" />
+        </form>
+
+    **Argumentos obligatorios**
+
+    * ``model``: El modelo Django del objeto a crear.
+
+    .. admonition:: Nota:
+
+        Obsérvese que esta vista espera el *modelo* del objeto a crear, y no
+        un ``QuerySet`` como el resto de las vistas anteriores que se han visto
+        previamente.
+
+    **Nombre de la plantilla**
+
+    Si no se ha especificado ningún valor en ``template_name`` la vista usará
+    como plantilla ``<app_label>/<model_name>_form.html``.
+
+    **Contexto de la plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto, la
+    plantilla tendrá los siguientes valores:
+
+    * ``form``: Una instancia de la clase ``ModelForm``, que representa
+      el formulario a utilizar. Esto te permite referirte de una forma
+      sencilla a los campos del formulario desde la plantilla. Por
+      ejemplo, si el modelo consta de dos atributos, ``nombre`` y ``direccion``:
+
+    .. code-block: html+django
+
+          <form action="" method="post">{% csrf_token %}
+            <p><label for="id_name">Nombre:</label> {{ form.nombre }}</p>
+            <p><label for="id_address">Direccion:</label> {{ form.direccion }}</p>
+          </form>
+
+
+Vista para modificar objetos: UpdateView
+----------------------------------------
+
+.. class:: django.views.generic.edit.UpdateView
+
+    Esta vista muestra un formulario para editar un objeto existente, vuelve a
+    mostrar el formulario en caso de errores de validación (si los hay) y
+    permite guardar los cambios en el objeto. Usa un formulario generado
+    automáticamente por el modelo de la clase del objeto (A menos que se
+    especifique manualmente una clase para el formulario ).
+
+    **Ancestros (MRO)**
+
+    Esta vista hereda los métodos y atributos de las siguientes vistas:
+
+    * :class:`django.views.generic.detail.SingleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * ``django.views.generic.edit.BaseUpdateView``
+    * :class:`django.views.generic.edit.ModelFormMixin`
+    * :class:`django.views.generic.edit.FormMixin`
+    * :class:`django.views.generic.detail.SingleObjectMixin`
+    * :class:`django.views.generic.edit.ProcessFormView`
+    * :class:`django.views.generic.base.View`
+
+    **Atributos**
+
+    .. attribute:: template_name_suffix
+
+      La pagina ``UpdateView``  a mostrar, mediante una petición ``GET``
+      que usa como ``template_name_suffix`` a ``_form``. Por ejemplo
+      cambiando este atributo por ``_create_form`` para una vista
+      para actualizar objetos, por ejemplo para el modelo ``Autor``
+      ocasionara que el valor predeterminado de  ``template_name``  sea
+      'biblioteca/autor_create_form.html'.
+
+    .. attribute:: object
+
+      Cuando se usa ``UpdateView` se tiene acceso a ``self.object``, el cual
+      es el objeto modificado.
+
+    **Ejemplo**
+
+    Siguiendo con el ejemplo, podemos proporcionar al usuario una interfaz de
+    modificación de los datos de un autor con el siguiente código en el
+    URLconf:
+
+    .. snippet::
+      :filename: biblioteca/views.py
+
+        from django.views.generic.edit import UpdateView
+        from biblioteca.models import Autor
+
+        class ModificarAutor(UpdateView):
+            model = Autor
+            fields = ['nombre', 'apellidos']
+            template_name_suffix = '_update_form'
+
+    Y por supuesto la plantilla: 'autor_update_form.html'
+
+    .. code-block:: html+django
+
+        <form action="" method="post">{% csrf_token %}
+            {{ form.as_p }}
+            <input type="submit" value="Update" />
+        </form>
+
+    **Argumentos obligatorios**
+
+    * ``model``: El modelo Django a editar. Hay que prestar atención a que es
+      el *modelo* en sí, y no un objeto tipo ``QuerySet``.
+
+    Y, o bien un:
+
+    * ``object_id``: El valor de la clave primaria del objeto a modificar.
+
+    o bien un:
+
+    * ``slug``: El *slug* del objeto a modificar. Si se pasa este argumento, es
+      obligatorio también el argumento ``slug_field``.
+
+    **Argumentos opcionales**
+
+    * ``slug_field``: El nombre del campo en el que se almacena el
+      valor del *slug* del sujeto. Es obligado usar este argumento
+      si se ha indicado el argumento ``slug``, pero no debe
+      especificarse si hemos optado por identificar el objeto
+      mediante su clave primaria, usando el argumento ``object_id``.
+
+      Esta vista acepta los mismos argumentos opcionales que la vista
+      de creación y, además, el argumento común ``template_object_name``,
+      explicado en la tabla C-1.
+
+    **Nombre de la plantilla**
+
+    Esta vista utiliza el mismo nombre de plantilla por defecto que la
+    vista de creación (``<app_label>/<model_name>_form.html``).
+
+    **Contexto de la plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto,
+    la plantilla tendrá los siguientes valores:
+
+    * ``form``: Una instancia de ``ModelForm`` que representa el formulario
+      de edición del objeto.
+
+    * ``object``: El objeto a editar (El nombre de esta variable puede ser
+      diferente si se ha especificado el argumento ``template_object_name``).
+
+Vista de borrado de objetos: DeleteView
+---------------------------------------
+
+.. class:: django.views.generic.edit.DeleteView
+
+    Una vista que muestra una página de confirmación  y borrado de un objeto
+    existente. Esta vista es muy similar a la dos anteriores: crear y modificar
+    objetos. El  propósito de esta vista es, sin embargo, permitir el borrado
+    de objetos.
+
+    Si la vista es alimentada mediante ``GET``, se mostrará una pantalla de
+    confirmación (del tipo "¿Realmente quieres borrar este objeto?"). Si
+    la vista se alimenta con ``POST``, el objeto será borrado sin
+    conformación.
+
+    Los argumentos son los mismos que los de la vista de modificación, así
+    como las variables de contexto. El nombre de la plantilla por defecto
+    para esta vista es ``<app_label>/<model_name>_confirm_delete.html``.
+
+    **Ancestros (MRO)**
+
+    Esta vista hereda los métodos y atributos de las siguientes vistas:
+
+    * :class:`django.views.generic.detail.SingleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * ``django.views.generic.edit.BaseDeleteView``
+    * :class:`django.views.generic.edit.DeletionMixin`
+    * ``django.views.generic.detail.BaseDetailView``
+    * :class:`django.views.generic.detail.SingleObjectMixin`
+    * :class:`django.views.generic.base.View`
+
+    .. attribute:: template_name_suffix
+
+        La pagina ``DeleteView``  a mostrar, mediante una peticion ``GET``
+        que usa como ``template_name_suffix`` a ``_confirm_delete``.
+        Por ejemplo cambiando este atributo por ``_check_delete`` para
+        una vista para actualizar objetos, por ejemplo para el modelo ``Autor``
+        ocasionara que el valor predeterminado de  ``template_name``  sea
+        ``biblioteca/autor__check_delete.html``.
+
+    **Ejemplo**
+
+    Supongamos que queremos borrar un objeto ``Autor``, esta es la forma en la
+    que lo podemos hacer.
+
+    .. snippet::
+     :filename: biblioteca/views.py
+
+        from django.views.generic.edit import DeleteView
+        from django.core.urlresolvers import reverse_lazy
+        from biblioteca.models import Author
+
+        class BorrarAutor(DeleteView):
+            model = Autor
+            success_url = reverse_lazy('lista-autores')
+
+    Y la plantilla: 'biblioteca/author_confirm_delete.html'
+
+    .. code-block:: html+django
+
+        <form action="" method="post">{% csrf_token %}
+            <p>¿Realmente quieres borrar este {{ object }}"?</p>
+            <input type="enviar" value="Confirmar" />
+        </form>
+
+Vistas genéricas basadas en fechas
+==================================
+
+Estas vistas genéricas basadas en fechas se suelen utilizar para
+organizar la parte de "archivo" de nuestro contenido. Los casos típicos son los
+archivos por año/mes/día de un periódico, o el archivo de una bitácora o *blog*.
+
+.. admonition:: Truco:
+
+    En principio, estas vistas ignoran las fechas que estén situadas en el futuro.
+
+    Esto significa que si intentas visitar una página de un archivo que esté en
+    el futuro, Django mostrará automáticamente un error 404 ("Página no
+    encontrada"), incluso aunque hubiera objetos con esa fecha en el sistema.
+
+    Esto te permite publicar objetos por adelantado, que no se mostrarán
+    públicamente hasta que se llegue a la fecha de publicación deseada.
+
+    Sin embargo, para otros tipos de objetos con fechas, este comportamiento
+    no es el deseable (por ejemplo, un calendario de próximos eventos). Para
+    estas vistas, podemos definir el argumento ``allow_future`` como ``True``  y
+    de esa manera conseguir que los objetos con fechas futuras aparezcan (o
+    permitir a los usuarios visitar páginas de archivo "en el futuro").
+
+Índice de archivo: ``ArchiveIndexView``
+---------------------------------------
+
+.. class:: django.views.generic.dates.ArchiveIndexView
+
+    Esta vista proporciona un índice a nivel-superior donde se muestran los
+    "últimos" objetos  (es decir, los más recientes) según la fecha. Los objetos
+    con fechas en el futuro no están incluidos, a menos que se establezca el
+    atributo ``allow_future`` en ``True``.
+
+    **Ancestros (MRO)**
+
+    * :class:`django.views.generic.list.MultipleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * :class:`django.views.generic.dates.BaseArchiveIndexView`
+    * :class:`django.views.generic.dates.BaseDateListView`
+    * :class:`django.views.generic.list.MultipleObjectMixin`
+    * :class:`django.views.generic.dates.DateMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Contexto**
+
+    Además del contexto ofrecido por:
+    :class:`django.views.generic.list.MultipleObjectMixin` (via
+    :class:`django.views.generic.dates.BaseDateListView`), el contexto de
+    las plantillas será:
+
+    * ``date_list``: Un objeto
+      :meth:`DateQuerySet<django.db.models.query.QuerySet.dates>` que contiene
+      todos las años según los cuales tengan objetos disponibles de acuerdo al
+      ``queryset``, representado como un objeto
+      :class:`datetime.datetime<python:datetime.datetime>` en orden descendiente.
+
+    **Notas**
+
+    * Usa de forma predeterminada ``latest`` para el ``context_object_name``.
+    * Usa de forma predeterminada ``_archive`` para el sufijo ``template_name_suffix``.
+    * Usa de forma predeterminada ``date_list`` por año, pero puede ser
+      sobrescrito  a mes o día usando el atributo ``date_list_period``.  Esto
+      también se aplica a las vistas de las subclases.
+
+    **Ejemplo**
+
+
+    Supongamos el típico editor que desea una página con la lista de sus
+    últimos libros publicados. Suponiendo que tenemos un objeto ``Libro``
+    con un atributo tipo, ``fecha_publicacion``, podemos usar la vista
+    ``ArchiveIndexView`` para resolver este problema:
+
+    .. snippet::
+     :filename: biblioteca/urls.py
+
+        from django.conf.urls import url
+        from django.views.generic.dates import ArchiveIndexView
+
+        from biblioteca.models import Libro
+
+        urlpatterns = [
+            url(r'^ultimos-libros/$',
+                ArchiveIndexView.as_view(model=Libro, date_field="fecha_publicacion"),
+                    name="ultimos_libros"),
+        ]
+
+    La plantilla: 'biblioteca/libro_archive.html'
+
+    .. code-block:: html+django
+
+        <ul>
+            {% for libros in latest %}
+                <li>{{ libros.fecha_publicacion }}: {{ libros.titulo }}</li>
+            {% endfor %}
+        </ul>
+
+    **Argumentos obligatorios**
+
+    * ``date_field``: El nombre de un campo tipo ``DateField`` o ``DateTimeField``
+      de los objetos que componen el ``QuerySet``. La vista usará los valores de
+      ese campo como referencia para obtener los últimos objetos.
+
+    * ``queryset``: El ``QuerySet`` de objetos que forman el archivo o el ``model``.
+
+    **Argumentos opcionales**
+
+    * ``allow_future``: Un valor booleano que indica si los objetos
+      "futuros" (es decir, con fecha de referencia en el futuro) deben
+      aparecer o no.
+
+    **Nombre de la plantilla**
+
+    Si no se ha especificado ``template_name``, se
+    usará la plantilla ``<app_label>/<model_name>_archive.html``.
+
+    **Contexto de la plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto de la
+    plantilla tendrá los siguientes valores:
+
+    * ``date_list``: Una lista de objetos de tipo ``datetime.date`` que representarían
+      todos los años en los que hay objetos, de acuerdo al ``queryset``. Vienen ordenados
+      de forma descendente, los años más recientes primero.
+
+      Por ejemplo, para un blog que tuviera entradas desde el año 2003 hasta el
+      2006, la lista contendrá cuatro objetos de tipo ``datetime.date``, uno
+      para cada uno se esos años.
+
+    * ``latest``: Los últimos ``num_latest`` objetos en el sistema, considerándolos
+      ordenados de forma descendiente por el campo ``date_field`` de referencia.
+
+Archivos anuales: ``YearArchiveView``
 -------------------------------------
 
-Por cada campo ``FileField``, el objeto tendrá un método ``save_FOO_file()``,
-donde ``FOO`` es el nombre del campo.  Este método guarda el archivo en el
-sistema de archivos, utilizando el nombre dado.  Si un archivo con el nombre
-dado ya existe, Django le agrega guiones bajos al final del nombre de archivo
-(pero antes de la extensión) hasta que el nombre de archivos esté disponible.
+.. class:: django.views.generic.dates.BaseYearArchiveView
 
-get_FOO_height() and get_FOO_width()
+    Esta vista sirve para presentar archivos basados en años. Poseen una lista
+    de los meses en los que hay algún objeto, y pueden mostrar opcionalmente todos
+    los objetos publicados en un año determinado. Los objetos con fechas en el
+    futuro no están incluidos, a menos que se establezca el  atributo
+    ``allow_future`` en ``True``.
+
+    **Ancestros (MRO)**
+
+    * :class:`django.views.generic.list.MultipleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * :class:`django.views.generic.dates.BaseYearArchiveView`
+    * :class:`django.views.generic.dates.YearMixin`
+    * :class:`django.views.generic.dates.BaseDateListView`
+    * :class:`django.views.generic.list.MultipleObjectMixin`
+    * :class:`django.views.generic.dates.DateMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Atributos**
+
+    .. attribute:: make_object_list
+
+    Un valor booleano que especifica si debe recuperar la lista completa de
+    objetos para este año y pasársela a la plantilla. Si es ``True`` la lista
+    de objetos estará disponible en el contexto. Si es ```False``, el queryset
+    usara el valor ``None`` como la lista de objetos. De forma predeterminada
+    esta es ``False``.
+
+    .. method:: get_make_object_list()
+
+    Determina si un objeto de la lista, debe devolverse como parte de el
+    contexto. Devuelve de forma predeterminada
+    :attr:`~YearArchiveView.make_object_list`
+
+    **Contexto**
+
+    Además del contexto ofrecido por:
+    :class:`django.views.generic.list.MultipleObjectMixin` (a través de
+    :class:`django.views.generic.dates.BaseDateListView`), el contexto de la
+    plantilla contendrá:
+
+    * ``date_list``: Un objeto
+      :meth:`DateQuerySet<django.db.models.query.QuerySet.dates>` que contiene
+      todos los meses en los que hay objetos disponibles,  de acuerdo al
+      ``queryset``, representado como un objeto
+      :class:`datetime.datetime<python:datetime.datetime>` en orden ascendente.
+
+    * ``year``: Un objeto  :class:`~datetime.date` que representa el año dado.
+
+    * ``next_year``: Un objeto :class:`~datetime.date` que representa el primer
+      día de el siguiente año, de acuerdo al :attr:`~BaseDateListView.allow_empty` y
+      :attr:`~DateMixin.allow_future`.
+
+    * ``previous_year``: Un objeto :class:`~datetime.date` que representa el primer
+      día del año previo, de acuerdo al :attr:`~BaseDateListView.allow_empty` y
+      :attr:`~DateMixin.allow_future`.
+
+    **Notas**
+
+    * Usa de forma predeterminada ``_archive_year`` como el nombre del sufijo
+      de plantilla para  ``template_name_suffix``.
+
+    **Ejemplo**
+
+    Vamos a ampliar el ejemplo anterior incluyendo una vista que muestre todos los
+    libros publicados en un determinado año:
+
+    .. snippet::
+      :filename: biblioteca/views.py
+
+        from django.views.generic.dates import YearArchiveView
+
+        from biblioteca.models import Libro
+
+        class LibrosAnuales(YearArchiveView):
+            queryset = Libro.objects.all()
+            date_field = "fecha_publicacion"
+            make_object_list = True
+            allow_future = True
+
+    .. snippet::
+     :filename: biblioteca/urls.py
+
+        from django.conf.urls import url
+        from biblioteca.views import LibrosAnuales
+
+        urlpatterns = [
+            url(r'^(?P<year>[0-9]{4})/$',
+                LibrosAnuales.as_view(),
+                    name="libros_anuales"),
+        ]
+
+    La plantilla: 'biblioteca/libros_archive_year.html'
+
+    .. code-block:: html+django
+
+        <ul>
+            {% for fecha in date_list %}
+                <li>{{ fecha|date }}</li>
+            {% endfor %}
+        </ul>
+
+        <div>
+            <h1>Todos los libros del {{ year|date:"Y" }}</h1>
+               {% for libros in object_list %}
+                   <p>
+                       {{ libros.titulo }} - {{ libros.fecha_publicacion|date:"F j, Y" }}
+                   </p>
+               {% endfor %}
+        </div>
+
+    **Argumentos obligatorios**
+
+    * ``date_field``: Igual que en ``ArchiveIndexView`` (Véase la sección previa).
+
+    * ``queryset``: El ``QuerySet`` de objetos archivados.
+
+    * ``year``: El año, con cuatro dígitos, que la vista usará para
+      mostrar el archivo (Como se ve en el ejemplo, normalmente
+      se obtiene  de un parámetro en la URL).
+
+    **Argumentos opcionales**
+
+    * ``make_object_list``: Un valor booleano que indica si se debe
+      obtener la lista completa de objetos para este año y pasársela
+      a la plantilla. Si es ``True``, la lista de objetos estará disponible
+      para la plantilla con el nombre de ``object_list`` (Aunque este nombre
+      podría ser diferente; véase la información sobre ``object_list``
+      en la siguiente explicación sobre "Contexto de plantilla"). Su
+      valor por defecto es ``False``.
+
+    * ``allow_future``: Un valor booleano que indica si deben incluirse
+      o no en esta vista las fechas "en el futuro".
+
+    **Nombre de la plantilla**
+
+    Si no se especifica ningún valor en ``name``, la vista usará
+    la plantilla ``<app_label>/<model_name>_archive_year.html``.
+
+    **Contexto de la plantilla**
+
+    Además de los valores que se puedan haber definido en  el contexto de la
+    plantilla,  tendrá los siguientes valores:
+
+    * ``date_list``: Una lista de objetos de tipo ``datetime.date``, que
+      representan todos los meses en los que hay disponibles objetos
+      en un año determinado, de acuerdo al contenido del ``queryset``, en
+      orden ascendente.
+
+    * ``year``: El año a mostrar, en forma de cadena de texto con cuatro dígitos.
+
+    * ``object_list``: Si el parámetro ``make_object_list`` es ``True``, esta
+      variable será una lista de objetos cuya fecha de referencia cae en
+      en año a mostrar, ordenados por fecha. El nombre de la variable depende
+      del parámetro ``template_object_name``, que es ``'object'`` por
+      defecto. Si ``template_object_name`` fuera ``'foo'``, el nombre de esta
+      variable sería ``foo_list``.
+
+    Si ``make_object_list`` es ``False``, ``object_list`` será una lista vacía.
+
+Archivos mensuales
+------------------
+
+.. class:: django.views.generic.dates.BaseMonthArchiveView
+
+    Esta vista proporciona una representación basada en meses, en la que se
+    muestran todos los objetos cuya fecha de referencia caiga en un determinado
+    mes y año. Los objetos con fechas en el futuro no están incluidos, a menos
+    que se establezca el  atributo   ``allow_future`` en ``True``.
+
+    **Ancestros (MRO)**
+
+    * :class:`django.views.generic.list.MultipleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * :class:`django.views.generic.dates.BaseMonthArchiveView`
+    * :class:`django.views.generic.dates.YearMixin`
+    * :class:`django.views.generic.dates.MonthMixin`
+    * :class:`django.views.generic.dates.BaseDateListView`
+    * :class:`django.views.generic.list.MultipleObjectMixin`
+    * :class:`django.views.generic.dates.DateMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Contexto**
+
+    Además del contexto ofrecido por:
+    :class:`~django.views.generic.list.MultipleObjectMixin` (a través de
+    :class:`~django.views.generic.dates.BaseDateListView`), el contexto de la
+    plantilla contendrá:
+
+    * ``date_list``: Un objeto
+      :meth:`DateQuerySet<django.db.models.query.QuerySet.dates>` que contiene
+      todos los días que contienen objetos disponibles en el mes dado, de
+      acuerdo  al ``queryset`` representado por el objeto
+      :class:`datetime.datetime<python:datetime.datetime>` en orden ascendente.
+
+    * ``month``:Una objeto de la clase :class:`~datetime.date` que representa
+      en mes dado.
+
+    * ``next_month``: Un objeto de la clase :class:`~datetime.date` que
+      representa el primer día de el siguiente mes, de acuerdo al atributo
+      :attr:`~BaseDateListView.allow_empty` y
+      :attr:`~DateMixin.allow_future`.
+
+    * ``previous_month``: Un objeto de la clase :class:`~datetime.date` que
+      representa el primer día del mes anterior, de acuerdo al atributo
+      :attr:`~BaseDateListView.allow_empty` y :attr:`~DateMixin.allow_future`.
+
+    **Notas**
+
+    * Usa de forma predeterminada ``_archive_month`` como el nombre del sufijo
+      de plantilla para  ``template_name_suffix``.
+
+    **Ejemplo**
+
+    Siguiendo con nuestro ejemplo, añadir una vista mensual a nuestra aplicación,
+    debería ser algo sencillo:
+
+    .. snippet::
+     :filename: biblioteca/views.py
+
+        from django.views.generic.dates import MonthArchiveView
+        from biblioteca.models import Libro
+
+        class LibrosPorMes(MonthArchiveView):
+            queryset = Libro.objects.all()
+            date_field = "fecha_publicacion"
+            make_object_list = True
+            allow_future = True
+
+    .. snippet::
+     :filename: biblioteca/urls.py
+
+        from django.conf.urls import url
+        from biblioteca.views import LibrosPorMes
+
+        urlpatterns = [
+            # Ejemplo: /2012/agosto/
+            url(r'^(?P<year>[0-9]{4})/(?P<month>[-\w]+)/$',
+                LibrosPorMes.as_view(),
+               name="libros_mes"),
+            # Ejemplo: /2012/08/
+            url(r'^(?P<year>[0-9]{4})/(?P<month>[0-9]+)/$',
+                LibrosPorMes.as_view(month_format='%m'),
+                name="libros_mes_numerico"),
+        ]
+
+    La plantilla: 'libro_archive_month.html'
+
+    .. code-block:: html+django
+
+        <ul>
+            {% for libro in object_list %}
+                <li>{{ libro.fecha_publicacion|date:"F j, Y" }}: {{ libro.titulo }}</li>
+            {% endfor %}
+        </ul>
+
+        <p>
+            {% if previous_month %}
+                Mes anterior: {{ previous_month|date:"F Y" }}
+            {% endif %}
+            {% if next_month %}
+                Mes siguiente: {{ next_month|date:"F Y" }}
+            {% endif %}
+        </p>
+
+    **Argumentos obligatorios**
+
+    * ``year``: El año a mostrar, en forma de cadena de texto con cuatro dígitos.
+
+    * ``month``: El mes a mostrar, formateado de acuerdo con el argumento
+      ``month_format``.
+
+    * ``queryset``: El ``QuerySet`` de objetos archivados.
+
+    * ``date_field``: El nombre del campo de tipo ``DateField`` o ``DateTimeField``
+      en el modelo usado para el ``QuerySet`` que se usará como fecha de referencia.
+
+    **Argumentos opcionales**
+
+    * ``month_format``: Una cadena de texto que determina el formato que
+      debe usar el parámetro ``month``. La sintaxis a usar debe coincidir
+      con la de la función ``time.strftime`` (La documentación de esta
+      función se puede consultar en http://www.djangoproject.com/r/python/strftime/).
+      Su valor por defecto es "%b", que significa el nombre del mes, en inglés, y
+      abreviado a tres letras (Es decir, "jan", "feb", etc.). Para cambiarlo de forma
+      que se usen números, hay que utilizar como cadena de formato "%m".
+
+    * ``allow_future``: Un valor booleano que indica si deben incluirse
+      o no en esta vista las fechas "en el futuro", igual al que hemos
+      visto en otras vistas anteriores.
+
+    **Nombre de la plantilla**
+
+    Si no se especifica ningún valor en ``template_name``, la vista usará como
+    plantilla ``<app_label>/<model_name>_archive_month.html``.
+
+    **Contexto de la plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto,
+    la plantilla contendrá los siguientes valores:
+
+    * ``month``: Un objeto de tipo ``datetime.date`` que representa el mes y año
+      de referencia.
+
+    * ``next_month``: Un objeto de tipo ``datetime.date`` que representa el primer
+      día del siguiente mes. Si el siguiente mes cae en el futuro, valdrá ``None``.
+
+    * ``previous_month``: Un objeto de tipo ``datetime.date`` que representa el primer
+      día del mes anterior. Al contrario que ``next_month``, su valor nunca será ``None``.
+
+    * ``object_list``: Una lista de objetos cuya fecha de referencia cae en
+      en año y mes a mostrar. El nombre de la variable depende
+      del parámetro ``template_object_name``, que es ``'object'`` por
+      defecto. Si ``template_object_name`` fuera ``'foo'``, el nombre de esta
+      variable sería ``foo_list``.
+
+Archivos semanales: ``WeekArchiveView``
+---------------------------------------
+
+.. class:: django.views.generic.dates.BaseWeekArchiveView
+
+    Esta vista muestra todos los objetos de una semana determinada. Los objetos
+    con fechas en el futuro no están incluidos, a menos  que se establezca el
+    atributo ``allow_future`` en ``True``.
+
+    **Ancestros (MRO)**
+
+    * :class:`django.views.generic.list.MultipleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * :class:`django.views.generic.dates.BaseWeekArchiveView`
+    * :class:`django.views.generic.dates.YearMixin`
+    * :class:`django.views.generic.dates.WeekMixin`
+    * :class:`django.views.generic.dates.BaseDateListView`
+    * :class:`django.views.generic.list.MultipleObjectMixin`
+    * :class:`django.views.generic.dates.DateMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Contexto**
+
+    Además del contexto ofrecido por:
+    :class:`~django.views.generic.list.MultipleObjectMixin` (a través de
+    :class:`~django.views.generic.dates.BaseDateListView`), el contexto de la
+    plantilla contendrá:
+
+    * ``week``: Una objeto  :class:`~datetime.date` que representa el primer
+      día de la semana dada.
+
+    * ``next_week``: Un objeto :class:`~datetime.date` que representa el primer
+      día de la siguiente semana, de acuerdo al atributo
+      :attr:`~BaseDateListView.allow_empty` y :attr:`~DateMixin.allow_future`.
+
+    * ``previous_week``: Un objeto :class:`~datetime.date` que representa el
+      primer día de la semana previa, de acuerdo a
+      :attr:`~BaseDateListView.allow_empty` y
+      :attr:`~DateMixin.allow_future`.
+
+    **Notas**
+
+    * Usa de forma predeterminada ``_archive_week`` como el nombre del sufijo
+      de plantilla para  ``template_name_suffix``.
+
+    .. admonition:: Nota:
+
+        Por consistencia con las Librerías de manejo de fechas de Python, Django
+        asume que el primer día de la semana es el domingo.
+
+    **Ejemplo**
+
+    Siguiendo con nuestro ejemplo, añadir una vista semanal a nuestra aplicación,
+    no debería ser muy complicado.
+
+    .. snippet::
+     :filename: biblioteca/views.py.html
+
+        from django.views.generic.dates import WeekArchiveView
+
+        from biblioteca.models import Libro
+
+        class LibrosSemanales(WeekArchiveView):
+            queryset = Libro.objects.all()
+            date_field = "fecha_publicacion"
+            make_object_list = True
+            week_format = "%W"
+            allow_future = True
+
+    .. snippet::
+     :filename: biblioteca/urls.py
+
+        from django.conf.urls import url
+
+        from biblioteca.views import LibrosSemanales
+
+        urlpatterns = [
+            # Example: /2012/week/23/
+            url(r'^(?P<year>[0-9]{4})/week/(?P<week>[0-9]+)/$',
+                LibrosSemanales.as_view(),
+                name="libros-semanales"),
+        ]
+
+    La plantilla 'article_archive_week.html'
+
+    .. code-block:: html+django
+
+        <h1>Semana {{ week|date:'W' }}</h1>
+
+        <ul>
+            {% for libros in object_list %}
+                <li>{{ libros.fecha_publicacion|date:"F j, Y" }}: {{ libro.titulo }}</li>
+            {% endfor %}
+        </ul>
+
+        <p>
+            {% if previous_week %}
+                Semana anterior: {{ previous_week|date:"F Y" }}
+            {% endif %}
+            {% if previous_week and next_week %}--{% endif %}
+            {% if next_week %}
+                Semana siguiente: {{ next_week|date:"F Y" }}
+            {% endif %}
+        </p>
+
+    En este ejemplo, mostramos la salida de el número de semanas. El valor
+    predeterminado  para ``week_format`` en la vista ``WeekArchiveView`` usa
+    '%U' el cual está basado en el sistema de semanas manejado en los
+    Estados Unidos, cuyo inicio de semana es el domingo.  El formato ISO
+    usa el formato de semanas '%W', en este formato la semana comienza el
+    Lunes. El formato '%W' es el mismo en ambas funciones:
+    :func:`~time.strftime` y en el filtro  :tfilter:`date`.
+
+    Sin embargo el  filtro :tfilter:`date` del el sistema de plantillas
+    no tiene un equivalente, para la salida en el formato que soporta el
+    sistema de semanas US. El filtro :tfilter:`date` '%U', muestra por
+    salida el numero  de segundos desde la época Unix.
+
+    **Argumentos obligatorios**
+
+    * ``year``: El año, con cuatro dígitos (Una cadena de texto).
+
+    * ``week``: La semana del año (Una cadena de texto).
+
+    * ``queryset``: El ``QuerySet`` de los objetos archivados.
+
+    * ``date_field``: El nombre del campo de tipo ``DateField`` o ``DateTimeField``
+      en el modelo usado para el ``QuerySet`` que se usará como fecha de referencia.
+
+    **Argumentos opcionales**
+
+    * ``allow_future``: Un valor booleano que indica si deben incluirse
+      o no en esta vista las fechas "en el futuro".
+
+    **Nombre de la plantilla**
+
+    Si no se ha especificado ningún valor en ``template_name`` la vista usará
+    como plantilla  ``<app_label>/<model_name>_archive_week.html``.
+
+    **Contexto de la plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto, la
+    plantilla contendrá los siguientes valores:
+
+    * ``week``: Un objeto de tipo ``datetime.date``, cuyo valor es el primer
+      día de la semana considerada.
+
+    * ``object_list``: Una lista de objetos disponibles para la semana
+      en cuestión. El nombre de esta variable depende del parámetro
+      ``template_object_name``, que es 'object' por defecto. Si
+      ``template_object_name`` fuera 'foo', el nombre de esta
+      variable sería ``foo_list``.
+
+Archivos diarios: ``DayArchiveView``
 ------------------------------------
 
-Por cada campo ``ImageField``, el objeto obtendrá dos métodos,
-``get_FOO_height()`` y ``get_FOO_width()``, donde ``FOO`` es el nombre del
-campo.  Estos métodos devuelven el alto y el ancho (respectivamente) de la
-imagen, en pixeles, como un entero.
+.. class:: django.views.generic.dates.BaseDayArchiveView
 
-Atajos (Shortcuts)
-==================
+    Esta vista muestra todos los objetos para un día determinado. Los objetos
+    con fechas en el futuro muestran un error 404, no importa si existen objetos
+    a menos que se establezca el  atributo ``allow_future`` en ``True``.
 
-A medida que desarrolles tus vistas, descubrirás una serie de modismos en la
-manera de utilizar la API de la base de datos.  Django codifica algunos de estos
-modismos como atajos que pueden ser utilizados par simplificar el proceso de
-escribir vistas.  Estas funciones se pueden hallar en el módulo
-``django.shortcuts``.
+    **Ancestros (MRO)**
 
-get_object_or_404()
--------------------
+    * :class:`django.views.generic.list.MultipleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * :class:`django.views.generic.dates.BaseDayArchiveView`
+    * :class:`django.views.generic.dates.YearMixin`
+    * :class:`django.views.generic.dates.MonthMixin`
+    * :class:`django.views.generic.dates.DayMixin`
+    * :class:`django.views.generic.dates.BaseDateListView`
+    * :class:`django.views.generic.list.MultipleObjectMixin`
+    * :class:`django.views.generic.dates.DateMixin`
+    * :class:`django.views.generic.base.View`
 
-Un modismo frecuente es llamar a ``get()`` y levantar un ``Http404`` si el
-objeto no existe.  Este modismo es capturado en la función
-``get_object_or_404()``.
-Esta funcion toma un modelo Django como su primer argumento, y una cantidad
-arbitraria de argumentos de palabra clave, que le pasa al método ``get()`` del
-``Manager`` por defecto del modelo.  Luego levanta un ``Http404`` si el objeto
-no existe, por ejemplo::
+    **Contexto**
 
-    # Get the Entry with a primary key of 3
-    e = get_object_or_404(Entry, pk=3)
+    Además del contexto ofrecido por:
+    :class:`~django.views.generic.list.MultipleObjectMixin` (a través de
+    :class:`~django.views.generic.dates.BaseDateListView`), el contexto de la
+    plantilla contendrá:
 
-Cuando se le pasa un modelo a esta función, se utiliza el ``Manager`` por
-defecto para ejecutar la consulta ``get()`` subyacente.  Si no quieres que se
-utilice el manager por defecto, o si quiere buscar en una lista de objetos
-relacionados, se le puede pasar a ``get_object_or_404()`` un objeto ``Manager``
-en vez::
+    * ``day``: Un objeto :class:`~datetime.date` que representa el día dado.
 
-    # Get the author of blog instance e with a name of 'Fred'
-    a = get_object_or_404(e.authors, name='Fred')
+    * ``next_day``: Un objeto :class:`~datetime.date` object que representa el
+      día siguiente, de acuerdo al :attr:`~BaseDateListView.allow_empty` y
+      :attr:`~DateMixin.allow_future`.
 
-    # Use a custom manager 'recent_entries' in the search for an
-    # entry with a primary key of 3
-    e = get_object_or_404(Entry.recent_entries, pk=3)
+    * ``previous_day``: Un objeto :class:`~datetime.date` que representa el día
+      anterior, de acuerdo al atributo :attr:`~BaseDateListView.allow_empty` y
+      :attr:`~DateMixin.allow_future`.
 
-get_list_or_404()
------------------
+    * ``next_month``: Un objeto de la clase :class:`~datetime.date` que
+      representa el primer día de el siguiente mes, de acuerdo al atributo
+      :attr:`~BaseDateListView.allow_empty` y
+      :attr:`~DateMixin.allow_future`.
 
-``get_list_or_404()`` se comporta igual que ``get_object_or_404()``,
-salvo porque llama a ``filter()`` en vez de a ``get()``.  Levanta un
-``Http404`` si la lista resulta vacía.
+    * ``previous_month``: Un objeto de la clase :class:`~datetime.date` que
+      representa el primer día del mes anterior, de acuerdo al atributo
+      :attr:`~BaseDateListView.allow_empty` y :attr:`~DateMixin.allow_future`.
 
-Utilizando SQL Crudo
-====================
+    **Notas**
 
-Si te encuentras necesitando escribir una consulta SQL que es demasiado compleja
-para manejarlo con el mapeador de base de datos de Django, todavía puede optar
-por escribir la sentencia directamente en SQL crudo.
+    * Usa de forma predeterminada ``_archive_day`` como el nombre del sufijo
+      de plantilla para  ``template_name_suffix``.
 
-La forma preferida para hacer esto es dándole a tu modelo métodos personalizados
-o métodos de ``Manager`` personalizados que realicen las consultas.  Aunque no
-exista ningún requisito en Django que *exija* que las consultas a la base de
-datos vivan en la capa del modelo, esta implementación pone a toda tu lógica de
-acceso a los datos en un mismo lugar, lo cual es una idea astuta desde el punto
-de vista de organización del código.  Por más instrucciones, véase el
-Apéndice B..
+    **Ejemplo**
 
-Finalmente, es importante notar que la capa de base de datos de Django es
-meramente una interfaz a tu base de datos.  Puedes acceder a la base de datos
-utilizando otras herramientas, lenguajes de programación o frameworks de bases
-de datos -- No hay nada específicamente de Django acerca de tu base de datos.
+    Siguiendo con nuestro ejemplo, añadir una vista diaria de objetos a nuestra
+    aplicación, no debería ser más complicada que las anteriores.
+
+    .. snippet::
+     :filename: biblioteca/views.py
+
+        from django.views.generic.dates import DayArchiveView
+        from biblioteca.models import Libro
+
+        class LibrosDiarios(DayArchiveView):
+            queryset = Libro.objects.all()
+            date_field = "fecha_publicacion"
+            make_object_list = True
+            allow_future = True
+
+    .. snippet::
+     :filename: biblioteca/biblioteca/urls.py
+
+        from django.conf.urls import url
+        from biblioteca.views import LibrosDiarios
+
+        urlpatterns = [
+            # Ejemplo: /2012/nov/10/
+            url(r'^(?P<year>[0-9]{4})/(?P<month>[-\w]+)/(?P<day>[0-9]+)/$',
+                LibrosDiarios.as_view(),
+                name="libros-día"),
+
+    La plantilla 'biblioteca/libro_archive_day.html'
+
+    .. code-block:: html+django
+
+        <h1>{{ day }}</h1>
+
+        <ul>
+            {% for libros in object_list %}
+                <li>{{ libros.fecha_publicacion|date:"F j, Y" }}: {{ libro.titulo }}</li>
+            {% endfor %}
+        </ul>
+
+        <p>
+            {% if previous_day %}
+                Dia anterior: {{ previous_day }}
+            {% endif %}
+            {% if previous_day and next_day %}--{% endif %}
+            {% if next_day %}
+                Siguiente dia: {{ next_day }}
+            {% endif %}
+        </p>
+
+    **Argumentos obligatorios**
+
+    * ``year``: El año, con cuatro dígitos (Una cadena de texto).
+
+    * ``month``: El mes, formateado de acuerdo a lo indicado por el
+      argumento ``month_format``.
+
+    * ``day``: El día, formateado de acuerdo al argumento ``day_format``.
+
+    * ``queryset``: El ``QuerySet`` de los objetos archivados.
+
+    * ``date_field``: El nombre del campo de tipo ``DateField`` o ``DateTimeField``
+      en el modelo usado para el ``QuerySet`` que se usará como fecha de referencia.
+
+    **Argumentos opcionales**
+
+    * ``month_format``: Una cadena de texto que determina el formato que
+      debe usar el parámetro ``month``. Hay una explicación más detallada
+      en la sección de "Archivos mensuales", incluida anteriormente.
+
+    * ``day_format``: Equivalente a ``month_format``, pero para el día. Su
+      valor por defecto es ``"%d"`` (que es el día del mes como número
+      decimal y relleno con ceros de ser necesario; 01-31).
+
+    * ``allow_future``: Un valor booleano que indica si deben incluirse
+      o no en esta vista las fechas "en el futuro".
+
+    **Nombre de la plantilla**
+
+    Si no se ha especificado ningún valor en ``template_name`` la vista usará como
+    plantilla ``<app_label>/<model_name>_archive_day.html``.
+
+    **Contexto de la plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto,  la
+    plantilla tendrá los siguientes valores:
+
+    * ``day``: Un objeto de tipo ``datetime.date`` cuyo valor es el del día en cuestión.
+
+    * ``next_day``: Un objeto de tipo ``datetime.date`` que representa el
+          siguiente día. Si cae en el futuro, valdrá ``None``.
+
+    * ``previous_day``: Un objeto de tipo ``datetime.date`` que representa el
+      día  anterior. Al contrario que ``next_day``, su valor nunca será ``None``.
+
+    * ``object_list``: Una lista de objetos disponibles para el día  en cuestión.
+      El nombre de esta variable depende del parámetro ``template_object_name``,
+      que es ``object`` por defecto. Si ``template_object_name`` fuera ``foo``,
+      el nombre de esta  variable sería ``foo_list``.
+
+Archivo para hoy: ``TodayArchiveView``
+--------------------------------------
+
+.. class:: django.views.generic.dates.BaseTodayArchiveView
+
+    Esta  vista  muestra todos los objetos cuya fecha de referencia sea *hoy*.
+    Es parecida a :class:`django.views.generic.dates.DayArchiveView`, excepto
+    que no se utilizan los argumentos *year/month/day*,  ya que esos datos se
+    obtendrán de la fecha actual.
+
+    **Ancestros (MRO)**
+
+    * :class:`django.views.generic.list.MultipleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * :class:`django.views.generic.dates.BaseTodayArchiveView`
+    * :class:`django.views.generic.dates.BaseDayArchiveView`
+    * :class:`django.views.generic.dates.YearMixin`
+    * :class:`django.views.generic.dates.MonthMixin`
+    * :class:`django.views.generic.dates.DayMixin`
+    * :class:`django.views.generic.dates.BaseDateListView`
+    * :class:`django.views.generic.list.MultipleObjectMixin`
+    * :class:`django.views.generic.dates.DateMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Notas**
+
+    * Usa de forma predeterminada ``_archive_today`` como el nombre del sufijo
+      de plantilla para  ``template_name_suffix``.
+
+    **Ejemplo**
+
+    Siguiendo con ejemplo anterior, podemos añadir una vista para mostrar los objetos
+    del día de hoy de la siguiente forma.
+
+    .. snippet::
+     :filename: biblioteca/views.py
+
+        from django.views.generic.dates import TodayArchiveView
+
+        from biblioteca.models import Libro
+
+        class LibrosPublicadosHoy(TodayArchiveView):
+            queryset = Libro.objects.all()
+            date_field = "pub_date"
+            make_object_list = True
+            allow_future = True
+
+    .. snippet::
+     :filename: biblioteca/urls.py
+
+        from django.conf.urls import url
+
+        from myapp.views import LibrosPublicadosHoy
+
+        urlpatterns = [
+            url(r'^hoy/$',
+                LibrosPublicadosHoy.as_view(),
+                name="libros-publicados-hoy"),
+        ]
+
+    .. admonition:: ¿Donde está la plantilla para ``TodayArchiveView``?
+
+        Esta vista usa de forma predeterminada la misma plantilla que la clase
+        :class:`~DayArchiveView`, como en el ejemplo anterior. Si necesitas
+        una plantilla diferente, establece el atributo  ``template_name`` para
+        utilizar el nombre de la nueva plantilla.
+
+Páginas de detalle basadas en fecha: ``DateDetailView``
+-------------------------------------------------------
+
+.. class:: django.views.generic.dates.BaseDateDetailView
+
+
+    Esta vista se usa para representar un objeto individual. Los objetos
+    con fechas en el futuro muestran un error 404, no importa si existen los
+    objetos a menos que se establezca el  atributo ``allow_future`` en ``True``.
+
+    **Ancestors (MRO)**
+
+    * :class:`django.views.generic.detail.SingleObjectTemplateResponseMixin`
+    * :class:`django.views.generic.base.TemplateResponseMixin`
+    * :class:`django.views.generic.dates.BaseDateDetailView`
+    * :class:`django.views.generic.dates.YearMixin`
+    * :class:`django.views.generic.dates.MonthMixin`
+    * :class:`django.views.generic.dates.DayMixin`
+    * :class:`django.views.generic.dates.DateMixin`
+    * ``django.views.generic.detail.BaseDetailView``
+    * :class:`django.views.generic.detail.SingleObjectMixin`
+    * :class:`django.views.generic.base.View`
+
+    **Contexto**
+
+    * Incluye el único objeto asociado al ``modelo`` especificado en
+      ``DateDetailView``.
+
+    **Notas**
+
+    * Usa de forma predeterminada ``_detail`` como el nombre del sufijo
+      de plantilla para  ``template_name_suffix``.
+
+    * Esta vista tiene una URL distinta de la vista ``DetailView``; mientras
+      que la última usa una URL como, por ejemplo, ``/entradas/<slug>/``, esta
+      usa una URL en la forma ``/entradas/2006/aug/27/<slug>/``.
+
+    .. admonition:: Nota:
+
+        Si estás usando páginas de detalle basadas en fechas con *slugs* en
+        la URL, lo más probable es que quieras usar la opción ``unique_for_date``
+        en el campo *slug*, de forma que se garantice que los *slugs* nunca se
+        duplican para una misma fecha.
+
+    **Ejemplo**
+
+    Esta vista tiene una (pequeña) diferencia con las demás vistas basadas en
+    fechas que hemos visto anteriormente, y es que necesita que le especifiquemos
+    de forma inequívoca el objeto en cuestión; esto lo podemos hacer con el
+    identificador del objeto *pk* o con un campo de tipo *slug*.
+
+    Como el objeto que estamos usando en el ejemplo no tiene ningún campo
+    de tipo *slug*, usaremos el identificador para la URL. Normalmente
+    se considera una buena práctica usar un campo *slug*, pero no lo
+    haremos en aras de simplificar el ejemplo.
+
+    .. snippet::
+     :filename: biblioteca/urls.py
+
+        from django.conf.urls import url
+        from django.views.generic.dates import DateDetailView
+        from biblioteca.models import Libro
+
+        urlpatterns = [
+            url(r'^(?P<year>[0-9]+)/(?P<month>[-\w]+)/(?P<day>[0-9]+)/(?P<pk>[0-9]+)/$',
+                DateDetailView.as_view(model=Libro, date_field="fecha_publicacion"),
+                name="libros-detalle-por-fecha"),
+        ]
+
+    Plantilla: 'biblioteca/libro_detail.html'
+
+    code-block:: html+django
+
+        <h1>{{ object.titulo }}</h1>
+
+    **Argumentos obligatorios**
+
+    * ``year``: El año, con cuatro dígitos (Una cadena de texto).
+
+    * ``month``: El mes, formateado de acuerdo a lo indicado por el
+      argumento ``month_format``
+
+    * ``day``: El día, formateado de acuerdo al argumento ``day_format``.
+
+    * ``queryset``: El ``QuerySet`` que contiene el objeto.
+
+    * ``date_field``: El nombre del campo de tipo ``DateField`` o ``DateTimeField``
+      en el modelo usado para el ``QuerySet`` que se usará como fecha de referencia.
+
+    Y también habrá que especificar, o bien un:
+
+    * ``object_id``: El valor de la clave primaria del objeto.
+
+    o bien un:
+
+    * ``slug``: El *slug* del objeto. Si se utiliza este argumento, es obligatorio
+      especificar un valor para el argumento ``slug_field`` (que describiremos en la
+      siguiente sección).
+
+    **Argumentos opcionales**
+
+    * ``allow_future``: Un valor booleano que indica si deben incluirse
+      o no en esta vista las fechas "en el futuro".
+
+    * ``day_format``: Equivalente a ``month_format``, pero para el día. Su
+      valor por defecto es ``"%d"`` (que es el día del mes como número
+      decimal y relleno con ceros de ser necesario; 01-31).
+
+    * ``month_format``: Una cadena de texto que determina el formato que
+      debe usar el parámetro ``month``. Hay una explicación más detallada
+      en la sección de "Archivos mensuales", incluida anteriormente.
+
+    * ``slug_field``: El  nombre del atributo que almacena el valor del
+      slug*. Es obligatorio incluirlo si se ha usado el argumento ``slug``, y
+      no debe aparecer si se ha especificado el argumento ``object_id``.
+
+    * ``template_name_field``: El nombre de un atributo del objeto cuyo valor
+      se usará como el nombre de la plantilla a utilizar. De esta forma, puedes
+      almacenar en tu objeto la plantilla a usar.
+
+    **Nombre de la plantilla**
+
+    Si no se ha especificado ningún valor en ``template_name`` la vista usará
+    como plantilla ``<app_label>/<model_name>_detail.html``.
+
+    **Contexto de la plantilla**
+
+    Además de los valores que se puedan haber definido en el contexto,  la
+    plantilla contendrá los siguientes valores:
+
+    * ``object``: El object. El nombre de esta variable depende del parámetro
+      ``template_object_name``, que es ``object`` por defecto. Si ``template_object_name``
+      fuera ``foo``, el nombre de esta variable sería ``foo``.
+
+Todas las vistas genéricas basadas en clases listadas anteriormente,
+corresponden y heredan de la vista ``Base``, únicamente difieren de ella en que
+no incluyen la clase :class:`~django.views.generic.list.
+MultipleObjectTemplateResponseMixin` (para las vistas de archivos) o
+:class:`~django.views.generic.detail.SingleObjectTemplateResponseMixin`
+(para la clase :class:`DateDetailView`).
+

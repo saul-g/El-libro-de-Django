@@ -1,1201 +1,1584 @@
-==============================================
-Apéndice D: Referencia de las vistas genéricas
-==============================================
+﻿======================================
+Apéndice D: Variables de configuración
+======================================
 
-El :doc:`Capítulo 9<chapter09>` es una introducción a las vistas genéricas, pero pasa
-por alto algunos detalles . Este apéndice describe todas las
-vistas genéricas, junto con las opciones que cada una de ellas puede
-aceptar. Antes de intentar entender este material de referencia es
-muy conveniente leer el :doc:`Capítulo 9<chapter09>` . Tampoco viene mal un repaso a
-los modelos ``Book``, ``Publisher`` y ``Author`` definidos en dicho
-capítulo, ya que serán usados en los ejemplo incluidos en esta apéndice.
+El **archivo de configuración** ``setting.py`` contiene toda la configuración
+de tu instalación Django. Este apéndice explica cómo funcionan la mayoria de
+las variables de configuración y qué variables de configuración están disponibles.
 
-Argumentos comunes a todas las vistas genéricas
-===============================================
+.. admonition:: Nota:
 
-La mayoría de las vistas aceptan varios argumentos que pueden
-modificar su comportamiento. Muchos de esos argumentos funcionan
-igual para la mayoría de las vistas. La tabla D-1 describe estos
-argumentos comunes; cada vez que veas uno de estos argumentos
-en la lista de parámetros admitidos por una vista genérica, su
-comportamiento será tal y como se describe en esta tabla.
+    A medida que Django crece, es ocasionalmente necesario agregar o (raramente)
+    cambiar variables de configuración. Debes siempre buscar la información mas
+    reciente en la documentación de configuración en línea que se encuentra en
+    http://www.djangoproject.com/documentation/.
 
-.. tabla:: Tabla D-1. Argumentos comunes de las vistas genéricas.
-
-==========================  ===============================================
-  Argumento                   Descripción
-==========================  ===============================================
-``allow_empty``             Un valor booleano que indica como debe
-                            comportarse la vista si no hay objetos
-                            disponibles. Si vale ``False`` y no hay
-                            objetos, la vista elevará un error 404 en vez
-                            de mostrar una página vacía. Su valor por
-                            defecto es ``Falsa``.
-
-``context_processors``      Es una lista de procesadores de contexto
-                            adicionales (además de los incluidos por
-                            el sistema), que se aplican a la plantilla
-                            de la vista.
-                            En el :doc:`Capítulo 10<chapter10>`
-                            se explica con detalle la lista de 
-                            procesadores de  contexto adicionales.
-
-``extra_context``           Un diccionario cuyos valores se añaden al
-                            contexto de la plantilla. Si se
-                            almacena un objeto que sea invocable, la
-                            vista genérica lo ejecutará justo antes de
-                            representar la plantilla
-
-``mimetype``                El tipo MIME a usar para el documento
-                            resultante. Por defecto utiliza el tipo
-                            definido en la variable de configuración
-                            ``DEFAULT_MIME_TYPE``, cuyo valor inicial
-                            es ``text/html``.
-
-``queryset``                Un objeto de tipo ``QuerySet`` (por ejemplo,
-                            ``Author.objects.all()``) del cual se
-                            leerán los objetos a utilizar por la vista.
-                            En el apéndice C hay más información acerca
-                            de los objetos ``QuerySet``. La mayoría de
-                            las vistas genéricas necesitan este argumento.
-
-``template_loader``         El cargador de plantillas a utilizar. Por
-                            defecto es ``django.template.loader``. Véase
-                            el `Capítulo 10`_ donde se da más información
-                            acerca de los cargadores de plantillas.
-
-``template_name``           El nombre completo de la plantilla a usar
-                            para representar la página. Este argumento
-                            se puede usar si queremos modificar el
-                            nombre que se genera automáticamente a
-                            partir del ``QuerySet``.
-
-``template_object_name``    El nombre de la variable principal en el
-                            contexto de la plantilla. Por defecto, es
-                            ``'object'``. Para las listas que
-                            utilizan más de objeto (por ejemplo, las
-                            vistas de listados o de archivos por
-                            fechas), se añade el sufijo ``'_list'``
-                            al valor de este parámetro, así que si
-                            no se indica nada y la vista utiliza
-                            varios objetos, estos estarán accesibles
-                            mediante una variable llamada
-                            ``object_list``.
-==========================  ===============================================
-
-Vistas genéricas simples
-========================
-
-Dentro del módulo ``django.views.generic.simple`` hay varias
-vistas sencillas que manejan unos cuantos problemas frecuentes: mostrar
-una plantilla que no necesita una vista lógica, y hacer una redirección
-de una página.
-
-Representar una plantilla
--------------------------
-
-*Vista a importar*: ``django.views.generic.simple.direct_to_template``
-
-Esta vista representa una plantilla, a la que se le pasa una
-variable de plantilla accesible como ``{{ params }}``, y que es un
-diccionario que contiene los parámetros capturados de la URL, si
-los hubiera.
-
-Ejemplo
-~~~~~~~
-
-Dada la siguiente configuración del URLconf::
-
-    from django.conf.urls.defaults import *
-    from django.views.generic.simple import direct_to_template
-
-    urlpatterns = patterns('',
-        (r'^foo/$',             direct_to_template, {'template': 'foo_index.html'}),
-        (r'^foo/(?P<id>\d+)/$', direct_to_template, {'template': 'foo_detail.html'}),
-    )
-
-Una petición a ``/foo/`` mostraría la plantilla ``foo_index.html``, y una
-solicitud a ``/foo/15/``  mostraría ``foo_detail.html`` con una variable
-de contexto ``{{ params.id }}`` cuyo valor sería ``15``.
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-    * ``template``: El nombre completo de la plantilla a representar.
-
-
-Redirigir a otra URL
---------------------
-
-*Vista a importar*: ``django.views.generic.simple.redirect_to``
-
-Esta vista redirige a otra URL. La URL que se pasa como parámetro puede
-tener secuencias de formato aptas para diccionarios, que serán
-interpretadas contra los parámetros capturados desde la URL origen.
-
-Si la URL pasada como parámetro es ``None``, Django retornará un mensaje
-de error 410 ("Gone" según el estándar HTTP).
-
-Ejemplo
-~~~~~~~
-
-Este URLconf redirige desde ``/foo/<id>/`` a ``/bar/<id>/``::
-
-    from django.conf.urls.defaults import *
-    from django.views.generic.simple import redirect_to
-
-    urlpatterns = patterns('django.views.generic.simple',
-        ('^foo/(?p<id>\d+)/$', redirect_to, {'url': '/bar/%(id)s/'}),
-    )
-
-Este ejemplo devuelve una respuesta "Gone" para cualquier petición a ``/bar/``::
-
-    from django.views.generic.simple import redirect_to
-
-    urlpatterns = patterns('django.views.generic.simple',
-        ('^bar/$', redirect_to, {'url': None}),
-    )
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* ``url``: La URL a la que redirigir, en forma de cadena de texto, o ``None``
-  si quereremos devolver una respuesta 410 ("Gone" según el estándar HTTP).
-
-Vistas de listado/detalle
-=========================
-
-Las vistas genéricas de listados/detalle (que residen en el módulo
-``Django.views.generic.list_detail``) se encargan de la habitual
-tarea de mostrar una lista de elementos por un lado (el listado) y
-una vista individual para cada uno de los elementos (el detalle).
-
-Listas de objetos
------------------
-
-*Vista a importar*: ``django.views.generic.list_detail.object_list``
-
-Esta vista sirve para representear una lista de objetos.
-
-Ejemplo
-~~~~~~~
-
-Si consideramos el objeto ``Author`` tal y como se definió en el capítulo
-5, podemos usar la vista ``object_list`` para obtener un listado sencillo
-de todos los autores usando el siguiente URLconf::
-
-    from mysite.books.models import Author
-    from django.conf.urls.defaults import *
-    from django.views.generic import list_detail
-
-    author_list_info = {
-        'queryset' :   Author.objects.all(),
-        'allow_empty': True,
-    }
-
-    urlpatterns = patterns('',
-        (r'authors/$', list_detail.object_list, author_list_info)
-    )
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* ``queryset``: Un ``QuerySet`` de los objetos a listar (Véase la table D-1).
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-* ``paginate_by``: es un número entero que especifica cuantos
-  objetos se deben mostrar en cada página. Según se especifique
-  en este parámetro, los resultados serán paginados, de forma
-  que se distribuirán por varias páginas de resultado. La vista
-  determinará que página de resultados debe mostrar o bien
-  desde un parámetro ``page`` incluido en la URL (vía ``Get``)
-  o mediante una variable ``page`` especificada en el URLconf. En
-  cualquiera de los dos casos, el índice comienza en cero. En la
-  siguiente sección hay una nota sobre paginación donde se explica
-  con un poco más de detalle este sistema.
-
-Además, esta vidta acepta cualquiera de los siguientes argumentos opcionales
-descritos en la tabla D-1:
-
-* ``allow_empty``
-* ``context_processors``
-* ``extra_context``
-* ``mimetype``
-* ``template_loader``
-* ``template_name``
-* ``template_object_name``
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Si no se ha especificado el parámetro opcional ``template_name``, la vista
-usará una plantilla llamada ``<app_label>/<model_name>_list.html``. Tanto
-la etiqueta de la aplicación como la etiqueta del modelo se obtienen
-del parámetro ``queryset``. La etiqueta de aplicación es el
-nombre de la aplicación en que se ha definido el modelo, y la etiqueta
-de modelo es el nombre, en minúsculas, de la clase del modelo.
-
-En el ejemplo anterior, tendriamos que el ``queryset`` sería ``Author.objects.all()``, por
-lo que la etiqueta de la aplicación será ``books`` y el nombre del modelo es ``author``. Con
-esos datos, el nombre de la plantilla a utilizar por defecto será ``books/author_list.html``.
-
-Contexto de plantilla
-~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``object_list``: La lista de los objetos. El nombre de la variable
-  viene determinado por el parámetro ``template_object_name``, y vale
-  ``'object'`` por defecto. Si se definiera ``template_object_name``
-  como ``'foo'``, el nombre de esta variable sería ``foo_list``.
-
-* ``is_paginated``: Un valor booleano que indicará si los resultados
-  serán paginados o no. Concretamente, valdrá ``False`` si el
-  número de objetos disponibles es inferior o igual a ``paginate_by``.
-
-Si los resultados están paginados, el contexto dispondrá también de estas variables:
-
-* ``results_per_page``: El número de objetos por página. (Su valor es el mismo
-  que el del parámetro ``paginate_by``).
-
-* ``has_next``: Un valor booleano indicando si hay una siguiente página.
-
-* ``has_previous``: Un valor booleano indicando si hay una página previa.
-
-* ``page``: El número de la página actual, siendo 1 la primera página.
-
-* ``next``: El número de la siguiente página. Incluso si no hubiera
-   siguiente página, este valor seguirá siendo un numero entero que
-   apuntaría a una hipotética siguiente página. También utiliza
-   un índice basado en 1, no en cero.
-
-* ``previous``: El número de la anterior página, usando un índice
-   basado en 1, no en cero.
-
-* ``pages``: El número total de páginas.
-
-* ``hits``: El número total de objetos en *todas* las páginas, no sólo
-  en la actual.
-
-.. admonition:: Una nota sobre paginación
-
-Si se utiliza el parámetro ``paginate_by``, Django paginará los resultados. Puedes
-indicar qué pagina visualizar usando dos métodos diferentes:
-
-* Usar un parámetro ``page`` en el URLconf. Por ejemplo, tu URLconf
-  podría parecerse a este::
-
-  (r'^objects/page(?P<page>[0-9]+)/$', 'object_list', dict(info_dict))
-
-* Pasar el número de la página mediante un parámetro ``page`` en la URL: Por ejemplo,
-  tus URL se podrían parecer a esto::
-
-            /objects/?page=3
-
-
-En ambos casos, ``page`` es un índice basado en 1, lo que significa que la primera
-página siempre será la número 1, no la número 0.
-
-Vista de detalle
-----------------
-
-*Vista a importar*: ``django.views.generic.list_detail.object_detail``
-
-Esta vista proporciona una representación indidual de los "detalles" de un objeto.
-
-Ejemplo
-~~~~~~~
-
-Siguiendo con el ejemplo anterior, podemos añadir una vista de detalle de
-cada autor modificacando el URLconf de la siguiente manera::
-
-    from mysite.books.models import Author
-    from django.conf.urls.defaults import *
-    from django.views.generic import list_detail
-
-    author_list_info = {
-        'queryset' :   Author.objects.all(),
-        'allow_empty': True,
-    }
-    **author_detail_info = {**
-        **"queryset" : Author.objects.all(),**
-        **"template_object_name" : "author",**
-    **}**
-
-    urlpatterns = patterns('',
-        (r'authors/$', list_detail.object_list, author_list_info),
-        **(r'^authors/(?P<object_id>\d+)/$', list_detail.object_detail, author_detail_info),**
-    )
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* ``queryset``: Un ``QuerySet`` que será usado para localizar el objeto a mostrar (véase la Tabla D-1).
-
-y luego hace falta, o un:
-
-* ``object_id``: El valor de la clave primaria del objeto a mostrar.
-
-o bien:
-
-* ``slug``: La etiqueta o *slug* del objeto en cuestión. Si se usa este sistema de
-  identificación, hay que emplear obligatoriamente el argumento ``slug_field`` (que
-  se explica en la siguiente sección).
-
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-* ``slug_field``: El nombre del atributo del objeto que contiene el *slug*. Es
-  obligatorio si estás usando el argumento ``slug``, y no se debe usar si estás
-  usando el argumento ``object_id``.
-
-* ``template_name_field``: El nombre de un atributo del objeto cuyo valor
-  se usará como el nombre de la plantilla a utilizar. De esta forma, puedes
-  almacenar en tu objeto la plantilla a usar.
-
-  En otras palabras, si tu objeto tiene un atributo ``'the_template'`` que
-  contiene la cadena de texto ``'foo.html'``, y defines ``template_name_field``
-  para que valga ``'the_template'``, entonces la vista genérica de este
-  objeto usará como plantilla ``'foo.html'``.
-
-  Si el atributo indicado por ``template_name_field`` no existe, se usaría
-  el indicado por el argumento ``template_name``. Es un mecanismo
-  un poco enmarañado, pero puede ser de mucha ayuda en algunos casos.
-
-Esta vista también acepta estos argumentos comunes (Véase la tabla D-1):
-
-* ``context_processors``
-* ``extra_context``
-* ``mimetype``
-* ``template_loader``
-* ``template_name``
-* ``template_object_name``
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Si no se especifican ``template_name`` ni ``template_name_field``, se
-usará la plantilla ``<app_label>/<model_name>_detail.html``.
-
-Contexto de plantilla
-~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``object``: El objeto. El nombre de esta variable puede ser
-  distinto si se ha especificado el argumento ``template_object_name``, cuyo
-  valor es ``'object'`` por defecto. Si definimos ``template_object_name``
-  como ``'foo'``, el nombre de la variable será ``foo``.
-
-Vistas genéricas basadas en fechas
+Qué es un archivo de configuración
 ==================================
 
-Estas vistas genéricas basadas en fechas se suelen utilizar para
-organizar la parte de "archivo" de nuestro contenido. Los casos típicos son los
-archivos por año/mes/día de un periódico, o el archivo
-de una bitácora o *blog*.
+Un *archivo de configuración* es sólo un módulo Python con variables a nivel de
+módulo.
 
-.. admonition:: Truco:
+Un par de ejemplos de variables de configuración::
 
-    En principio, estas vistas ignoran las fechas que estén situadas en el futuro.
+    DEBUG = False
+    DEFAULT_FROM_EMAIL = 'webmaster@example.com'
+    TEMPLATE_DIRS = ('/home/templates/mike', '/home/templates/john')
 
-    Esto significa que si intentas visitar una página del archivo que esté en
-    el futuro, Django mostrará automáticamente un error 404 ("Página no
-    encontrada"), incluso aunque hubiera objetos con esa fecha en el sistema.
+Debido a que un archivo de configuración es un módulo Python, las siguientes
+afirmaciones son ciertas:
 
-    Esto te permite publicar objetos por adelantado, que no se mostrarán
-    públicamente hasta que se llegue a la fecha de publicación deseada.
+* Debe ser código Python válido; no se permiten los errores de sintaxis.
 
-    Sin embargo, para otros tipos de objetos con fechas, este comportamiento
-    no es el deseable (por ejemplo, un calendario de próximos eventos). Para
-    estas vistas, podemos definir el argumento ``allow_future`` como ``True``  y
-    de esa manera conseguir que los objetos con fechas futuras aparezcan (o permitir
-    a los usuarios visitar páginas de archivo "en el futuro").
+* El mismo puede asignar valores a las variables dinámicamente usando
+  sintaxis normal de Python, por ejemplo::
 
-Índice de archivo
------------------
+          MY_SETTING = [str(i) for i in range(30)]
 
-*Vista a importar*: ``django.views.generic.date_based.archive_index``
+* El mismo puede importar valores desde otros archivos de configuración.
 
-Esta vista proporciona un índice donde se mostraría los
-"últimos" objetos (es decir, los más recientes) según la fecha.
+Valores por omisión
+-------------------
 
-Ejemplo
-~~~~~~~
+No es necesario que un archivo de configuración de Django defina una variable
+de configuración si es que no es necesario. Cada variable de configuración tiene
+un valor por omisión sensato. Dichos valores por omisión residen en el archivo
+``django/conf/global_settings.py``.
 
-Supongamos el típico editor que desea una página con la lista de sus
-últimos libros publicados. Suponiendo que tenemos un objeto ``Book``
-con un atributo de fecha de publicación, ``publication_date``, podemos
-usar la vista ``archive_index`` para resolver este problema::
+Este es el algoritmo que usa Django cuando compila los valores de configuración:
 
+* Carga las variables de configuración desde ``global_settings``.
+* Carga las variables de configuración desde el archivo de configuración
+  especificado, reemplazando de ser necesario los valores globales previos.
 
-    from mysite.books.models import Book
-    from django.conf.urls.defaults import *
-    from django.views.generic import date_based
+Nota que un archivo de configuración *no* debe importar desde
+``global_settings``, ya que eso sería redundante.
 
-    book_info = {
-        "queryset"   : Book.objects.all(),
-        "date_field" : "publication_date"
-    }
+Viendo cuáles variables de configuración has cambiado
+-----------------------------------------------------
 
-    urlpatterns = patterns('',
-        (r'^books/$', date_based.archive_index, book_info),
-    )
+Existe una manera fácil de ver cuáles de tus variables de configuración difieren
+del valor por omisión. El comando ``manage.py diffsettings`` visualiza las
+diferencias entre el archivo de configuración actual y los valores por omisión
+de Django.
 
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
+``manage.py`` es descrito con más detalle en el Apéndice G.
 
-* ``date_field``: El nombre de un campo ``DateField`` o ``DateTimeField`` de los
-  objetos que componen el ``QuerySet``. La vista usará los valores de ese campo
-  como referencia para obtener los últimos objetos.
+Usando variables de configuración en código Python
+--------------------------------------------------
 
-* ``queryset``: El ``QuerySet`` de objetos que forman el archivo.
+En tus aplicaciones Django, usa variables de configuración importando el objeto
+``django.conf.settings``, por ejemplo::
 
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
+    from django.conf import settings
 
-* ``allow_future``: Un valor booleano que indica si los objetos
-  "futuros" (es decir, con fecha de referencia en el futuro) deben
-  aparecer o no.
+    if settings.DEBUG:
+        # Do something
 
-* ``num_latest``: El número de objetos que se deben enviar a la
-  plantilla. Su valor por defecto es 15.
+Nota que ``django.conf.settings`` no es un módulo -- es un objeto. De manera
+que no es posible importar variables de configuración individualmente.::
 
-Esta vista también acepta estos argumentos comunes (Véase la tabla D-1):
+    from django.conf.settings import DEBUG  # This won't work.
 
-* ``allow_empty``
-* ``context_processors``
-* ``extra_context``
-* ``mimetype``
-* ``template_loader``
-* ``template_name``
+Ten en cuenta también que tu código *no* debe importar ni desde
+``global_settings`` ni desde tu propio archivo de configuración.
+``django.conf.settings`` provee abstracción para los conceptos de variables de
+configuración por omisión y variables de configuración específicas de un sitio;
+presenta una única interfaz. También desacopla el código que usa variables de
+configuración de la ubicación de dicha configuración.
 
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
+Modificando variables de configuración en tiempo de ejecución
+-------------------------------------------------------------
 
-Si no se ha especificado ``template_name``, se
-usará la plantilla ``<app_label>/<model_name>_archive.html``.
+No debes alterar variables de configuración en tiempo de ejecución. Por ejemplo,
+no hagas esto en una vista::
 
-Contexto de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~~~
+    from django.conf import settings
 
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
+    settings.DEBUG = True   # ¡No hagas esto!
 
-* ``date_list``: Una lista de objetos de tipo ``datetime.date`` que representarían
-  todos los años en los que hay objetos, de acuerdo al ``queryset``. Vienen ordenados
-  de forma descendente, los años mas recientes primero.
+El único lugar en el que debes asignar valores a ``settings`` es en un archivo
+de configuración.
 
-  Por ejemplo, para un blog que tuviera entradas desde el año 2003 hasta el
-  2006, la lista contendrá cuatro objetos de tipo ``datetime.date``, uno
-  para cada uno se esos años.
+Seguridad
+---------
 
-* ``latest``: Los últimos ``num_latest`` objetos en el sistema, considerándolos
-  ordenados de forma descendiente por el campo ``date_field`` de referencia. Por
-  ejemplo, si ``num_latest`` vale ``10``, entonces ``latest`` será una lista de
-  los últimos 10 objetos contenidos en el ``queryset``.
+Debido  que un archivo de configuración contiene información importante, tal
+como la contraseña de la base de datos, debes hacer lo que esté e tus manos para
+limitar el acceso al mismo. Por ejemplo, cambia los permisos de acceso en el
+sistema de archivos de manera que solo tú y el usuario de tu servidor Web puedan
+leerlo. Esto es especialmente importante en un entorno de alojamiento
+compartido.
 
-Archivos anuales
-----------------
+Creando tus propias variables de configuración
+----------------------------------------------
 
-*Vista a importar*: ``django.views.generic.date_based.archive_year``
+No existe nada que impida que crees tus propias variables de configuración, para
+tus propias aplicaciones Django. Sólo sigue las siguientes convenciones:
 
-Esta vista sirve para presentar archivos basados en años. Poseen una lista
-de los meses en los que hay algún objeto, y pueden mostrar opcionalmente todos
-los objetos publicados en un año determinado.
+* Usa nombres de variables en mayúsculas.
 
-Ejemplo
-~~~~~~~
+* Para configuraciones que sean secuencias, usa tuplas en lugar de listas.
+  Las variables de configuración deben ser consideradas inmutables y no
+  deben ser modificadas una vez que se las ha definido. El usar tuplas
+  refleja esa semántica.
 
-Vamos a ampliar el ejemplo anterior incluyendo una vista que muestre todos los libros
-publicados en un determinado año::
+* No reinventes una variable de configuración que ya existe.
 
+Indicando la configuración: DJANGO_SETTINGS_MODULE
+==================================================
 
-    from mysite.books.models import Book
-    from django.conf.urls.defaults import *
-    from django.views.generic import date_based
+Cuando usas Django tienes que indicarle qué configuración estás usando. Haz esto
+mediante el uso de de la variable de entorno ``DJANGO_SETTINGS_MODULE``.
 
-    book_info = {
-        "queryset"   : Book.objects.all(),
-        "date_field" : "publication_date"
-    }
+El valor de ``DJANGO_SETTINGS_MODULE`` debe respetar la sintaxis de rutas de
+Python (por ej. ``mysite.settings``. Notar que el módulo de configuración debe
+ser encontrarse en la ruta de búsqueda para las importaciones de Python
+(``PYTHONPATH``).
 
-    urlpatterns = patterns('',
-        (r'^books/$', date_based.archive_index, book_info),
-        **(r'^books/(?P<year>\d{4})/?$', date_based.archive_year, book_info),**
-    )
+.. admonition:: Consejo:
 
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
+    Puedes encontrar una buena guía acerca de `PYTHONPATH`` en
+    http://diveintopython.org/getting_to_know_python/everything_is_an_object.html.
 
-* ``date_field``: Igual que en ``archive_index`` (Véase la sección previa).
-
-* ``queryset``: El ``QuerySet`` de objetos archivados.
-
-* ``year``: El año, con cuatro dígitos, que la vista usará para
-  mostrar el archivo (Como se ve en el ejemplo, normalmente
-  se obtiene  de un parámetro en la URL).
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-* ``make_object_list``: Un valor booleano que indica si se debe
-  obtener la lista completa de objetos para este año y pasársela
-  a la plantilla. Si es ``True``, la lista de objetos estará disponible
-  para la plantilla con el nombre de ``object_list`` (Aunque este nombre
-  podría ser diferente; véase la información sobre ``object_list``
-  en la siguiente explicación sobre "Contexto de plantilla"). Su
-  valor por defecto es ``False``.
-
-* ``allow_future``: Un valor booleano que indica si deben incluirse
-  o no en esta vista las fechas "en el futuro".
-
-Esta vista también acepta los siguientes argumentos comunes (Véase la Tabla D-1):
-
-* ``allow_empty``
-* ``context_processors``
-* ``extra_context``
-* ``mimetype``
-* ``template_loader``
-* ``template_name``
-* ``template_object_name``
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Si no se especifica ningún valor en ``template_name``, la vista usará
-la plantilla ``<app_label>/<model_name>_archive_year.html``.
-
-Contexto de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``date_list``: Una lista de objetos de tipo ``datetime.date``, que
-  representan todos los meses en los que hay disponibles objetos
-  en un año determinado, de acuerdo al contenido del ``queryset``, en
-  orden ascendente.
-
-* ``year``: El año a mostrar, en forma de cadena de texto con cuatro dígitos.
-
-* ``object_list``: Si el parámetro ``make_object_list`` es ``True``, esta
-  variable será una lista de objetos cuya fecha de referencia cae en
-  en año a mostrar, ordenados por fecha. El nombre de la variable depende
-  del parámetro ``template_object_name``, que es ``'object'`` por
-  defecto. Si ``template_object_name`` fuera ``'foo'``, el nombre de esta
-  variable sería ``foo_list``.
-
-Si ``make_object_list`` es ``False``, ``object_list`` será una lista vacía.
-
-Archivos mensuales
-------------------
-
-*Vista a importar*: ``django.views.generic.date_based.archive_month``
-
-Esta vista proporciona una representación basada en meses, en la que
-se muestran todos los objetos cuya fecha de referencia caiga en
-un determinado mes y año.
-
-Ejemplo
-~~~~~~~
-
-Siguiendo con nuestro ejemplo, añadir una vista mensual debería
-ser algo sencillo::
-
-    urlpatterns = patterns('',
-        (r'^books/$', date_based.archive_index, book_info),
-        (r'^books/(?P<year>\d{4})/?$', date_based.archive_year, book_info),
-        **(**
-            **r'^(?P<year>\d{4})/(?P<month>[a-z]{3})/$',**
-            **date_based.archive_month,**
-            **book_info**
-        **),**
-    )
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* ``year``: El año a mostrar, en forma de cadena de texto con cuatro dígitos.
-
-* ``month``: El mes a mostrar, formateado de acuerdo con el argumento
-  ``month_format``.
-
-* ``queryset``: El ``QuerySet`` de objetos archivados.
-
-* ``date_field``: El nombre del campo de tipo ``DateField`` o ``DateTimeField``
-   en el modelo usado para el ``QuerySet`` que se usará como fecha de referencia.
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-* ``month_format``: Una cadena de texto que determina el formato que
-  debe usar el parámetro ``month``. La sintaxis a usar debe coincidir
-  con la de la función ``time.strftime`` (La documentación de esta
-  función se puede consultar en http://www.djangoproject.com/r/python/strftime/).
-  Su valor por defecto es ``"%b"``, que significa el nombre del mes, en inglés, y
-  abreviado a tres letras (Es decir, "jan", "feb", etc.). Para cambiarlo de forma
-  que se usen números, hay que utilizar como cadena de formato ``"%m"``.
-
-* ``allow_future``: Un valor booleano que indica si deben incluirse
-  o no en esta vista las fechas "en el futuro", igual al que hemos
-  visto en otras vistas anteriores.
-
-Esta vista también acepta los siguientes argumentos comunes (Véase la Tabla D-1):
-
-* ``allow_empty``
-* ``context_processors``
-* ``extra_context``
-* ``mimetype``
-* ``template_loader``
-* ``template_name``
-* ``template_object_name``
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Si no se especifica ningún valor en ``template_name``, la vista usará como
-plantilla ``<app_label>/<model_name>_archive_month.html``.
-
-Contexto de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``month``: Un objeto de tipo ``datetime.date`` que representa el mes y año
-  de referencia.
-
-* ``next_month``: Un objeto de tipo ``datetime.date`` que representa el primer
-  día del siguiente mes. Si el siguiente mes cae en el futuro, valdrá ``None``.
-
-* ``previous_month``: Un objeto de tipo ``datetime.date`` que representa el primer
-  día del mes anterior. Al contrario que ``next_month``, su valor nunca será ``None``.
-
-* ``object_list``: Una lista de objetos cuya fecha de referencia cae en
-  en año y mes a mostrar. El nombre de la variable depende
-  del parámetro ``template_object_name``, que es ``'object'`` por
-  defecto. Si ``template_object_name`` fuera ``'foo'``, el nombre de esta
-  variable sería ``foo_list``.
-
-Archivos semanales
-------------------
-
-*Vista a importar*: ``django.views.generic.date_based.archive_week``
-
-Esta vista muestra todos los objetos de una semana determinada.
-
-.. admonition:: Nota:
-
-    Por consistencia con las bibliotecas de manejo de fechas de Python, Django
-    asume que el primer día de la semana es el domingo.
-
-Ejemplo
-~~~~~~~
-
-.. code-block:: python
-
-    urlpatterns = patterns('',
-        # ...
-        **(**
-            **r'^(?P<year>\d{4})/(?P<week>\d{2})/$',**
-            **date_based.archive_week,**
-            **book_info**
-        **),**
-    )
-
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-    * ``year``: El año, con cuatro dígitos (Una cadena de texto).
-
-    * ``week``: La semana del año (Una cadena de texto).
-
-    * ``queryset``: El ``QuerySet`` de los objetos archivados.
-
-    * ``date_field``: El nombre del campo de tipo ``DateField`` o ``DateTimeField``
-      en el modelo usado para el ``QuerySet`` que se usará como fecha de referencia.
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-    * ``allow_future``: Un valor booleano que indica si deben incluirse
-      o no en esta vista las fechas "en el futuro".
-
-Esta vista también acepta los siguientes argumentos comunes (Véase la Tabla D-1):
-
-* ``allow_empty``
-* ``context_processors``
-* ``extra_context``
-* ``mimetype``
-* ``template_loader``
-* ``template_name``
-* ``template_object_name``
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Si no se ha especificado ningún valor en ``template_name`` la vista usará como plantilla
-``<app_label>/<model_name>_archive_week.html``.
-
-Contexto de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``week``: Un objeto de tipo ``datetime.date``, cuyo valor es el primer
-  día de la semana considerada.
-
-* ``object_list``: Una lista de objetos disponibles para la semana
-  en cuestión. El nombre de esta variable depende del parámetro
-  ``template_object_name``, que es ``'object'`` por defecto. Si
-  ``template_object_name`` fuera ``'foo'``, el nombre de esta
-  variable sería ``foo_list``.
-
-Archivos diarios
-----------------
-
-*Vista a importar*: ``django.views.generic.date_based.archive_day``
-
-esta vista muestra todos los objetos para un día determinado.
-
-Ejemplo
-~~~~~~~
-
-.. code-block:: python
-
-    urlpatterns = patterns('',
-        # ...
-        **(**
-            **r'^(?P<year>\d{4})/(?P<month>[a-z]{3})/(?P<day>\d{2})/$',**
-            **date_based.archive_day,**
-            **book_info**
-        **),**
-    )
-
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* ``year``: El año, con cuatro dígitos (Una cadena de texto).
-
-* ``month``: El mes, formateado de acuerdo a lo indicado por el
-  argumento ``month_format``
-
-* ``day``: El día, formateado de acuerdo al argumento ``day_format``.
-
-* ``queryset``: El ``QuerySet`` de los objetos archivados.
-
-* ``date_field``: El nombre del campo de tipo ``DateField`` o ``DateTimeField``
-  en el modelo usado para el ``QuerySet`` que se usará como fecha de referencia.
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-* ``month_format``: Una cadena de texto que determina el formato que
-  debe usar el parámetro ``month``. Hay una explicación más detallada
-  en la seccion de "Archivos mensuales", incluida anteriormente.
-
-* ``day_format``: Equivalente a ``month_format``, pero para el día. Su
-  valor por defecto es ``"%d"`` (que es el día del mes como número
-  decimal y relleno con ceros de ser necesario; 01-31).
-
-* ``allow_future``: Un valor booleano que indica si deben incluirse
-  o no en esta vista las fechas "en el futuro".
-
-Esta vista también acepta los siguientes argumentos comunes (Véase la Tabla D-1):
-
-* ``allow_empty``
-* ``context_processors``
-* ``extra_context``
-* ``mimetype``
-* ``template_loader``
-* ``template_name``
-* ``template_object_name``
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Si no se ha especificado ningún valor en ``template_name`` la vista usará como plantilla
-``<app_label>/<model_name>_archive_day.html``.
-
-Contexto de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``day``: Un objeto de tipo ``datetime.date`` cuyo valor es el del día en cuestión.
-
-* ``next_day``: Un objeto de tipo ``datetime.date`` que representa el
-      siguiente día. Si cae en el futuro, valdrá ``None``.
-
-* ``previous_day``: Un objeto de tipo ``datetime.date`` que representa el
-  día  anterior. Al contrario que ``next_day``, su valor nunca será ``None``.
-
-* ``object_list``: Una lista de objetos disponibles para el día
-  en cuestión. El nombre de esta variable depende del parámetro
-  ``template_object_name``, que es ``'object'`` por defecto. Si
-  ``template_object_name`` fuera ``'foo'``, el nombre de esta
-  variable sería ``foo_list``.
-
-Archivo para hoy
-----------------
-
-La vista ``django.views.generic.date_based.archive_today`` muestra todos
-los objetos cuya fecha de referencia sea *hoy*. Es exactamente igual a
-``archive_day``, excepto que no se utilizan los argumentos
-``year``, ``month`` ni ``day``, ya que esos datos se obtendrán
-de la fecha actual.
-
-Ejemplo
-~~~~~~~
-
-.. code-block:: python
-
-    urlpatterns = patterns('',
-        # ...
-        **(r'^books/today/$', date_based.archive_today, book_info),**
-    )
-
-Páginas de detalle basadas en fecha
------------------------------------
-
-*Vista a importar*: ``django.views.generic.date_based.object_detail``
-
-Se usa esta vista para representar un objeto individual.
-
-Esta vista tiene una URL distinta de la vista ``object_detail``; mientras
-que la última usa una URL como, por ejemplo, ``/entries/<slug>/``, esta
-usa una URL en la forma ``/entries/2006/aug/27/<slug>/``.
-
-.. admonition:: Nota:
-
-    Si estás usando páginas de detalle basadas en la fecha con *slugs* en
-    la URL, lo más probable es que quieras usar la opción ``unique_for_date``
-    en el campo *slug*, de forma que se garantice que los *slugs* nunca se
-    duplican para una misma fecha. Lee el apéndice F para más detalles sobre
-    la opción ``unique_for_date``.
-
-Ejemplo
-~~~~~~~
-
-Esta vista tiene una (pequeña) diferencia con las demás vistas basadas en
-fechas que hemos visto anteriormente, y es que necesita que le especifiquemos
-de forma inequívoca el objeto en cuestión; esto lo podemos hacer con el
-identificador del objeto o con un campo de tipo *slug*.
-
-Como el objeto que estamos usando en el ejemplo no tiene ningún campo
-de tipo *slug*, usaremos el identificador para la URL. Normalmente
-se considera una buena práctica usar un campo *slug*, pero no lo
-haremos en aras de simplificar el ejemplo.
-
-.. code-block:: python
-
-    urlpatterns = patterns('',
-        # ...
-        **(**
-            **r'^(?P<year>\d{4})/(?P<month>[a-z]{3})/(?P<day>\d{2})/(?P<object_id>[\w-]+)/$',**
-            **date_based.object_detail,**
-            **book_info**
-        **),**
-    )
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* ``year``: El año, con cuatro dígitos (Una cadena de texto).
-
-* ``month``: El mes, formateado de acuerdo a lo indicado por el
-  argumento ``month_format``
-
-* ``day``: El día, formateado de acuerdo al argumento ``day_format``.
-
-* ``queryset``: El ``QuerySet`` que contiene el objeto.
-
-* ``date_field``: El nombre del campo de tipo ``DateField`` o ``DateTimeField``
-  en el modelo usado para el ``QuerySet`` que se usará como fecha de referencia.
-
-Y también habrá que especificar, o bien un:
-
-* ``object_id``: El valor de la clave primaria del objeto.
-
-o bien un:
-
-* ``slug``: El *slug* del objeto. Si se utiliza este argumento, es obligatorio
-  especificar un valor para el argumento ``slug_field`` (que describiremos en la
-  siguiente sección).
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-* ``allow_future``: Un valor booleano que indica si deben incluirse
-  o no en esta vista las fechas "en el futuro".
-
-* ``day_format``: Equivalente a ``month_format``, pero para el día. Su
-  valor por defecto es ``"%d"`` (que es el día del mes como número
-  decimal y relleno con ceros de ser necesario; 01-31).
-
-* ``month_format``: Una cadena de texto que determina el formato que
-  debe usar el parámetro ``month``. Hay una explicación más detallada
-  en la seccion de "Archivos mensuales", incluida anteriormente.
-
-* ``slug_field``: El  nombre del atributo que almacena el valor del
-  slug*. Es obligatorio incluirlo si se ha usado el argumento ``slug``, y
-  no debe aparecer si se ha especificado el argumento ``object_id``.
-
-* ``template_name_field``: El nombre de un atributo del objeto cuyo valor
-  se usará como el nombre de la plantilla a utilizar. De esta forma, puedes
-  almacenar en tu objeto la plantilla a usar.
-
-  En otras palabras, si tu objeto tiene un atributo ``'the_template'`` que
-  contiene la cadena de texto ``'foo.html'``, y defines ``template_name_field``
-  para que valga ``'the_template'``, entonces la vista genérica de este
-  objeto usará como plantilla ``'foo.html'``.
-
-Esta vista también acepta los siguientes argumentos comunes (Véase la Tabla D-1):
-
-* ``context_processors``
-* ``extra_context``
-* ``mimetype``
-* ``template_loader``
-* ``template_name``
-* ``template_object_name``
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Si no se ha especificado ningún valor en ``template_name`` la vista usará como plantilla
-``<app_label>/<model_name>_detail.html``.
-
-Contexto de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``object``: El object. El nombre de esta variable depende del parámetro
-  ``template_object_name``, que es ``object`` por defecto. Si ``template_object_name``
-  fuera ``foo``, el nombre de esta variable sería ``foo``.
-
-Vistas genericas para Crear/Modificar/Borrar
-============================================
-
-El módulo ``Django.views.generic.create_update`` contiene una serie de funciones
-para crear, modificar y borrar objetos.
-
-.. admonition:: Nota:
- 
-    Estas vistas pueden cambiar ligeramente en la nueva revisión
-    de la arquitectura de formularios de Django (que está en fase
-    de desarrollo con el nombre ``django.newforms``).
-
-Todas estas vistas presenta formularios si se acceden con ``GET`` y
-realizan la operación solicitada (crear/modificar/borrar) si se acceden
-con ``POST``.
-
-Estas vistas tienen un concepto muy simple de la seguridad. Aunque
-aceptan un argumento llamado ``login_required``, que restringe el
-acceso sólo a usuarios identificados, no hacen nada más. Por ejemplo,
-no comprueban que el usuario que está modificando un objeto sea
-el  mismo usuario que lo creo, ni validarán ningún tipo de
-permisos.
-
-En cualquier caso, la mayor parte de las veces se puede conseguir esta
-funcionalidad simplemente escribiendo un pequeño recubrimiento alrededor de
-la vista genérica. Para más información sobre esta técnica, véase el
-:doc:`Capítulo 9<chapter09>`.
-
-Vista de creación de objetos
-----------------------------
-
-*Vista a importar*: ``django.views.generic.create_update.create_object``
-
-Esta vista presenta un formulario que permite la creación de un objeto. Cuando
-se envían los datos del formulario, la vista se vuelve a mostrar si se produce
-algún error de validación (incluyendo, por supuesto, los mensajes pertinentes) o, en
-caso de que no se produzca ningún error de validación, guarda el objeto en la
-base de datos.
-
-Ejemplo
-~~~~~~~
-
-Si quisiéramos permitir al usuario que creara nuevos libros en la
-base de datos, podríamos hacer algo como esto::
-
-    from mysite.books.models import Book
-    from django.conf.urls.defaults import *
-    from django.views.generic import create_update
-
-    book_info = {'model' : Book}
-
-    urlpatterns = patterns('',
-        (r'^books/create/$', create_update.create_object, book_info),
-    )
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* ``model``: El modelo Django del objeto a crear.
-
-.. admonition:: Nota:
-
-    Obsérvese que esta vista espera el *modelo* del objeto a crear, y no
-    un ``QuerySet`` como el resto de las vistas anteriores que se han visto
-    previamente.
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-* ``post_save_redirect``: Una URL, a la cual la vista redirigirá después de haber
-  guardado el objeto. Si no se especifica, se tomará de ``object.get_absolute_url()``
-
-  ``post_save_redirect``: puede contener cadenas de formato para diccionarios, cuyos
-  valores se interpolarán usando los nombres de los atributos del objeto. Por ejemplo, se
-  podría usar: ``post_save_redirect="/polls/%(slug)s/"``.
-
-* ``login_required``: Un valor booleano que obliga a que la operación la realice
-  un usuario identificado, ya sea para ver el formulario o para realizar la
-  operación de creación del objeto. Utiliza el subsistema de autentificación
-  y seguridad de Django. Por defecto, su valor es ``False``.
-
-  En caso de que se defina como ``True``, si un usuario no identificado intentase
-  acceder a esta página o guardar los datos, Django le redirigiría a
-  ``/accounts/login/``
-
-Esta vista también acepta los siguientes argumentos comunes (Véase la Tabla D-1):
-
-* ``context_processors``
-* ``extra_context``
-* ``template_loader``
-* ``template_name``
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Si no se ha especificado ningún valor en ``template_name`` la vista usará como plantilla
-``<app_label>/<model_name>_form.html``.
-
-Contexto de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``form``: Una instancia de la clase ``FormWrapper``, que representa
-  el formulario a utilizar. Esto te permite referirte de una forma
-  sencilla a los campos del formulario desde la plantilla. Por
-  ejemplo, si el modelo consta de dos atributos, ``name`` y ``address``::
-
-          <form action="" method="post">
-            <p><label for="id_name">Name:</label> {{ form.name }}</p>
-            <p><label for="id_address">Address:</label> {{ form.address }}</p>
-          </form>
-
-Hay que hacer notar que ``form`` es un  FormWrapper definido en *oldforms*, y
-que no está contemplado en este libro. Véase http://www.djangoproject.com/documentation/0.96/forms/
-par más información.
-
-Vista de modificación de objetos
---------------------------------
-
-*Vista a importar*: ``django.views.generic.create_update.update_object``
-
-Esta vista es prácticamente igual al anterior, siendo la única diferencia
-que esta permite la modificación de los atributos del objeto, en vez de su creación.
-
-Ejemplo
-~~~~~~~
-
-Siguiendo con el ejemplo, podemos proporcionar al usuario una interfaz de
-modificación de los datos de un libro con el siguiente código en el
-URLconf:
-
-.. code-block:: python
-
-    from mysite.books.models import Book
-    from django.conf.urls.defaults import *
-    from django.views.generic. import create_update
-
-    book_info = {'model' : Book}
-
-    urlpatterns = patterns('',
-        (r'^books/create/$', create_update.create_object, book_info),
-        **(**
-            **r'^books/edit/(?P<object_id>\d+)/$',**
-            **create_update.update_object,**
-            **book_info**
-        **),**
-    )
-
-Argumentos obligatorios
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* ``model``: El modelo Django a editar. Hay que prestar atención a que es
-  el *modelo* en sí, y no un objeto tipo ``QuerySet``.
-
-Y, o bien un:
-
-* ``object_id``: El valor de la clave primaria del objeto a modificar.
-
-o bien un:
-
-* ``slug``: El *slug* del objeto a modificar. Si se pasa este argumento, es
-  obligatorio también el argumento ``slug_field``.
-
-Argumentos opcionales
-~~~~~~~~~~~~~~~~~~~~~
-
-* ``slug_field``: El nombre del campo en el que se almacena el
-  valor del *slug* del sujeto. Es obligado usar este argumento
-  si se ha indicado el argumento ``slug``, pero no debe
-  especificarse si hemos optado por identificar el objeto
-  mediante su calve primaria, usando el argumento ``object_id``.
-
-Esta vista acepta los mismos argumentos opcionales que la vista
-de creación y, además, el argumento común ``template_object_name``, explicado
-en la tabla D-1.
-
-Nombre de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~
-
-Esta vista utiliza el mismo nombre de plantilla por defecto que la
-vista de creación (``<app_label>/<model_name>_form.html``).
-
-Contexto de la plantilla
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Además de los valores que se puedan haber definido en ``extra_context``, el
-contexto de la plantilla tendrá los siguientes valores:
-
-* ``form``: Una instancia de ``FormWrapper`` que representa el formulario
-  de edición del objeto. Véase la sección "`Vista de creación de objetos`_"
-  para obtener más información de esta variable.
-
-* ``object``: El objeto a editar (El nombre de esta variable puede ser
-  diferente si se ha especificado el argumento ``template_object_name``).
-
-Vista de borrado de objetos
+La utilidad django-admin.py
 ---------------------------
 
-*Vista a importar*: ``django.views.generic.create_update.delete_object``
+Cuando usas ``django-admin.py`` (ver Apéndice F), puedes ya sea fijar el valor
+de la variable de entorno una vez o especificar explícitamente el módulo de
+configuración cada vez que ejecutes la utilidad.
 
-Esta vista es muy similar a la dos anteriores: crear y modificar objetos. El
-propósito de esta es, sin embargo, permitir el borrado de objetos.
+Este es un ejemplo usando el shell Bash de Unix::
 
-Si la vista es alimentada mediante ``GET``, se mostrará una pantalla de
-confirmación (del tipo "¿Realmente quieres borrar este objeto?"). Si
-la vista se alimenta con ``POST``, el objeto será borrado sin
-conformación.
+    export DJANGO_SETTINGS_MODULE=mysite.settings
+    django-admin.py runserver
 
-Los argumentos son los mismos que los de la vista de modificación, así
-como las variables de contexto. El nombre de la plantilla por defecto
-para esta vista es ``<app_label>/<model_name>_confirm_delete.html``.
+Este es otro ejemplo, esta vez usando el shell de Windows::
 
+    set DJANGO_SETTINGS_MODULE=mysite.settings
+    django-admin.py runserver
+
+Usa el argumento de línea de comandos ``--settings`` para especificar el módulo
+de configuración en forma manual::
+
+    django-admin.py runserver --settings=mysite.settings
+
+La utilidad ``manage.py`` creada por ``startproject`` como parte del esqueleto
+del proyecto asigna un valor a ``DJANGO_SETTINGS_MODULE`` en forma automática;
+revisa el Apéndice G si deseas conocer más sobre ``manage.py``.
+
+En el servidor (mod_wsgi)
+---------------------------
+
+En tu entorno del servidor activo, necesitarás indicarle a ``WSGI application``
+qué archivo de configuración debe usar. Haz eso con ``os.environ``::
+
+    import os
+
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'misitio.settings'
+
+Usando variables de configuración sin fijar DJANGO_SETTINGS_MODULE
+==================================================================
+
+Es algunos casos, querrás saltearte la variable de entorno
+``DJANGO_SETTINGS_MODULE``. Por ejemplo, si estás usando el sistema de
+plantillas en forma aislada, muy probablemente no desearás tener que preparar
+una variable de entorno que apunte a un módulo de configuración.
+
+En esos casos, puedes fijar los valores de las variables de configuración de
+Django manualmente. Haz esto llamando a ``django.conf.settings.configure()``.
+Este es un ejemplo::
+
+    from django.conf import settings
+
+    settings.configure(DEBUG=True, TEMPLATE_DEBUG=True,
+        TEMPLATE_DIRS=('/home/web-apps/myapp', '/home/web-apps/base'))
+
+Pásale a ``configure()`` tantos argumentos de palabra clave como desees, con
+cada argumento representando una variable de configuración y su valor. Cada
+nombre de argumento debe estar escrito totalmente en mayúsculas, con el mismo
+nombre que la variable de configuración que ya se describieron. Si una
+variable de configuración no es pasada a ``configure()`` y es necesario luego,
+Django usará el valor por omisión respectivo.
+
+El configurar Django de esta manera es en general necesario -- y, en efecto,
+recomendado,  cuando usas una parte del framework dentro de una aplicación más
+grande.
+
+En consecuencia, cuando es configurado vía ``settings.configured()``, Django no
+hará modificación alguna a las variables de entorno del proceso (revisa la
+explicación acerca de ``TIME_ZONE`` más adelante en este apéndice para conocer
+por qué habría de ocurrir esto). Asumimos que en esos casos ya tienes completo
+control de tu entorno.
+
+Variables de configuración por omisión personalizados
+-----------------------------------------------------
+
+Si te gustaría que los valores por omisión provinieran desde otra ubicación
+diferente a ``django.conf.global_settings``, puedes pasarle un módulo o clase
+que provea las variables de configuración por omisión como el argumento
+``default_settings`` (o como el primer argumento posicional) en la llamada a
+``configure()``.
+
+En este ejemplo, las variables de configuración por omisión se toman desde
+``myapp-defaults``, y se fija el valor de ``DEBUG`` en ``True``,
+independientemente de su valor en ``myapp_defaults``::
+
+    from django.conf import settings
+    from myapp import myapp_defaults
+
+    settings.configure(default_settings=myapp_defaults, DEBUG=True)
+
+El siguiente ejemplo, que usa ``myapp_defaults`` como un argumento posicional,
+es equivalente::
+
+    settings.configure(myapp_defaults, DEBUG = True)
+
+Normalmente, no necesitarás sobrescribir los valores por omisión de esta
+manera. Los valores por omisión provistos por Django son suficientemente
+sensatos como para que puedas usarlos. Ten en cuenta que si pasas un nuevo valor
+por omisión, este *reemplaza* completamente los valores de Django, así que debes
+especificar un valor para cada variable de configuración posible que pudiera ser
+usado en el código que estás importando. Examina
+``django.conf.settings.global_settings`` para ver la lista completa.
+
+Es necesario que uses configure() o DJANGO_SETTINGS_MODULE
+----------------------------------------------------------
+
+Si no estás fijando la variable de entorno ``DJANGO_SETTINGS_MODULE``, debes
+llamar a ``configure()`` en algún punto antes de usar cualquier código que lea
+las variables de configuración.
+
+Si no fijas ``DJANGO_SETTINGS_MODULE`` y no llamas a ``configure()``, Django
+lanzará una excepción ``EnvironmentError`` la primera vez que se accede a una
+variable de configuración.
+
+Si fijas el valor de ``DJANGO_SETTINGS_MODULE``, luego accedes a los valores de
+las variables de configuración de alguna manera, y *entonces* llamas a
+``configure()``, Django lanzará un ``EnvironmentError`` indicando que la
+configuración ya ha sido preparada.
+
+También es un error el llamar a ``configure()`` más de una vez, o llamar a
+``configure`` luego de que ya se ha accedido a alguna variable de configuración.
+
+En resumen: Usa exactamente una vez ya sea ``configure()`` o
+``DJANGO_SETTINGS_MODULE``. No ambos, y no ninguno.
+
+Variables de configuración disponibles
+======================================
+
+Las siguientes secciones consisten de una lista completa de todas las variables
+de configuración en orden alfabético, y sus valores por omisión.
+
+.. warning::
+
+    Ten cuidado al sobrescribir alguna configuración, especialmente cuando
+    el valor predeterminado no está vacío, es un diccionario o una tupla, tal 
+    como :setting:`MIDDLEWARE_CLASSES` y :setting:`TEMPLATE_CONTEXT_PROCESSORS`.
+    Asegúrate que los componentes requeridos estén disponibles para usar esta
+    característica de  Django.
+
+ABSOLUTE_URL_OVERRIDES
+----------------------
+
+.. setting:: ABSOLUTE_URL_OVERRIDES
+
+*Valor por omisión*: ``{}`` (Diccionario vacío)
+
+Un diccionario enlazando cadenas ``app_label.model_name`` a funciones que
+toman un objeto modelo y retornan su URL. Esta es una forma de sobrescribir
+métodos ``get_absolute_url()`` en cada instalación. Un ejemplo::
+
+    ABSOLUTE_URL_OVERRIDES = {
+        'blogs.weblog': lambda o: "/blogs/%s/" % o.slug,
+        'news.story': lambda o: "/stories/%s/%s/" % (o.pub_year, o.slug),
+    }
+
+Notar que el nombre del modelo usado en esta variable de configuración debe
+estar escrito totalmente en mayúsculas, con independencia de la combinación de
+mayúsculas y minúsculas del nombre real de la clase del modelo.
+
+``ABSOLUTE_URL_OVERRIDES`` no funciona en modelos que no tienen declarado un
+metodo ``get_absolute_url()``.
+
+ADMINS
+------
+
+*Valor por omisión*: ``()`` (Tupla vacía)
+
+Una tupla que enumera las personas que recibirán notificaciones de errores en
+el código. Cuando ``DEBUG=False`` y una vista laza una excepción, Django enviará
+a esta gente un e-mail con la información completa de la información. Cada
+miembro de la tupla debe ser una tupla de (Nombre completo, dirección de e-mail),
+por ejemplo::
+
+    (('John', 'john@example.com'), ('Mary', 'mary@example.com'))
+
+Notar que Django el enviará e-mail a *todas* estas personas cada vez que ocurra
+un error.
+
+ALLOWED_HOSTS
+-------------
+
+*Valor por omisión*: ``[]`` (Lista vacía)
+
+Una lista de cadenas que representa el nombre del  host/dominio que usa el
+sitio de Django. Se trata de una medida de seguridad, que impide que un
+atacante puede envenenar la cache y resetear contraseñas enviando emails
+con links a sitios maliciosos, enviando peticiones HTTP con cabeceras falsas
+``Host``, lo cual es posible incluso bajo muchos configuraciones 
+aparentemente-seguras del servidor web.
+
+ALLOWED_INCLUDE_ROOTS
+---------------------
+
+*Valor por omisión*: ``()`` (Tupla vacía)
+
+Una tupla de cadenas que representan prefijos permitidos para la etiqueta de
+plantillas ``{% ssi %}``. Se trata de una medida de seguridad, que impide que
+los autores de plantillas puedan acceder a archivos a los que no deberían
+acceder.
+
+Por ejemplo, si ``ALLOWED_INCLUDE_ROOTS`` es ``('/home/html', '/var/www')``
+entonces ``{% ssi /home/html/foo.txt %}`` funcionaría pero ``{% ssi /etc/passwd %}``
+no.
+
+APPEND_SLASH
+------------
+
+*Valor por omisión*: ``True``
+
+Esta variable de configuración indica si debe anexarse barras al final de las
+URLs. Se usa solamente si está instalado el ``CommonMiddleware`` (ver  
+:doc:`capítulo 17<chapter17>`). 
+
+CACHES
+------
+
+*Valor por omisión*:: 
+
+    CACHES{
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+
+Un diccionario que contiene la configuración para todas las caches
+que se usaran con Django. Es un diccionario jerarquizado cuyos 
+contenidos asocian en forma de alias un diccionario que contiene
+las opciones para usar la cache de forma individual.
+
+La configuración de :setting:`CACHES` debe configurar el valor 
+predeterminado ``default`` cache; y cualquier numero adicional de
+caches debe ser especificado. Si estas usando algún tipo de 
+``backend`` u otra cache en memoria o necesitas definir múltiples
+caches, necesitas definir otras opciones. Las siguientes opciones
+de cache están disponibles:
+
+BACKEND
+~~~~~~~
+
+*Valor por omisión*: ``''`` (Una cadena vacía)
+
+El  ``backend`` para usar como cache. Los ``backends`` incorporados
+en la cache son:
+
+* ``'django.core.cache.backends.db.DatabaseCache'``
+* ``'django.core.cache.backends.dummy.DummyCache'``
+* ``'django.core.cache.backends.filebased.FileBasedCache'``
+* ``'django.core.cache.backends.locmem.LocMemCache'``
+* ``'django.core.cache.backends.memcached.MemcachedCache'``
+* ``'django.core.cache.backends.memcached.PyLibMCCache'``
+
+Puedes usar algún otro tipo de almacenamiento para la cache o
+``backend`` configurando :setting:`BACKEND <CACHES-BACKEND>` con
+la ruta completa a la clase  ``backend`` que estés usando. 
+Por ejemplo ``mipaquete.backends.whatever.WhateverCache``
+
+KEY_FUNCTION
+~~~~~~~~~~~~
+
+Una cadena que contiene la ruta a la función (o cualquier llamable)
+que define la forma en que se compone el prefijo, ``version`` y 
+``key`` en la clave de la cache final. El valor predeterminado
+es equivalente a la función::
+
+    def make_key(key, key_prefix, version):
+        return ':'.join([key_prefix, str(version), key])
+
+Puedes usar cualquier función clave que quieras, siempre que
+tenga los mismo argumentos.
+
+KEY_PREFIX
+~~~~~~~~~~
+
+*Valor por omisión*: ``''`` (Cadena Vacía)
+
+Una cadena que estará automáticamente incluida( agregada por omisión) 
+en todas la claves de la cache usadas por el servidor.
+
+LOCATION
+~~~~~~~~
+
+*Valor por omisión*: ``''`` (Cadena Vacía)
+
+La localización de la cache a utilizar. Ésta puede ser el directorio
+para usar un archivo como sistema de cache, un host o  un puerto para
+el servidor de memcache, o simplemente un nombre para identificar la 
+memoria local que se esté usando, por ejemplo::
+
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+            'LOCATION': '/var/tmp/django_cache',
+        }
+    }
+
+OPTIONS
+~~~~~~~
+
+*Valor por omisión*:  None
+
+Parámetros extra para pasar a la cache.  Los parámetros disponibles
+varían dependiendo del tipo de ``backend`` usado para la cache.
+
+TIMEOUT
+~~~~~~~
+
+*Valor por omisión*:  300
+
+El número de segundos antes de que una entrada en la cache expire.
+Si el valor de la configuración es ``None``, la entrada en la cache no
+expira.
+
+VERSION
+~~~~~~~
+
+*Valor por omisión*: ``1``
+
+El valor predeterminado para el numero de versión, generado por el servidor.
+
+CACHE_MIDDLEWARE_ALIAS
+----------------------
+
+*Valor por omisión*:  ``default``
+
+La conexión a la cache a usar por el middleware de cache.
+
+CACHE_MIDDLEWARE_KEY_PREFIX
+---------------------------
+
+*Valor por omisión*: ``''`` (Cadena vacía)
+
+El prefijo de las claves de cache que debe usar el middleware de cache (ver
+:doc:`capítulo 17<chapter17>`).
+
+
+CACHE_MIDDLEWARE_SECONDS
+------------------------
+
+*Valor por omisión*: ``600``
+
+El valor predeterminado para el numero de segundos que se mantendrá en cache
+una página, cuando se usen el middleware de cacheo o el decorador ``cache_page()``.
+
+CSRF_COOKIE_AGE
+---------------
+
+*Valor por omisión*: ``31449600`` (1 año, en segundos)
+
+La edad de las cookies CSRF, en segundos.
+
+La razón para configurar el tiempo de vida y expiración de las cookies, es para
+evitar problemas en el caso de que se cierre el navegador de un usuario o una
+pagina de marcadores y se cargue la pagina desde la cache del navegador. Sin 
+cookies persistentes, los formularios para subir datos fallaran.    
+
+Algunos navegadores (especialmente Internet Explorer) pueden rechazar el
+uso de cookies persistentes o pueden tener índices de cookies corrompidos
+en el disco, por consiguiente causan que la comprobaciones de protección CSRF
+falle (a veces intermitentemente). Cambia esta configuración  a ``None`` para
+usar cookies basadas en sesión CSRF, que guardan en la memoria las cookies, 
+en vez de usar el almacenamiento persistente.
+
+CSRF_COOKIE_DOMAIN
+------------------
+
+*Valor por omisión*: ``None``
+
+El dominio para usar cuando se usa la configuración para cookie CSRF. Esto
+puede ser útil para fácilmente permitir peticiones de  dominios cruzados
+para excluirlas normalmente de la  protección de falsificación de petición 
+de sitio. Esta puede ser una cadena tal como ``".example.com"``, para permitir
+que una petición POST de un formulario en un subdominio sea validada por una
+vista que es servida por otro subdominio.
+
+Nota que la presencia de esta configuración no implica que la protección
+Django CSRF sea segura de ataques en subdominios cruzados de forma predeterminada. 
+
+CSRF_COOKIE_HTTPONLY
+--------------------
+
+*Valor por omisión*:  ``False``
+
+Usado solo si utilizas la bandera ``HttpOnly`` en la cookie de CSRF. Si se fija en 
+``True``, Java Script del lado-cliente no podrá acceder a las cookie CSRF.
+
+Esto puede ayudar a prevenir Java Script  malicioso que pueda sobrepasar la
+protección CSRF. Si permites y necesitas enviar valores al CSRF con peticiones
+Ajax, Java Script  necesitara empujar  el valor de un token CSRF oculto  en
+los formularios de entrada en la página, en lugar de las cookie.
+
+CSRF_COOKIE_NAME
+----------------
+
+*Valor por omisión*: ``'csrftoken'``
+
+El nombre de la cookie para usar el token CSRF de autentificación. Este puede ser
+el que quieras.
+
+CSRF_COOKIE_PATH
+----------------
+
+*Valor por omisión*: ``'/'``
+
+La ruta establecida en la cookie CSRF.  Este debería corresponder a la  URL de la
+ruta de instalación Django o puede ser una ruta padre de esa ruta.
+
+Esto es útil si tienes múltiples instancias de Django ejecutándose bajo el mismo
+nombre de dominio o ```hostname``. Puedes usara diferentes rutas para las cookies
+y cada caso considerará solamente su propia cookies CSRF.
+
+CSRF_COOKIE_SECURE
+------------------
+
+*Valor por omisión*: ``False``
+
+Se asegura que la cookie sea marcada como segura.  Si está establecido en ``True``, 
+La cookie será marcada como "segura," lo cual quiere decir que los navegadores 
+pueden asegurar que la cookie es sólo enviada bajo  una conexión HTTPS.
+
+CSRF_FAILURE_VIEW
+-----------------
+
+*Valor por omisión*: ``'django.views.csrf.csrf_failure'``
+
+La ruta a la función vista, para usar cuando una petición entrante sea
+rechazada por la protección CSRF. La función debe tener esta firma::
+
+    def csrf_failure(request, reason="")
+
+donde ``reason`` es un mensaje corto (previsto para los desarrolladores,
+no para los usuarios finales) indica la razón  por la que la petición
+fue rechazada.
+
+DATABASES
+---------
+
+*Valor por omisión*:  (Un diccionario vacio)
+
+Un diccionario que contiene las configuraciones para todas las bases
+de datos usadas con Django. Es un diccionario jerarquizado cuyo 
+contenido mapea alias de la base de datos a un diccionario, conteniendo
+las opciones para una base de datos individual.
+
+La configuración :setting:`DATABASES` debe permitir configurar una
+base de datos por ``default``  y cualquier numero de bases de datos
+adicionales que puedan especificarse.
+
+La configuración más simple posible es para una simple base de datos
+usando SQLite. Esta se puede configurar de la siguiente forma::
+
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': 'datos.db',
+        }
+    }
+
+Cuando se conecta a otras bases de datos, tal como MySQL, Oracle o 
+PostgreSQL es necesario agregar los parámetros de conexión que requiera. 
+
+Por ejemplo para configurar PostgreSQL::    
+
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': 'datos.db',
+            'USER': 'nombreusuario',
+            'PASSWORD': 'contraseña',
+            'HOST': '127.0.0.1',
+            'PORT': '5432',
+        }
+    }
+
+Las siguientes opciones internas disponibles pueden ser requeridas
+para configurar conexiones más complejas.
+
+ATOMIC_REQUESTS
+~~~~~~~~~~~~~~~
+
+*Valor por omisión*: ``False``
+
+Fija este valor a  ``True`` para envolver cada petición HTTP request en
+una sola transacción de la base de datos.
+
+AUTOCOMMIT
+~~~~~~~~~~
+
+*Valor por omisión*: ``True``
+
+Fija este valor a ``False`` si quieres desactivar el manejador de transacciones
+de Django e implementar el tuyo.
+
+ENGINE
+~~~~~~
+
+*Valor por omisión*: ``''`` (cadena vacía)
+
+Esta variable de configuración indica qué back-end de base de datos debe
+usarse,  los ``backends`` incorporados son:
+
+* ``'django.db.backends.postgresql_psycopg2'``
+* ``'django.db.backends.mysql'``
+* ``'django.db.backends.sqlite3'``
+* ``'django.db.backends.oracle'``
+
+Puedes usar una base de datos como backend que no esté listada en Django
+configurando ``ENGINE`` con la ruta completa a tu backend (por ejemplo 
+``mipaquete.backends.whatever``).
+
+HOST
+~~~~
+
+*Valor por omisión*: ``''`` (cadena vacía)
+
+Esta variable de configuración indica el ``dominio`` debe usarse cuando se
+establezca una conexión a la base de datos. Una cadena vacía significa
+``localhost``. No se usa con SQLite.
+
+Si este valor comienza con una barra (``/``) y estás usando MySQL, MySQL se
+conectará al socket vía un socket Unix::
+
+    "HOST": '/var/run/mysql'
+
+Si estás usando MySQL  este valor *no* comienza con una barra, entonces se asume
+que el mismo es el nombre del equipo.
+
+NAME
+~~~~
+
+*Valor por omisión*: ``''`` (cadena vacía)
+
+El nombre de la base de datos a usarse. Para SQLite, es la ruta completa al
+archivo de la base de datos.
+
+CONN_MAX_AGE
+~~~~~~~~~~~~
+
+*Valor por omisión*: ``0``
+
+El tiempo de vida de la conexión en segundos. Usa ``0`` para cerrar la conexión
+a la base de datos al final de cada petición -- el comportamiento histórico de 
+Django y ``None``  para  conexiones  persistentes ilimitadas.
+
+OPTIONS
+~~~~~~~
+
+*Valor por omisión*: ``{}`` (Diccionario vacío)
+
+Parámetros extra a usarse cuando se establece la conexión a la base de datos.
+Los parámetros disponibles varían dependiendo de la base de datos.
+
+PASSWORD
+~~~~~~~~
+
+*Valor por omisión*: ``''`` (cadena vacía)
+
+Esta variable de configuración es la contraseña a usarse cuando se establece una
+conexión a la base de datos. No se usa con SQLite.
+
+PORT
+~~~~
+
+*Valor por omisión*: ``''`` (Cadena vacía)
+
+El puerto a usarse cuando se establece una conexión a la base de datos. Una
+cadena vacía significa el puerto por omisión. No se usa con SQLite.
+
+USER
+~~~~
+
+*Valor por omisión*: ``''`` (Cadena vacía)
+
+Esta variable de configuración es el nombre de usuario a usarse cuando se
+establece una conexión a la base de datos. No se usa con SQLite.
+
+TEST
+~~~~
+
+*Valor por omisión*: ``{}``
+
+Un diccionario de configuraciones para pruebas o ``test`` en la base de datos.
+
+.. faltan todas las opciones de test
+
+DATABASE_ROUTERS
+----------------
+
+*Valor por omisión*: ``[]`` (Lista vacía)
+
+La lista de routers que pueden usarse para determinar cual base de datos
+es usada para optimizar las consultas a la base de datos.
+
+DATE_FORMAT
+-----------
+
+*Valor por omisión*: ``'N j, Y'`` (por ej. ``Feb. 4, 2003``)
+
+El formato a usar por omisión para los campos de fecha en las páginas lista de
+cambios en el sitio de administración de Django -- y, posiblemente, por otras
+partes del sistema. Acepta el mismo formato que la etiqueta ``now``.
+
+Ver también ``DATETIME_FORMAT``, ``TIME_FORMAT``, ``YEAR_MONTH_FORMAT`` y
+``MONTH_DAY_FORMAT``.
+
+DATETIME_FORMAT
+---------------
+
+*Valor por omisión*: ``'N j, Y, P'`` (por ej. ``Feb. 4, 2003, 4 p.m.``)
+
+El formato a usar por omisión para los campos de fecha-hora en las páginas lista
+de cambios en el sitio de administración de Django -- y, posiblemente, por otras
+partes del sistema. Acepta el mismo formato que la etiqueta ``now`` ver Apéndice
+F, Tabla F-2).
+
+Ver también ``DATE_FORMAT``, ``DATETIME_FORMAT``, ``TIME_FORMAT``,
+``YEAR_MONTH_FORMAT`` y ``MONTH_DAY_FORMAT``.
+
+DATE_INPUT_FORMATS
+------------------
+
+*Valor por omisión*::
+
+    (
+        '%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y', # '2006-10-25', '10/25/2006', '10/25/06'
+        '%b %d %Y', '%b %d, %Y',            # 'Oct 25 2006', 'Oct 25, 2006'
+        '%d %b %Y', '%d %b, %Y',            # '25 Oct 2006', '25 Oct, 2006'
+        '%B %d %Y', '%B %d, %Y',            # 'Octubre 25 2006', 'Octubre 25, 2006'
+        '%d %B %Y', '%d %B, %Y',            # '25 Octubre 2006', '25 Octubre, 2006'
+    )
+
+Una tupla de formatos que serán aceptados al introducir datos en un campo ``date``.     
+
+DATETIME_FORMAT
+---------------
+
+*Valor por omisión*: ``'N j, Y, P'`` (e.g. ``Feb. 4, 2003, 4 p.m.``)
+
+El formato predeterminado para mostrar campos tipo fecha o ``datetime`` en 
+cualquier parte del sistema. Nota que si la configuración local ``USE_L10N``
+es ```True`` esta tendrá mayor precedencia.
+
+DATETIME_INPUT_FORMATS
+----------------------
+
+*Valor por omisión*::
+
+    (
+        '%Y-%m-%d %H:%M:%S',     # '2006-10-25 14:30:59'
+        '%Y-%m-%d %H:%M:%S.%f',  # '2006-10-25 14:30:59.000200'
+        '%Y-%m-%d %H:%M',        # '2006-10-25 14:30'
+        '%Y-%m-%d',              # '2006-10-25'
+        '%m/%d/%Y %H:%M:%S',     # '10/25/2006 14:30:59'
+        '%m/%d/%Y %H:%M:%S.%f',  # '10/25/2006 14:30:59.000200'
+        '%m/%d/%Y %H:%M',        # '10/25/2006 14:30'
+        '%m/%d/%Y',              # '10/25/2006'
+        '%m/%d/%y %H:%M:%S',     # '10/25/06 14:30:59'
+        '%m/%d/%y %H:%M:%S.%f',  # '10/25/06 14:30:59.000200'
+        '%m/%d/%y %H:%M',        # '10/25/06 14:30'
+        '%m/%d/%y',              # '10/25/06'
+    )
+
+Una tupla de formatos que serán aceptados al introducir datos en un campo 
+``datetime``. 
+ 
+DEBUG
+-----
+
+*Valor por omisión*: ``False``
+
+Esta variable de configuración es un Booleano que activa y desactiva el modo de
+depuración.
+
+Si defines variables de configuración personalizadas, ``django/views/debug.py``
+tiene una expresión regular ``HIDDEN_SETTINGS`` que ocultará de la vista
+``DEBUG`` todo aquello que contenga ``SECRET``, ``PASSWORD`` o ``PROFANITIES``.
+Esto permite que usuarios en los que no se confía puedan proveer trazas
+sin ver variables de configuración con contenido importante (u ofensivo).
+
+Sin embargo, nota que siempre existirán secciones de la salida de depuración que
+son inapropiadas para el consumo del público. Rutas de archivos, opciones de
+configuración y similares le proveen a potenciales atacantes información extra
+acerca de tu servidor. Nunca instales un sitio con ``DEBUG`` activo.
+
+DEBUG_PROPAGATE_EXCEPTIONS
+--------------------------
+
+*Valor por omisión*: ``False``
+
+Si se establece en ``True`` El manejo normal que Django hace de las
+excepciones de las funciones de vista será suprimido. Esto puede ser
+útil para algunos tipos de pruebas, asegúrate de solo usarlo en desarrollo.
+
+DECIMAL_SEPARATOR
+-----------------
+
+*Valor por omisión*: ``'.'`` (Punto)
+
+El separador de decimales predeterminado, usado cuando se formatean números
+decimales. Nota que si la configuración local ``USE_L10N`` es ```True`` esta
+tendrá mayor precedencia.
+
+DEFAULT_CHARSET
+---------------
+
+*Valor por omisión*: ``'utf-8'``
+
+El conjunto de caracteres a usar por omisión para todos los objetos
+``HttpResponse`` si no se especifica en forma manual un tipo MIME. Se usa en
+conjunto con ``DEFAULT_CONTENT_TYPE`` para construir la cabecera
+``Content-Type``. 
+
+DEFAULT_CONTENT_TYPE
+--------------------
+
+*Valor por omisión*: ``'text/html'``
+
+Tipo de contenido a usar por omisión para todos los objetos ``HttpResponse``,
+si no se especifica manualmente un tipo MIME. Se usa en conjunto con
+``DEFAULT_CHARSET`` para construir la cabecera ``Content-Type``. Ver el
+Apéndice H para conocer más acerca de los objetos ``HttpResponse``.
+
+DEFAULT_EXCEPTION_REPORTER_FILTER
+---------------------------------
+
+*Valor por omisión*: : :class:`django.views.debug.SafeExceptionReporterFilter`
+
+Valor predeterminado para el filtro encargado del manejo de reportes de exepciones
+usado si no se asigna uno.
+
+DEFAULT_FILE_STORAGE
+--------------------
+
+*Valor por omisión*:  :class:`django.core.files.storage.FileSystemStorage`
+
+Clase de almacenamiento de archivos predeterminado para usar por cualquiera
+de las operaciones descritas,  que no especifiquen un sistema en particular 
+de almacenamiento.
+
+DEFAULT_FROM_EMAIL
+------------------
+
+*Valor por omisión*: ``'webmaster@localhost'``
+
+La dirección de correo a usar por omisión para correspondencia automatizada
+enviada por el administrador del sitio.
+
+DEFAULT_INDEX_TABLESPACE
+------------------------
+
+*Valor por omisión*:  ``''`` (Cadena vacía)
+
+Predeterminado ``tablespace`` para usar como índice en campos que no especifiquen
+uno, si la base de datos lo soporta.
+
+DEFAULT_TABLESPACE
+------------------
+
+*Valor por omisión*: ``''`` (Cadena vacía)
+
+Predeterminado ``tablespace`` para usar en modelos que no especifiquen
+uno, si la base de datos lo soporta.
+
+DISALLOWED_USER_AGENTS
+----------------------
+
+*Valor por omisión*: ``()`` (Tupla vacía)
+
+Una lista de objetos expresiones regulares compiladas que representan cadenas
+User-Agent que no tiene permitido visitar ninguna página del sitio, a nivel
+global para el sitio. Usa la misma para bloquear robots y *crawlers* con mal
+comportamiento. Se usa únicamente si se ha instalado ``CommonMiddleware`` (ver
+:doc:`capítulo 17<chapter17>`).
+
+EMAIL_BACKEND
+-------------
+
+*Valor por omisión*:  ``'django.core.mail.backends.smtp.EmailBackend'``
+
+El ``backend`` usado para enviar.  
+
+EMAIL_FILE_PATH
+---------------
+
+*Valor por omisión*: No definido
+
+El directorio usado por el ``backend`` de emails ``file`` para almacenar archivos.
+
+EMAIL_HOST
+----------
+
+*Valor por omisión*: ``'localhost'``
+
+El host a usarse para enviar e-mail. Ver también ``EMAIL_PORT``.
+
+EMAIL_HOST_PASSWORD
+-------------------
+
+*Valor por omisión*: ``''`` (cadena vacía)
+
+La contraseña a usarse para el servidor SMTP definido en ``EMAIL_HOST``. Esta
+variable de configuración se usa en combinación con ``EMAIL_HOST_USER`` cuando
+se está autenticando ante el servidor SMTP. Si alguna de estas variables de
+configuración está vacía, Django no intentará usar autenticación.
+
+Ver también ``EMAIL_HOST_USER``.
+
+EMAIL_HOST_USER
+---------------
+
+*Valor por omisión*: ``''`` (cadena vacía)
+
+El nombre de usuario a usarse para el servidor SMTP definido en ``EMAIL_HOST``.
+Si está vacío, Django no intentará usar autenticación. Ver también
+``EMAIL_HOST_PASSWORD``.
+
+EMAIL_PORT
+----------
+
+*Valor por omisión*: ``25``
+
+El puerto a usarse pata el servidor SMTP definido en ``EMAIL_HOST``.
+
+EMAIL_SUBJECT_PREFIX
+--------------------
+
+*Valor por omisión*: ``'[Django] '``
+
+El prefijo del asunto para mensajes de e-mail enviados con
+``django.core.mail.mail_admins`` o ``django.core.mail.mail_managers``.
+Probablemente querrás incluir un espacio al final.
+
+FILE_CHARSET
+------------
+
+*Valor por omisión*: ``'utf-8'``
+
+La codificación del carácteres usada para decodificar cualquier archivo
+leído del disco. Esto incluye archivos de plantillas y ficheros de datos 
+iniciales SQL.
+
+
+FILE_UPLOAD_HANDLERS
+--------------------
+
+*Valor por omisión*::
+
+    ("django.core.files.uploadhandler.MemoryFileUploadHandler",
+     "django.core.files.uploadhandler.TemporaryFileUploadHandler")
+
+Una tupla de manejadores usados para subir archivos.
+
+FILE_UPLOAD_MAX_MEMORY_SIZE
+---------------------------
+
+*Valor por omisión* ``2621440`` (i.e. 2.5 MB).
+
+El tamaño máximo(en bytes) que se permite subir, antes de usar ``streamed``
+por el  sistema de archivos.
+
+FILE_UPLOAD_DIRECTORY_PERMISSIONS
+---------------------------------
+
+*Valor por omisión*: ``None``
+
+El modo numérico aplicado a directorios creados en el proceso de subir archivos.
+
+FILE_UPLOAD_TEMP_DIR
+--------------------
+
+*Valor por omisión*:  ``None``
+
+El directorio para almacenar datos (en particular  archivos más grandes que
+:setting:`FILE_UPLOAD_MAX_MEMORY_SIZE`) temporalmente cuando se suben archivos.
+Si es ``None``, Django usara el directorio temporal usado por el sistema
+operativo. Por ejemplo, en sistemas estilo-'nix el valor predeterminado es:
+``/tmp``.
+
+FIRST_DAY_OF_WEEK
+-----------------
+
+*Valor por omisión* ``0`` (Domingo)
+
+Numero que representa el primer día de la semana. Especialmente útil cuando
+se muestra un calendario. Este valor únicamente es usado cuando se usa el 
+formato de ``internacionalización`` o cuando no se puede encontrar el actual
+formato local.
+
+Este valor debe ser un entero entre 0 y 6, donde 0 es Domingo, 1 es Lunes y
+así sucesivamente. 
+
+FIXTURE_DIRS
+-------------
+
+*Valor por omisión*: ``()`` (tupla vacía)
+
+Una lista de ubicaciones para los archivos con datos de ``fixtures``, en el
+orden en el que se buscará en las mismas. Notar que esas rutas deben usar
+barras de estilo Unix aún en Windows. 
+
+IGNORABLE_404_ENDS
+------------------
+
+*Valor por omisión*: ``('mail.pl', 'mailform.pl', 'mail.cgi', 'mailform.cgi', 'favicon.ico',
+'.php')``
+
+Ver también ``IGNORABLE_404_STARTS`` y ``Error reporting via e-mail``.
+
+
+IGNORABLE_404_URLS
+------------------
+
+*Valor por omisión*: ``()``
+
+Lista de expresiones regulares compiladas que describen las URL que deben ser
+ignoradas cuando se reportan errores HTTP 404 via  email.
+
+INSTALLED_APPS
+--------------
+
+*Valor por omisión*: ``()`` (tupla vacía)
+
+Una tupla de cadenas que indican todas las aplicaciones que están activas en esta
+instalación de Django. Cada cadena debe ser una ruta completa de Python hacia:
+
+* Una clase para configurar una aplicación, o
+* Un paquete que contiene una aplicación.
+
+INTERNAL_IPS
+------------
+
+*Valor por omisión*: ``()`` (tupla vacía)
+
+Una tupla de direcciones IP, como cadenas, que:
+
+* Pueden ver comentarios de depuración cuando ``DEBUG`` es ``True``.
+* Reciben cabeceras X si está instalado ``XViewMiddleware``.
+
+LANGUAGES
+---------
+
+*Valor por omisión*: Una tupla de todos los idiomas disponibles. Esta lista
+está en continuo crecimiento y cualquier copia que incluyéramos aquí
+inevitablemente quedaría rápidamente desactualizada. Puedes ver la lista actual
+de idiomas traducidos examinando ``django/conf/global_settings.py``. (o consulta
+la documentación `online`_).
+
+.. _online: https://github.com/django/django/blob/master/django/conf/global_settings.py
+
+La lista es una tupla de tuplas de dos elementos en el formato (código de
+idioma, nombre de idioma) -- por ejemplo, ``('ja', 'Japanese')``. Especifica
+qué idiomas están disponibles para la selección de idioma. Ver el 
+:doc:`capítulo 19<chapter19>` para más información acerca de selección de idiomas.
+
+Generalmente, el valor por omisión debería ser suficiente. Solo asigna valor a
+esta variable de configuración si deseas restringir la selección de idiomas a un
+subconjunto de los idiomas provistos con Django.
+
+Si asignas un valor personalizado a ``LANGUAGES``, está permitido marcar los
+idiomas como cadenas de traducción, pero *nunca* debes importar
+``django.utils.translation`` desde el archivo de configuración, porque ese
+módulo a su vez depende de la configuración y esto crearía una importación
+circular.
+
+La solución es usar una función ``gettext()`` "boba". A continuación un archivo
+de configuración ejemplo::
+
+    gettext = lambda s: s
+
+    LANGUAGES = (
+        ('de', gettext('German')),
+        ('en', gettext('English')),
+    )
+
+Con este esquema, ``make-messages.py`` todavía podrá encontrar y marcar esas
+cadenas para traducción, pero la traducción no ocurrirá en tiempo de ejecución
+-- así que tendrás que recordar envolver los idiomas con la ``gettext()`` *real*
+en todo código que use ``LANGUAGES`` en tiempo de ejecución.
+
+MANAGERS
+--------
+
+*Valor por omisión*: ``()`` (tupla vacía)
+
+Esta tupla está en el mismo formato que ``ADMINS`` que especifica quiénes deben
+recibir notificaciones de enlaces rotos cuando ``SEND_BROKEN_LINK_EMAILS`` tiene
+el valor ``True``.
+
+MEDIA_ROOT
+----------
+
+MEDIA_ROOT
+----------
+
+Default: ``''`` (Empty string)
+*Valor por omisión*: ``''`` (cadena vacía)
+La ruta absoluta al directorio del sistema que contiene los archivos subidos
+por los usuarios.
+.. warning::
+
+    Los valores para :setting:`MEDIA_ROOT` y :setting:`STATIC_ROOT` deben de
+    contener valores distintos.
+
+MEDIA_URL
+---------
+
+Default: ``''`` (Empty string)
+
+*Valor por omisión*: ``''`` (cadena vacía)
+
+Esta URL maneja los medios servidos desde ``MEDIA_ROOT`` (por ej.
+``"http://media.lawrence.com"``).
+
+Notar que esta debe tener una barra final si posee un componente de ruta:
+
+* *Correcto*: ``"http://www.example.com/static/"``
+* *Incorrecto*: ``"http://www.example.com/static"``
+
+Para usar ``{{ MEDIA_URL }}`` en las plantillas, es necesario configurar 
+``'django.core.context_processors.media'`` en el 
+:setting:`TEMPLATE_CONTEXT_PROCESSORS`. 
+
+MIDDLEWARE_CLASSES
+------------------
+
+*Valor por omisión*::
+
+    ('django.middleware.common.CommonMiddleware',
+     'django.middleware.csrf.CsrfViewMiddleware')
+
+Una tupla de clases middleware a usarse. Ver el :doc:`capítulo 17<chapter17>`.
+
+MIGRATION_MODULES
+-----------------
+
+*Valor por omisión*::
+
+    {}  # Un diccionario vacio
+
+Un diccionario que especifica los paquetes donde los módulos de migraciónes
+se pueden encontrar, uno por aplicación. El valor predeterminado de esta
+configuración es un diccionario vacio, pero el nombre del paquete predeterminado
+para el modulo de migraciones es ``migrations``.
+
+Ejemplo::
+
+    {'blog': 'blog.db_migrations'}
+
+En este caso, las migraciones relacionado con la aplicación ``blog`` estarán 
+contenidas en el paquete  ``blog.db_migrations``
+
+El comando :djadmin:`makemigrations` automáticamente crea el paquete  si este no
+existe.
+
+MONTH_DAY_FORMAT
+----------------
+
+*Valor por omisión*: ``'F j'``
+
+El formato a usar por omisión para campos de fecha en las páginas de lista de
+cambios en la aplicación de administración de Django -- y, probablemente, en
+otras partes del sistema -- en casos en los que sólo se muestran el mes y el
+día. Acepta el mismo formato que la etiqueta ``now``.
+
+Por ejemplo, cuando en una página de lista de cambios la aplicación de
+administración de Django se filtra por una fecha, la cabecera para un día
+determinado muestra el día y mes.  Diferentes locales tienen diferentes
+formatos. Por ejemplo, el Inglés de EUA tendría "January 1" mientras que Español
+podría tener "1 Enero".
+
+Ver también ``DATE_FORMAT``, ``DATETIME_FORMAT``, ``TIME_FORMAT`` y
+``YEAR_MONTH_FORMAT``.
+
+PREPEND_WWW
+-----------
+
+*Valor por omisión*: ``False``
+
+Esta variable de configuración indica si se debe agregar el prefijo de
+subdominio "www." a URLs que no lo poseen. Se usa únicamente si
+``CommonMiddleware`` está instalado (ver ::doc`capítulo 17<chapter17>`). 
+Ver también ``APPEND_SLASH``.
+
+NUMBER_GROUPING
+----------------
+
+*Valor por omisión*:  ``0``
+
+Numero de dígitos agrupados 
+
+Número de dígitos agrupados juntos en la parte entera de un número.
+
+De uso común para visualizar separadores de mil. Si la configuración es ``0``,
+entonces no se aplicara el agrupamiento a los números. Si la configuración
+es más grande que ``0`` entonces :setting:`THOUSAND_SEPARATOR` se usara para
+separar entre esos grupos.
+
+Nota que si el valor de :setting:`USE_L10N` está fijado en ``True``, el formato
+local tendrá precedencia sobre esta configuración.
+
+ROOT_URLCONF
+------------
+
+*Valor por omisión*: No definido
+
+Una cadena que representa la ruta completa de importación Python hacia tu URLconf
+raíz (por ej. ``"mydjangoapps.urls"``). Ver :doc:`capítulo 3<chapter03>`.
+
+STATIC_ROOT
+-----------
+
+*Valor por omisión* ``None``
+
+La ruta absoluta al directorio donde se recolectaran los archivos estáticos
+para el despliegue, usando el comando :djadmin:`collectstatic`.
+
+Por ejemplo: ``"/var/www/example.com/static/"``
+
+STATIC_URL
+----------
+
+*Valor por omisión*: ``None``
+
+URL usada para referirse a la ubicación de los archivos estáticos en
+:setting:`STATIC_ROOT`.
+
+Por ejemplo: ``"/static/"`` o  ``"http://static.example.com/"``
+
+SECRET_KEY
+----------
+
+*Valor por omisión*: (Generado automáticamente cuando creas un proyecto)
+
+Una clave secreta para esta instalación particular de Django. Es usada para
+proveer una semilla para los algoritmos de hashing. Asigna un valor de una
+cadena con caracteres al azar -- mientras más larga mejor.
+``django-admin startproject`` crea una en forma automática y en la mayoría de
+los casos no será necesario que la modifiques.
+
+SEND_BROKEN_LINK_EMAILS
+-----------------------
+
+*Valor por omisión*: ``False``
+
+Esta variable de configuración indica si se debe enviar un e-mail a los
+``MANAGERS`` cada vez que alguien visita una página impulsada por Django que
+generará un error 404 y que posea una cabecera referir no vacía (en otras
+palabras un enlace roto). Es solamente usado si está instalado
+``CommonMiddleware`` (ver :doc:`capítulo 17<chapter17>`). 
+
+SERIALIZATION_MODULES
+---------------------
+
+*Valor por omisión*: No definida.
+
+Un diccionario de módulos que contiene las definiciones de serialización (previstas
+como strings) Con llave para un identificador de cadena para el tipo de 
+serialización. Por ejemplo, para definir un serializador YAML, usa::
+
+    SERIALIZATION_MODULES = {'yaml': 'path.to.yaml_serializer'}
+
+SERVER_EMAIL
+------------
+
+*Valor por omisión*: ``'root@localhost'``
+
+La dirección de e-mail a usarse como remitente para los mensajes de error, tales
+como los enviados a :setting:`ADMINS` and :setting:`MANAGERS`.
+
+SHORT_DATE_FORMAT
+-----------------
+
+*Valor por omisión*:  ``m/d/Y`` (e.g. ``12/31/2003``)
+
+Un formato disponible que puede usarse para mostrar campos ``date``
+en las plantillas. Nota que si :setting:`USE_L10N` está fijado en ``True``,
+el formato local tendrá mayor precedencia y será aplicado.
+
+SHORT_DATETIME_FORMAT
+---------------------
+
+*Valor por omisión*:  ``m/d/Y P`` (e.g. ``12/31/2003 4 p.m.``)
+
+Un formato disponible que puede usarse para mostrar campos ``datetime``
+en las plantillas. Nota que si :setting:`USE_L10N` está fijado en ``True``,
+el formato local tendrá mayor precedencia y será aplicado.
+
+SIGNING_BACKEND
+---------------
+
+*Valor por omisión*: ``'django.core.signing.TimestampSigner'``
+
+El ``backend`` usado para firma las cookies y otros datos.
+
+SESSION_COOKIE_AGE
+------------------
+
+*Valor por omisión*: ``1209600`` (dos semanas, en segundos)
+
+Esta es la edad de las cookies de sesión, en segundos. Ver :doc:`capítulo 14<chapter14>`.
+
+SESSION_COOKIE_DOMAIN
+---------------------
+
+*Valor por omisión*: ``None``
+
+El dominio a usarse para las cookies de sesión. Asigna como valor una cadena
+tal como ``".lawrence.com"`` para cookies inter-dominio, o usa ``None`` para una
+cookie de dominio estándar. Ver  :doc:`capítulo 14<chapter14>`.
+
+SESSION_COOKIE_NAME
+-------------------
+
+*Valor por omisión*: ``'sessionid'``
+
+El nombre de la cookie a usarse para las sesiones; puede tener el valor que tu
+desees. Ver :doc:`capítulo 14<chapter14>`.
+
+SESSION_COOKIE_SECURE
+---------------------
+
+*Valor por omisión*: ``False``
+
+Esta variable de configuración indica si debe usarse una cookie segura para la
+cookie de sesión. Si tiene un valor ``True``, la cookie será marcada como
+"segura", lo que significa que los navegadores podrían asegurarse que la cookie
+sólo se envíe vía una conexión HTTPS. Ver :doc:`capítulo 14<chapter14>`.
+
+SESSION_EXPIRE_AT_BROWSER_CLOSE
+-------------------------------
+
+*Valor por omisión*: ``False``
+
+Esta variable de configuración indica si las sesiones deben caducar cuando el
+usuario cierre su navegador. Ver :doc:`capítulo 12<chapter12>`.
+
+SESSION_SAVE_EVERY_REQUEST
+--------------------------
+
+*Valor por omisión*: ``False``
+
+Esta variable de configuración indica si la sesión debe ser grabada en cada
+petición. Ver :doc:`capítulo 14<chapter14>`.
+
+SITE_ID
+-------
+
+*Valor por omisión*: No definida.
+
+El identificador, como un entero, del sitio actual en la tabla
+``django_site`` de la base de datos. Es usada de manera que datos de aplicación
+puede conectarse en sitio(s) específico(s) y una única base de datos pueda
+manejar contenido de múltiples sitios. Ver :doc:`capítulo 14<chapter14>`.
+
+TEMPLATE_CONTEXT_PROCESSORS
+---------------------------
+
+*Valor por omisión*::
+
+    ("django.contrib.auth.context_processors.auth",
+    "django.core.context_processors.debug",
+    "django.core.context_processors.i18n",
+    "django.core.context_processors.media",
+    "django.core.context_processors.static",
+    "django.core.context_processors.tz",
+    "django.contrib.messages.context_processors.messages")
+
+Una tupla de llamables que son usados para poblar el contexto en
+``RequestContext``. Esos llamables reciben como argumento un objeto
+petición y retornan un diccionario de ítems a ser fusionados con el contexto.
+
+TEMPLATE_DEBUG
+--------------
+
+*Valor por omisión*: ``False``
+
+Este Booleano controla el estado encendido/apagado del modo de depuración de
+plantillas. Si es ``True`` la página de error vistosa mostrará un reporte
+detallado para cada ``TemplateSyntaxError``. Este reporte contiene los
+fragmentos relevantes de la plantilla, en los cuales se han resaltado las líneas
+relevantes.
+
+Notar que Django solo muestra páginas de error vistosas si ``DEBUG`` es
+``True``, así que es posible que desees activar dicha variable para sacar
+provecho de esta variable.
+
+Ver también ``DEBUG``.
+
+TEMPLATE_DIRS
+-------------
+
+*Valor por omisión*: ``()`` (tupla vacía)
+
+Un lista de ubicaciones de los archivos de código fuente de plantillas, en el
+orden en el que serán examinadas. Notar que esas rutas deben usar barras al
+estilo Unix, aun en Windows. Ver :doc:`capítulo 4<chapter04>` y  
+:doc:`capítulo 10<chapter10>`.
+
+TEMPLATE_LOADERS
+----------------
+
+*Valor por omisión*::
+
+     ('django.template.loaders.filesystem.Loader',
+      'django.template.loaders.app_directories.Loader')
+
+Una tupla de cargadores de plantillas, especificados como cadenas. Cada clase
+``Loader`` sabe como  importar plantillas desde un particular origen. Opcionalmente,
+una tupla puede usarse en lugar de una cadena. El primer ítem en la tupla debe ser
+el modulo  ``Loader`` los ítems subsecuentes se pasan a ``Loader`` durante la 
+inicialización. 
+TEMPLATE_STRING_IF_INVALID
+--------------------------
+
+*Valor por omisión*: ``''`` (cadena vacía)
+
+La salida, como una cadena, que debe usar el sistema de plantillas para
+variables inválidas (por ej. con errores de sintaxis en el nombre). Ver Capítulo
+10.
+
+TEST_RUNNER
+-----------
+
+*Valor por omisión*: ``'django.test.simple.run_tests'``
+
+El nombre del método a usarse para arrancar la batería de pruebas (por *test
+suite*). Es usado por el framework de pruebas de Django, el cual se describe en
+línea en http://www.djangoproject.com/documentation/0.96/testing/.
+
+TIME_FORMAT
+-----------
+
+*Valor por omisión*: ``'P'`` (e.g., ``4 p.m.``)
+
+El formato a usar por omisión para los campos de hora en las páginas
+lista de cambios en el sitio de administración de Django -- y, posiblemente, por
+otras partes del sistema. Acepta el mismo formato que la etiqueta ``now`` ver
+Apéndice F, Tabla F-2).
+
+Ver también ``DATE_FORMAT``, ``DATETIME_FORMAT``, ``TIME_FORMAT``,
+``YEAR_MONTH_FORMAT`` y ``MONTH_DAY_FORMAT``.
+TIME_ZONE
+---------
+
+*Valor por omisión*: ``'America/Chicago'``
+
+Una cadena que representa la zona horaria para esta instalación o ``None``. 
+
+Esta es la zona a la cual Django convertirá todas las fechas/horas -- no
+necesariamente la zona horaria del servidor. Por ejemplo, un servidor podría
+servir múltiples sitios impulsados por Django, cada uno con una configuración de
+zona horaria separada.
+
+Normalmente, Django fija la variable ``os.environ['TZ']`` a la zona horaria que
+especificas en la variable de configuración ``TIME_ZONE``. Por lo tanto, todas
+tus vistas y modelos operarán automáticamente en la zona horaria correcta. Sin
+embargo, si estás usando el método de configuración manual (descrito arriba en
+la sección "`Usando variables de configuración sin fijar DJANGO_SETTINGS_MODULE`_"
+) Django *no* tocará la variable de entorno ``TZ`` y quedará en tus manos
+asegurarte de que tus procesos se ejecuten en el entorno correcto.
+
+.. admonition:: Nota:
+
+    Django no puede usar en forma confiable zonas horarias alternativas en un
+    entorno Windows. Si estás ejecutando Django en Windows debes asignar a esta
+    variable un valor que coincida con la zona horaria del sistema.
+
+USE_ETAGS
+---------
+
+*Valor por omisión*: ``False``
+
+Este Booleano especifica si debe generarse la cabecera ``ETag``. La misma
+permite ahorrar ancho de banda pero disminuye el rendimiento. Se usa solamente
+si se ha instalado ``CommonMiddleware`` (ver :doc:`capítulo 17<chapter17>`).
+
+USE_I18N
+--------
+
+*Valor por omisión*: ``True``
+
+Un Booleano que especifica si debe activarse el sistema de ``internacionalización`` de
+Django (ver :doc:`capítulo 19<chapter19>`). Provee una forma sencilla de desactivar la
+internacionalización, para mejorar el rendimiento. Si se asigna a esta variable
+el valor ``False`` Django realizará algunas optimizaciones de manera que no se
+cargue la maquinaria de internacionalización.
+
+USE_L10N
+--------
+
+*Valor por omisión*: ``False``
+
+Un Booleano que especifica si debe activarse el sistema de ``localización`` de
+Django (ver :doc:`capítulo 19<chapter19>`). Si se fija a ``True`` Django mostrara
+números y fechas usando el formato de la localización actual.
+
+.. admonition:: Nota:
+    
+    El archivo :file:`settings.py` creado por :djadmin:`django-admin
+    startproject <startproject>` incluye por conveniencia ``USE_L10N = True``.
+
+USE_TZ
+------
+
+*Valor por omisión*: ``False``
+
+Un valor booleano  que especifica si se tendrán en cuenta los formatos de fecha y tiempo
+por defecto o no. Django toma en cuenta los formatos de fechas y tiempos internamente
+de otra forma Django usara los valores en  tiempo local.
+
+.. admonition:: Nota:
+
+    El archivo :file:`settings.py` creado por :djadmin:`django-admin
+    startproject <startproject>` incluye por conveniencia ``USE_TZ = True``.
+
+WSGI_APPLICATION
+----------------
+
+*Valor por omisión*:  ``None``
+
+La ruta completa al objeto incorporado ``WSGI application`` que Django  sirve.
+usando (e.g. :djadmin:`runserver`) El comando djadmin:`django-admin
+startproject <startproject>` crea un simple archivo ``wsgi.py`` con un llamable
+llamado ``application`` y apunta a este a la configuración de ``application``. 
+
+Si no se fija, el valor se usara el valor de retorno de 
+``django.core.wsgi.get_wsgi_application()``. En este caso el comportamiento de
+:djadmin:`runserver`  será idéntico al de versiones anteriores de Django.  
+
+YEAR_MONTH_FORMAT
+-----------------
+
+*Valor por omisión*: ``'F Y'``
+
+El formato a usar por omisión para los campos de fecha en las páginas lista de
+cambios en el sitio de administración de Django -- y, posiblemente, por otras
+partes del sistema-  en los casos en los que sólo se muestran el mes y el año.
+Acepta el mismo formato que la etiqueta ``now`` ver Apéndice F).
+
+Por ejemplo, cuando se está filtrando una página lista de cambios de la aplicación
+de administración de Django mediante un detalle de fecha, la cabecera de un mes 
+determinado muestra el mes y el año. Los distintos ``locales`` tienen diferentes 
+formatos. Por ejemplo, el Inglés de EUA usaría "January 2006" mientras que otro 
+``locale`` podría usar "2006/January".

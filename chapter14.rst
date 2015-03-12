@@ -1,1011 +1,1410 @@
-==============================================
-Capítulo 14: Otros sub-frameworks contribuidos
+﻿==============================================
+Capítulo 14: Sesiones, usuario e inscripciones
 ==============================================
 
-Una de las varias fortalezas de Python, es su filosofía de "baterías
-incluidas". Cuando instalas Python, viene con una amplia biblioteca de
-paquetes que puedes comenzar a usar inmediatamente, sin necesidad de
-descargar nada más. Django trata de seguir esta filosofía, e incluye
-su propia biblioteca estándar de agregados útiles para las tareas
-comunes del desarrollo web. Este capítulo cubre dicha colección de
-agregados.
+Tenemos que confesar algo: hasta el momento hemos ignorado un aspecto 
+absolutamente importante del desarrollo web. Hemos hecho la suposición de que 
+el tráfico que visita nuestra web está compuesto por una masa amorfa de 
+usuarios anónimos, que se precipitan contra nuestras cuidadosamente diseñadas 
+páginas.
 
-La biblioteca estándar de Django
+Esto no es verdad, claro. Los navegadores que consultan nuestras páginas 
+tienen a personas reales detrás (la mayor parte del tiempo, al menos). Este es 
+un hecho importantísimo y que no debemos ignorar: Lo mejor de Internet es que 
+**sirve para conectar personas**, no máquinas. Si queremos desarrollar un sitio 
+web realmente competitivo, antes o después tendremos que plantearnos como 
+tratar a las personas que están detrás del navegador.
+
+Por desgracia, no es tan fácil como podría parecer. El protocolo HTTP
+se diseñó específicamente para que fuera un protocolo *sin estado*, es
+decir, que cada petición y respuesta está totalmente aislada de las
+demás. No hay persistencia entre una petición y la siguiente, y ninguno
+de los atributos de la petición (dirección IP, identificador del
+agente, etc...) nos permite discriminar de forma segura y consistente
+las peticiones de una persona de las del resto.
+
+En este capítulo aprenderemos como solucionar esta carencia de estados. 
+Empezaremos al nivel más bajo (*cookies*), e iremos ascendiendo hasta las 
+herramientas de alto nivel que nos permitirán gestionar sesiones, usuarios y 
+altas o inscripciones de los mismos.
+
+Cookies
+=======
+
+Los desarrolladores de navegadores hace tiempo que se dieron cuenta de que esta
+carencia de estados iba a representar un problema para los desarrolladores
+web, y así fue como nacieron las *cookies* (literalmente *galleta*). Una
+cookie es una pequeña cantidad de información que el servidor delega
+en el navegador, de forma que este la almacena. Cada vez que el cliente
+web solicita una página del servidor, se le envía de
+vuelta la cookie.
+
+Veamos con un poco más de detalle el funcionamiento. Cuando abrimos nuestro 
+navegador y escribimos ``google.com``, el navegador envía una solicitud HTTP a 
+Google que empieza más o menos así::
+
+    GET / HTTP/1.1
+    Host: google.com
+    ...
+
+Cuando Google responde, la respuesta contiene algo parecido a esto::
+
+    HTTP/1.1 200 OK
+    Content-Type: text/html
+    Set-Cookie: PREF=ID=5b14f22bdaf1e81c:TM=1167000671:LM=1167000671;
+                expires=Sun, 17-Jan-2038 19:14:07 GMT;
+                path=/; domain=.google.com
+    Server: GWS/2.1
+    ...
+
+Fíjate en la línea que comienza con ``Set-Cookie``. El navegador almacenará
+el valor indicado (``PREF=ID=5b14f22bdaf1e81c:TM=1167000671:LM=1167000671``) y
+se lo volverá a enviar a Google cada vez que vuelva a acceder a alguna de
+sus páginas; de esa forma, la próxima vez que vuelvas a Google, la petición
+que enviará el navegador se parecerá a esta::
+
+    GET / HTTP/1.1
+    Host: google.com
+    Cookie: PREF=ID=5b14f22bdaf1e81c:TM=1167000671:LM=1167000671
+    ...
+
+Google puede saber ahora, gracias al valor de la *Cookie*, que eres la misma
+persona que accedió anteriormente. Este valor puede ser, por ejemplo, una
+clave en una tabla de la base de datos que almacene los datos del usuario. Con 
+esa información, Google puede hacer aparecer tu nombre en la página (de hecho, 
+lo hace).
+
+Cómo definir y leer los valores de las cookies
+----------------------------------------------
+
+A la hora de utilizar las capacidades de persistencia de Django, lo más
+probable es que uses las prestaciones de alto nivel para la gestión de
+sesiones y de usuarios, prestaciones que discutiremos un poco más adelante en 
+este mismo capítulo. No obstante, ahora vamos a hacer una breve parada y veremos
+cómo leer y definir *cookies* a bajo nivel. Esto debería ayudarte a entender 
+cómo funcionan el resto de las herramientas que veremos en el capítulo, y te 
+será de utilidad si alguna vez tienes que trabajar con las cookies directamente.
+
+Obtener los valores de las cookies que ya están definidas es muy fácil. Cada
+objeto de tipo petición, ``request``, contiene un objeto ``COOKIES`` que se
+comporta como un diccionario; puedes usarlo para leer cualquier *cookie* que el
+navegador haya enviado a la vista::
+
+    def mostrar_color(request):
+        if "color_favorito" in request.COOKIES:
+            return HttpResponse("Tu color favorito es %s" % \
+                request.COOKIES["color_favorito"])
+        else:
+            return HttpResponse("No tienes un color favorito.")
+
+Definir los valores de las cookies es sólo un poco más complicado. Debes
+usar el método ``set_cookie()`` en un objeto de tipo ``HttpResponse``. He
+aquí un ejemplo que define la *cookie* ``color_favorito`` utilizando
+el valor que se le pasa como parámetro ``GET``::
+
+    def set_color(request):
+        if "color_favorito" in request.GET:
+
+            # Crea un objeto  HttpResponse...
+            response = HttpResponse("Tu color favorito es ahora %s" % \
+                request.GET["color_favorito"])
+
+            # ... y definimos la cookie en la respuesta
+            response.set_cookie("color_favorito",
+                                request.GET["color_favorito"])
+
+            return response
+
+        else:
+            return HttpResponse("No haz elegido un color favorito.")
+
+Hay una serie de parámetros opcionales que puedes pasar
+a ``response.set_cookie()`` y que te permiten controlar determinadas
+características de la *cookie*, tal y como se muestra en la
+tabla 14-1.
+
+.. table:: Tabla 14-1: Opciones de las Cookies
+
+    ==============  =================  ===================================================
+    Parámetro       Valor por omisión  Descripción
+    ==============  =================  ===================================================
+      ``max_age``       ``None``       El tiempo (en segundos) que la cookie
+                                       debe permanecer activa. Si este
+                                       parámetro es la *cookie*, desaparecerá
+                                       automáticamente cuando se cierre el
+                                       navegador.
+
+
+     ``expires``       ``None``        La fecha y hora en que la cookie debe
+                                       expirar. Debe estar en el formato
+                                       ``"Wdy, DD-Mth-YY HH:MM:SS GMT"``. Si
+                                       se utiliza este parámetro, su valor
+                                       tiene preferencia sobre el definido
+                                       mediante ``max_age``.
+
+        ``path``        ``"/"``        La ruta o *path* para la cual es válida la
+                                       cookie. Los navegadores solo reenviarán la
+                                       cookie a las páginas que estén en dicha
+                                       ruta. Esto impide que se envíe esta cookie
+                                       a otras secciones de la web.
+
+                                       Es especialmente útil si no se tiene el control
+                                       del nivel superior de directorios del
+                                       servidor web.
+
+     ``domain``         ``None``       El dominio para el cual es válida la cookie. Se
+                                       puede usar este parámetro para definir una
+                                       cookie que sea apta para varios dominios. Por
+                                       ejemplo, definiendo ``domain=".example.com"``
+                                       la cookie será enviada a los dominios
+                                       ``www.example.com``, ``www2.example.com`` y
+                                       ``aun.otro.subdominio.example.com``.
+
+                                       Si a este parámetro no se le asigna ningún valor, 
+                                       la cookie solo será enviada al dominio que la
+                                       definió.
+
+        ``secure``      ``False``      Si este valor se define como ``True``, se le indica
+                                       al navegador que sólo retorne esta cookie a las 
+                                       páginas que se accedan de forma segura
+                                       (protocolo HTTPS en vez de   HTTP).
+    ==============  =================  ===================================================
+
+Las cookies tienen doble filo
+-----------------------------
+
+Puede que te hayas dado cuenta de algunos de los problemas potenciales
+que se presentan con esto de las cookies; vamos a ver algunos de los
+más importantes:
+
+* El almacenamiento de los cookies es voluntario; los navegadores
+  no dan ninguna garantía. De hecho, los navegadores permiten al
+  usuario definir una política de aceptación o rechazo de las
+  mismas. Para darte cuenta de lo muy usadas que son las cookies
+  en la web actual, simplemente activa la opción de "Avisar antes
+  de aceptar cualquier cookie" y date un paseo por Internet.
+
+  A pesar de su uso habitual, las cookies son el ejemplo perfecto
+  de algo que no es confiable. Esto significa que el desarrollador debe
+  comprobar que el usuario está dispuesto a aceptar las cookies
+  antes de confiar en ellas.
+
+  Aún más importante, *nunca* debes almacenar información fundamental
+  en las cookies. La Web rebosa de historias de terror acerca
+  de desarrolladores que guardaron información irrecuperable
+  en las cookies del usuario, solo para encontrarse con que el
+  navegador había borrado todos esos datos por cualquier razón.
+
+* Las Cookies (especialmente aquellas que no se envían mediante HTTPS)
+  no son seguras. Dado que los datos enviados viajan en texto claro,
+  están expuestas a que terceras personas lean esa información, lo
+  que se llama ataques de tipo *snooping* (por *snoop*, fisgonear, husmear).
+  Por lo tanto, un atacante que tenga acceso al medio puede interceptar la
+  cookie y leer su valor. El resultado de esto es que nunca se debe almacenar
+  información confidencial en una cookie.
+
+  Hay otro tipo de ataque, aún más insidioso, conocido como
+  ataque *man-in-the-middle* o MitM (ataque de tipo Hombre-en-medio o
+  Intermediario). Aquí, el atacante no solo intercepta la cookie,
+  sino que además la usa para actuar ante el servidor como si fuera
+  el usuario legítimo. Él :doc:`capítulo 19<chapter19>` describe en profundidad
+  este tipo de ataques, así como formas de prevenirlo.
+
+* Las Cookies ni siquiera son seguras para los servidores. La mayoría de los
+  navegadores permiten manipular y editar de forma sencilla los contenidos
+  de cookies individuales, y existen herramientas como mechanize
+  (http://wwwsearch.sourceforge.net/mechanize/) que permiten a cualquiera
+  que esté lo suficientemente motivado construir solicitudes HTTP
+  a mano.
+
+Así que tampoco debemos almacenar en las cookies datos que sean fáciles de 
+falsificar. El error habitual en este escenario consiste en almacenar algo así 
+como  ``IsLoggedIn=1`` en una cookie cuando el usuario se ha validado. Te 
+sorprendería saber cuántos sitios web cometen este tipo de error; no lleva más 
+de unos segundos engañar a sus sistemas de "seguridad".
+
+El entorno de sesiones de Django
 ================================
 
-La biblioteca estándar de Django vive en el paquete
-``django.contrib``. Dentro de cada sub-paquete hay una pieza aislada
-de funcionalidad para agregar. Estas piezas no están necesariamente
-relacionadas, pero algunos sub-paquetes de ``django.contrib`` pueden
-requerir a otros.
+Con todas estas limitaciones y agujeros potenciales de seguridad, es obvio
+que la gestión de las cookies y de las sesiones persistentes es el origen
+de muchos dolores de cabeza para los desarrolladores web. Por supuesto, uno de 
+los objetivos de Django es evitar eficazmente estos dolores de cabeza, así
+que dispone de un entorno de sesiones diseñado para suavizar y facilitar todas
+estas cuestiones.
 
-No hay grandes requerimientos para los tipos de funcionalidad que hay
-en ``django.contrib``. Algunos de los paquetes incluyen modelos (y por
-lo tanto requieren que instales sus tablas en tu base de datos), pero
-otros consisten solamente de *middleware* o de etiquetas de plantillas
-(*template tags*).
+El entorno de sesiones te permite almacenar y recuperar cualquier dato que 
+quieras basándote en la sesión del usuario. Almacena la información relevante
+solo en el servidor y abstrae todo el problema del envío y recepción de las
+cookies. Estas solo almacenan una versión codificada (*hash*) del identificador
+de la sesión, y ningún otro dato, lo cual te aísla de la mayoría de los
+problemas asociados con las cookies.
 
-La única característica común a todos los paquetes de
-``django.contrib`` es la siguiente: si borraras dicho paquete por
-completo, seguirías pudiendo usar las capacidades fundamentales de
-Django sin problemas. Cuando los desarrolladores de Django agregan
-nueva funcionalidad al *framework*, emplean esa regla de oro al
-decidir en dónde va a residir la nueva funcionalidad, si en
-``django.contrib``, o en algún otro lugar.
+Veamos como activar las sesiones, y como usarlas en nuestras vistas.
 
-``django.contrib`` consiste de los siguientes paquetes:
+Activar sesiones
+----------------
 
-    * ``admin``: el sitio automático de administración. Consulta los
-      capítulos 6 y 18.
+Las sesiones se implementan mediante un poco de *middleware* y un modelo Django. 
+Para activar las sesiones, necesitas seguir los siguientes pasos:
 
-    * ``auth``: el *framework* de autenticación de Django. Consulta el
-      `Capítulo 12`_.
+#. Editar el valor de ``MIDDLEWARE_CLASSES`` de forma que contenga
+   ``'django.contrib.sessions.middleware.SessionMiddleware'``. 
 
-    * ``comments``: una aplicación para comentarios. Esta aplicación
-      está actualmente bajo un fuerte desarrollo, y por lo tanto, no
-      puede ser cubierta por completo para cuando se publique de este
-      libro. Chequea el sitio web de Django para obtener la última
-      información sobre esta aplicación.
+#. Comprobar que ``'django.contrib.sessions'`` esté incluido
+   en el valor de ``INSTALLED_APPS`` (y ejecutar los comandos
+   ``manage.py makemigrationes`` y ``migrate``  si lo tuviste que añadir).
 
-    * ``contenttypes``: un *framework* para conectar "tipos" de
-      contenido, en que cada modelo de Django instalado es un tipo de
-      contenido aislado. Este *framework* es usado internamente por
-      otras aplicaciones "contrib", y está especialmente enfocada a
-      los desarrolladores de Django muy avanzados. Dichos
-      desarrolladores pueden hallar más información sobre esta
-      aplicación, leyendo el código fuente que está en
-      ``django/contrib/contenttypes/``.
+El archivo por defecto ``settings.py`` creado por el comando ``startproject`` 
+activa estas dos características, así que a menos que las hayas borrado,
+es muy probable que no tengas que hacer nada para empezar a usar las
+sesiones.
 
-    * ``csrf``: protección ante un ataque de falsificación de petición
-      en sitios cruzados, en inglés *Cross-Site Request Forgery*
-      (CSRF). Consulta la sección titulada "`Protección contra CSRF`_" más adelante.
+Si lo que quieres en realidad es no usar sesiones, deberías quitar la referencia
+a ``SessionMiddleware`` de ``MIDDLEWARE_CLASSES`` y borra
+``'django.contrib.sessions'`` de ``INSTALLED_APPS``. Esto te ahorrará sólo un 
+poco de sobrecarga, pero toda ayuda es buena.
 
-    * ``flatpages``: un *framework* para administrar contenido HTML simple,
-      "plano", dentro de la base de datos. Consulta la sección titulada
-      "`Flatpages`_" más adelante.
+Usar las sesiones en una vista
+------------------------------
 
-    * ``humanize``: un conjunto de filtros de plantillas Django, útiles para
-      darle un "toque de humanidad" a los datos. Consulta la sección titulada
-      "`Haciendo los datos más humanos`_" más adelante.
+Cuando están activadas las sesiones, los objetos ``HttpRequest`` --el primer 
+argumento de cualquier función que actúe como una vista en Django tendrán un 
+atributo llamado ``session``, que se comporta igual que un diccionario. Se puede
+leer y escribir en él de la misma forma en que lo harías con un diccionario 
+normal. Por ejemplo, podrías usar algo como esto en una de tus vistas::
 
-    * ``markup``: un conjunto de filtros de plantillas de Django, que
-      implementan varios lenguajes de marcado conocidos. Consulta la sección
-      titulada "`Filtros de marcado`_" más adelante.
+    # Set a session value:
+    request.session["fav_color"] = "blue"
 
-    * ``redirects``: un *framework* para administrar redirecciones. Consulta la
-      sección titulada "`Redirects`_" más adelante.
+    # Get a session value -- this could be called in a different view,
+    # or many requests later (or both):
+    fav_color = request.session["fav_color"]
 
-    * ``sessions``: el *framework* de sesiones de Django. Consulta el
-      `Capítulo 12`_.
+    # Clear an item from the session:
+    del request.session["fav_color"]
 
-    * ``sitemaps``: un *framework* para generara archivos de mapas de
-      sitio XML. Consulta el `Capítulo 11`_.
+    # Check if the session has a given key:
+    if "fav_color" in request.session:
+        ...
 
-    * ``sites``: un *framework* que te permite operar múltiples sitios
-      web desde la misma base de datos, y con una única instalación de
-      Django. Consulta la próxima sección, "`Sites`_".
+También puedes usar otros métodos propios de un diccionario como ``keys()``
+o ``items()`` en ``request.session``.
 
-    * ``syndication``: un *framework* para generar documentos de
-      sindicación (*feeds*), en RSS y en Atom. Consulta el `Capítulo 11`_.
+Hay dos o tres reglas muy sencillas para usar eficazmente las sesiones en Django:
 
-El resto de este capítulo entra en los detalles de cada paquete
-``django.contrib`` que no ha sido cubierto aún en este libro.
+* Debes usar sólo cadenas de texto normales como valores de clave
+  en ``request.session``, en vez de, por ejemplo, enteros, objetos, etc. Esto
+  es más un convenio que un regla en el sentido estricto, pero merece la pena
+  seguirla.
 
-Sites
-=====
+* Los valores de las claves de una sesión que empiecen con el carácter
+  subrayado están reservadas para uso interno de Django. En la práctica, sólo
+  hay unas pocas variables así, pero, a no ser que sepas lo que estás
+  haciendo (y estés dispuesto a mantenerte al día en los cambios internos
+  de Django), lo mejor que puedes hacer es evitar usar el carácter subrayado
+  como prefijo en tus propias variables; eso impedirá que Django
+  pueda interferir con tu aplicación,
 
-El sistema *sites* de Django es un *framework* genérico que te permite
-operar múltiples sitios web desde la misma base de datos, y desde el
-mismo proyecto de Django. Éste es un concepto abstracto, y puede ser
-difícil de entender, así que comenzaremos mostrando algunos escenarios
-en donde sería útil usarlo.
+* Nunca reemplaces ``request.session`` por otro objeto, y nunca accedas
+  o modifiques sus atributos. Utilízalo sólo como si fuera un diccionario.
 
-Escenario 1: reuso de los datos en múltiples sitios
----------------------------------------------------
+Veamos un ejemplo rápido. Esta vista simplificada define una variable
+``has_commented`` como ``True`` después de que el usuario haya publicado
+un comentario. Es una forma sencilla (aunque no particularmente segura) de
+impedir que el usuario publique dos veces el mismo comentario::
 
-Como explicamos en el `Capítulo 1`_, los sitios LJWorld.com y
-Lawrence.com, que funcionan gracias a Django, son operados por la
-misma organización de prensa, el diario *Lawrence Journal-World* de
-Lawrence, Kansas. LJWorld.com se enfoca en noticias, mientras que
-Lawrence.com se enfoca en el entretenimiento local. Pero a veces los
-editores quieren publicar un artículo en *ambos* sitios.
+    def post_comment(request):
+        if request.method != 'POST':
+            raise Http404('Only POSTs are allowed')
 
-La forma cabeza dura de resolver el problema sería usar una base de
-datos para cada sitio, y pedirle a los productores que publiquen la
-misma nota dos veces: una para LJWorld.com y nuevamente para
-Lawrence.com. Pero esto es ineficiente para los productores del sitio,
-y es redundante conservar múltiples copias de la misma nota en las
-bases de datos.
+        if 'comment' not in request.POST:
+            raise Http404('Comment not submitted')
 
-¿Una solución mejor? Que ambos sitios usen la misma base de datos de
-artículos, y que un artículo esté asociado con uno o más sitios por
-una relación de muchos-a-muchos. El *framework* *sites* de Django,
-proporciona la tabla de base de datos que hace que los artículos se
-puedan relacionar de esta forma. Sirve para asociar datos con uno o
-más "sitios".
+        if request.session.get('has_commented', False):
+            return HttpResponse("You've already commented.")
 
-Escenario 2: alojamiento del nombre/dominio de tu sitio en un solo lugar
-------------------------------------------------------------------------
+        c = comments.Comment(comment=request.POST['comment'])
+        c.save()
+        request.session['has_commented'] = True
+        return HttpResponse('Thanks for your comment!')
 
-Los dos sitios LJWorld.com y Lawrence.com, tienen la funcionalidad de
-alertas por correo electrónico, que les permite a los lectores
-registrarse para obtener notificaciones. Es bastante básico: un lector
-se registra en un formulario web, e inmediatamente obtiene un correo
-electrónico que dice "Gracias por su suscripción".
+Esta vista simplificada permite que un usuario se identifique
+como tal en nuestras páginas::
 
-Sería ineficiente y redundante implementar el código del procesamiento
-de registros dos veces, así que los sitios usan el mismo código detrás
-de escena. Pero la noticia "Gracias por su suscripción" debe ser
-distinta para cada sitio. Empleando objetos ``Site``, podemos abstraer
-el agradecimiento para usar los valores del nombre y dominio del
-sitio, variables ``name`` (ej. ``'LJWorld.com'``) y ``domain`` (ej.
-``'www.ljworld.com'``).
-
-El *framework* *sites* te proporciona un lugar para que puedas almacenar
-el nombre (``name``) y el dominio (``domain``) de cada sitio de tu
-proyecto, lo que significa que puedes reutilizar estos valores de
-manera genérica.
-
-Modo de uso del *framework* *sites*
------------------------------------
-
-Sites más que un *framework*, es una serie de convenciones. Toda la
-cosa se basa en dos conceptos simples:
-
-    * el modelo ``Site``, que se halla en ``django.contrib.sites``,
-      tiene los campos ``domain`` y ``name``.
-
-    * la opción de configuración ``SITE_ID`` especifica el ID de la
-      base de datos del objeto ``Site`` asociado con este archivo de
-      configuración en particular.
-
-La manera en que uses estos dos conceptos queda a tu criterio, pero
-Django los usa de varios modos de manera automática, siguiendo
-convenciones simples.
-
-Para instalar la aplicación *sites*, sigue estos pasos:
-
-    1. Agrega ``'django.contrib.sites'`` a tu ``INSTALLED_APPS``.
-
-    2. Ejecuta el comando ``manage.py syncdb`` para instalar la tabla
-       ``django_site`` en tu base de datos.
-
-    3. Agrega uno o más objetos ``Site``, por medio del sitio de
-       administración de Django, o por medio de la API de Python. Crea
-       un objeto ``Site`` para cada sitio/dominio que esté respaldado
-       por este proyecto Django.
-
-    4. Define la opción de configuración ``SITE_ID`` en cada uno de
-       tus archivos de configuración (*settings*). Este valor debería
-       ser el ID de base de datos del objeto ``Site`` para el sitio
-       respaldado por el archivo de configuración.
-
-Las capacidades del framework Sites
------------------------------------
-
-Las siguientes secciones describen las cosas que puedes hacer con este
-*framework*.
-
-Reuso de los datos en múltiples sitios
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Para reusar los datos en múltiples sitios, como explicamos en el
-primer escenario, simplemente debes agregarle un campo
-muchos-a-muchos, ``ManyToManyField`` hacia ``Site`` en tus
-modelos. Por ejemplo::
-
-    from django.db import models
-    from django.contrib.sites.models import Site
-
-    class Article(models.Model):
-        headline = models.CharField(maxlength=200)
-        # ...
-        sites = models.ManyToManyField(Site)
-
-Esa es toda la infraestructura necesaria para asociar artículos con
-múltiples sitios en tu base de datos. Con eso en su lugar, puedes
-reusar el mismo código de vista para múltiples sitios. Continuando con
-el modelo ``Article`` del ejemplo, aquí mostramos cómo luciría una
-vista ``article_detail``::
-
-    from django.conf import settings
-
-    def article_detail(request, article_id):
+    def login(request):
+        if request.method != 'POST':
+            raise Http404('Only POSTs are allowed')
         try:
-            a = Article.objects.get(id=article_id, sites__id=settings.SITE_ID)
-        except Article.DoesNotExist:
-            raise Http404
-        # ...
+            m = Member.objects.get(username=request.POST['username'])
+            if m.password == request.POST['password']:
+                request.session['member_id'] = m.id
+                return HttpResponseRedirect('/you-are-logged-in/')
+        except Member.DoesNotExist:
+            return HttpResponse("Your username and password didn't match.")
 
-esta función de vista es reusable porque chequea el sitio del artículo
-dinámicamente, según cuál sea el valor de la opción ``SITE_ID``.
+Y esta le permite cerrar o salir de la sesión::
 
-Por ejemplo, digamos que el archivo de configuración de LJWorld.com
-tiene un ``SITE_ID`` asignado a ``1``, y que el de Lawrence.com lo
-tiene asignado a ``2``. Si esta vista es llamada cuando el archivo de
-configuración de LJWorld.com está activado, entonces la búsqueda de
-artículos se limita a aquellos en que la lista de sitios incluye
-LJWorld.com.
+    def logout(request):
+        try:
+            del request.session['member_id']
+        except KeyError:
+            pass
+        return HttpResponse("You're logged out.")
 
-Asociación de contenido con un solo sitio
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. note:: 
 
-De manera similar, puedes asociar un modelo con el modelo ``Site`` en una
-relación muchos-a-uno, usando ``ForeignKey``.
+    En la práctica, esta sería una forma pésima de validar a tus
+    usuarios. El mecanismo de autentificación que presentaremos
+    un poco más adelante realiza esta tarea de forma mucho más
+    segura y robusta. Los ejemplo son deliberadamente simples
+    para que se comprendan con más facilidad.
 
-Por ejemplo, si un artículo sólo se permite en un sitio, puedes usar
-un modelo como este::
+Comprobar las configuraciones de las *cookies* 
+----------------------------------------------
 
-    from django.db import models
-    from django.contrib.sites.models import Site
+.. Setting Test Cookies
 
-    class Article(models.Model):
-        headline = models.CharField(maxlength=200)
-        # ...
-        site = models.ForeignKey(Site)
+Como ya mencionamos, no se puede confiar en que cualquier navegador
+sea capaz de aceptar *cookies*. Por ello, Django incluye una forma fácil
+de comprobar que el cliente del usuario disponga de esta capacidad. Sólo
+es necesario llamar a la función ``request.session.set_test_cookie()``
+en una vista, y comprobar posteriormente, en otra vista distinta, el
+resultado de llamar a ``request.session.test_cookie_worked()``.
 
-Este tiene los mismos beneficios, como se describe en la última
-sección.
+Esta división un tanto extraña entre las llamadas a ``set_test_cookie()`` 
+y ``test_cookie_worked()`` se debe a la forma es que trabajan 
+las *cookies*. Cuando se define una *cookie*, no tienes forma de saber
+si el navegador la ha aceptado realmente hasta la siguiente solicitud.
 
-Obtención del sitio actual desde las vistas
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Es una práctica recomendable llamar a la función ``delete_test_cookie()`` para
+limpiar la cookie de prueba después de haberla usado. Lo mejor es hacerlo
+justo después de haber verificado que las *cookies* funcionan.
 
-A un nivel más bajo, puedes usar el *framework sites* en tus vistas de
-Django para hacer cosas particulares según el sitio en el cual la
-vista sea llamada. Por ejemplo::
+He aquí un ejemplo típico de uso::
 
-    from django.conf import settings
+    def login(request):
+
+        # If we submitted the form...
+        if request.method == 'POST':
+
+            # Check that the test cookie worked (we set it below):
+            if request.session.test_cookie_worked():
+
+                # The test cookie worked, so delete it.
+                request.session.delete_test_cookie()
+
+                # In practice, we'd need some logic to check username/password
+                # here, but since this is an example...
+                return HttpResponse("You're logged in.")
+
+            # The test cookie failed, so display an error message. If this
+            # were a real site, we'd want to display a friendlier message.
+            else:
+                return HttpResponse("Please enable cookies and try again.")
+
+        # If we didn't post, send the test cookie along with the login form.
+        request.session.set_test_cookie()
+        return render(request, 'foo/login_form.html')
+
+
+.. admonition:: Nota
+
+    De nuevo, las funciones de autentificación ya definidas en el entorno
+    se encargan de realizar estos chequeos por ti.
+
+Usar sesiones fuera de las vistas
+---------------------------------
+
+Internamente, cada sesión es simplemente un modelo de entidad de
+Django como cualquier otro, definido en ``django.contrib.sessions.models``. Cada
+sesión se identifica gracias a un *hash* pseudo-aleatorio de 32 caracteres, que
+es el valor que se almacena en la cookie. Dado que es un modelo normal, puedes
+acceder a las propiedades de las sesiones usando la API de acceso a la
+base de datos de Django::
+
+    >>> from django.contrib.sessions.models import Session
+    >>> s = Session.objects.get(pk='2b1189a188b44ad18c35e113ac6ceead')
+    >>> s.expire_date
+    datetime.datetime(2005, 8, 20, 13, 35, 14)
+
+Para poder acceder a los datos de la sesión, hay que usar el método
+``get_decoded()``. Esto se debe a que estos datos, que consistían en
+un diccionario, están almacenados codificados::
+
+    >>> s.session_data
+    'KGRwMQpTJ19hdXRoX3VzZXJfaWQnCnAyCkkxCnMuMTExY2ZjODI2Yj...'
+    >>> s.get_decoded()
+    {'user_id': 42}
+
+Cuándo se guardan las sesiones
+------------------------------
+
+Django, en principio, solo almacena la sesión en la base de datos si ésta
+ha sido modificada; es decir, si cualquiera de los valores almacenados
+en el diccionario es asignado o borrado. Esto puede dar lugar a algunos
+errores sutiles, como se indica en el último ejemplo::
+
+    # Session is modified.
+    request.session['foo'] = 'bar'
+
+    # Session is modified.
+    del request.session['foo']
+
+    # Session is modified.
+    request.session['foo'] = {}
+
+    # Gotcha: Session is NOT modified, because this alters
+    # request.session['foo'] instead of request.session.
+    request.session['foo']['bar'] = 'baz'
+
+Se puede cambiar este comportamiento, especificando la opción
+``SESSION_SAVE_EVERY_REQUEST`` a ``True``. Si lo hacemos así, Django
+almacenará la sesión en la base de datos en cada petición, incluso si
+no se ha modificado ninguno de sus valores.
+
+Fíjate que la cookie de sesión sólo se envía cuando se ha creado o
+modificado una sesión. Si ``SESSION_SAVE_EVERY_REQUEST`` está como ``True``, la
+cookie de sesión será reenviada en cada petición. De forma similar, la sección
+de expiración (''expires'') se actualizará cada vez que se reenvíe la
+cookie.
+
+Sesiones breves frente a sesiones persistentes
+----------------------------------------------
+
+Es posible que te hayas fijado en que la cookie que nos envió Google al
+principio del capítulo contenía el siguiente texto ``expires=Sun,
+17-Jan-2038 19:14:07 GMT;``. Las Cookies pueden incluir opcionalmente
+una fecha de expiración, que informa al navegador el momento en que se
+debe desechar por inválida. Si la cookie no contiene ningún
+valor de expiración, el navegador entiende que esta debe expirar
+en el momento en que se cierra el propio navegador. Se puede controlar
+el comportamiento del entorno para que use cookies de este tipo, breves, ajustando
+en valor de la opción ``SESSION_EXPIRE_AT_BROWSER_CLOSE``.
+
+El valor por omisión de la opción ``SESSION_EXPIRE_AT_BROWSER_CLOSE`` es
+``False``, lo que significa que las cookies serán almacenadas en el
+navegador del usuario durante ``SESSION_COOKIE_AGE`` segundos (cuyo
+valor por defecto es de dos semanas, o 1.209.600 segundos). Estos
+valores son adecuados si no quieres obligar a tus usuarios a validarse
+cada vez que abran el navegador y accedan a tu página.
+
+Si ``SESSION_EXPIRE_AT_BROWSER_CLOSE`` se establece a ``True``, Django
+usará cookies que se invalidarán cuando el usuario cierre el navegador.
+
+Otras características de las sesiones
+-------------------------------------
+
+Además de las características ya mencionadas, hay otros valores de configuración que
+influyen en la gestión de sesiones con Django, tal y como se muestra en
+la tabla 14-2.
+
+.. table:: Tabla 14-2. Valores de configuración que influyen en el comportamiento de las cookies
+
+    ==========================  =============================  =================
+      Opción                      Descripción                  Valor por defecto
+    ==========================  =============================  =================
+    ``SESSION_COOKIE_DOMAIN``   El Dominio a utilizar por la   ``None``
+                                cookie de sesión. Se puede
+                                utilizar, por ejemplo, el
+                                valor ``".lawrence.com"``
+                                para utilizar la cookie en
+                                diferentes subdominios. El
+                                valor ``None`` indica una
+                                cookie estándar.
+
+    ``SESSION_COOKIE_NAME``     El nombre de la cookie de       ``"sessionid"``
+                                sesiones. Puede ser cualquier
+                                cadena de texto.
+
+    ``SESSION_COOKIE_SECURE``   Indica si se debe usar una       ``False``
+                                cookie segura para la cookie
+                                de sesión. Si el valor es
+                                ``True``, la cookie se
+                                marcará como segura, lo que
+                                significa que sólo se podrá
+                                utilizar mediante el
+                                protocolo HTTPS.
+    ==========================  =============================  =================
+
+.. admonition:: Detalles técnicos
+
+    Para los más curiosos, he aquí una serie de notas técnicas acerca de algunos
+    aspectos interesantes de la gestión interna de las sesiones:
+
+* El diccionario de la sesión acepta cualquier objeto Python capaz de
+  ser serializado con ``pickle``. Véase la documentación del módulo
+  ``pickle`` incluido en la biblioteca estándar de Python para más información.
+
+* Los datos de la sesión se almacenan en una tabla en la base de datos llamada
+  ``django_session``.
+
+* Los datos de la sesión son suministrados bajo demanda. Si nunca accedes al
+  atributo ``request.session``, Django nunca accederá a la base de datos.
+
+* Django sólo envía la cookie si tiene que hacerlo. Si no modificas ningún
+  valor de la sesión, no reenvía la cookie (a no ser que hayas definido
+  ``SESSION_SAVE_EVERY_REQUEST`` como ``True``).
+
+* El entorno de sesiones de Django se basa entera y exclusivamente en
+  las cookies. No almacena la información de la sesión en las URL, como recurso
+  extremo en el caso de que no se puedan utilizar las cookies, como hacen
+  otros entornos (PHP, JSP).
+
+  Esta es una decisión tomada de forma consciente. Poner los
+  identificadores de sesión en las URL no solo hace que las
+  direcciones sean más feas, también hace que el sistema sea
+  vulnerable ante un tipo de ataque en que se roba el
+  identificador de la sesión utilizando la cabecera
+  ``Referer``.
+
+  Si aun te pica la curiosidad, el código fuente es bastante directo y claro, mira
+  en ``django.contrib.sessions`` para más detalles.
+
+
+Usuarios e identificación
+=========================
+
+Estamos ya a medio camino de poder conectar los navegadores con la Gente
+de Verdad™. Las sesiones nos permiten almacenar información a lo largo de
+las diferentes peticiones del navegador; la segunda parte de la ecuación
+es utilizar esas sesiones para validar al usuario, es decir, permitirle
+hacer *login*. Por supuesto, no podemos simplemente confiar en que
+los usuarios sean quien dicen ser, necesitamos autentificarlos de alguna
+manera.
+
+Naturalmente, Django nos proporciona las herramientas necesarias para
+tratar con este problema tan habitual (y con muchos otros). El sistema
+de autentificación de usuarios de Django maneja cuentas de usuarios, grupos,
+permisos y sesiones basadas en cookies. El sistema también es llamada sistema
+*aut/aut* (autenticaficación y autorización). El nombre implica que, a
+menudo, tratar con los usuarios implica dos procesos. Se necesita:
+
+* Verificar (*autentificación*) que un usuario es quien dice
+  ser (Normalmente comprobando un nombre de usuario y una
+  contraseña contra una tabla de una base de datos)
+
+* Verificar que el usuario está autorizado (*autorización*) a
+  realizar una operación determinada (normalmente
+  comprobando una tabla de permisos)
+
+Siguiendo estos requerimientos, el sistema aut/aut de Django consta de los
+siguientes componentes:
+
+* *Usuarios*: Personas registradas en tu sitio web
+
+* *Permisos*: Valores binarios (Si/No) que indican si un usuario
+  puede o no realizar una tarea determinada.
+
+* *grupos*: Una forma genérica de aplicar etiquetas y permisos a
+  más de un usuario.
+
+* *mensajes*: Un mecanismo sencillo que permite enviar y mostrar
+  mensajes del sistema usando una cola.
+
+* *Perfiles*: Un mecanismo que permite extender los objetos de
+  tipo usuario con campos adicionales.
+
+Si ya has utilizado la herramienta de administración (descrita en el
+:doc:`capítulo 6<chapter06>`), habrás visto muchas de estas utilidades, 
+y si has modificado usuarios y grupos con dicha herramienta, ya has modificado
+las tablas en las que se basa el sistema aut/aut.
+
+Habilitar el soporte para autentificación
+-----------------------------------------
+
+Al igual que ocurría con las sesiones, el sistema de autentificación
+viene incluido como una aplicación en el módulo ``django.contrib``, y
+necesita ser instalado. De igual manera, viene instalado por defecto, por
+lo que solo es necesario seguir los siguientes pasos si previamente
+la has desinstalado:
+
+* Comprueba que el sistema de sesiones esté activo, tal y como
+  se explico previamente en este capítulo. Seguir la pista de
+  los usuario implica usar cookies, y por lo tanto necesitamos
+  el entorno de sesiones operativo.
+
+* Incluye ``'django.contrib.auth'`` dentro de tu ``INSTALLED_APPS`` y
+  ejecuta los comandos ``makemigration`` y ``migrate``.
+
+* Asegúrate de que
+  ``'django.contrib.auth.middleware.AuthenticationMiddleware'`` está
+  incluido en ``MIDDLEWARE_CLASSES`` *después de*
+  ``SessionMiddleware``.
+
+Una vez resuelto este tema, ya estamos preparados para empezar a lidiar
+con los usuarios en nuestras vistas. La principal interfaz que
+usarás para trabajar con los datos del usuario dentro de una vista es
+``request.user``; es un objeto que representa al usuario que está conectado
+en ese momento. Si no hay ningún usuario conectado, este objeto será
+una instancia de la clase ``AnonymousUser`` (veremos más sobre esta clase
+un poco más adelante).
+
+Puedes saber fácilmente si el usuario está identificado o no con el método
+``is_authenticated()``::
+
+    if request.user.is_authenticated():
+        # Do something for authenticated users.
+    else:
+        # Do something for anonymous users.
+
+Utilizando usuarios
+===================
+
+Una vez que ya tienes un usuario (normalmente mediante ``request.user``, pero
+también puede ser por otros métodos, que se describirán en breve) dispondrás
+de una serie de campos de datos y métodos asociados al mismo. Los objetos de la 
+clase ``AnonymousUser`` emulan *parte* de esta interfaz, pero no toda, por lo
+que es preferible comprobar el resultado de ``user.is_authenticated()`` antes
+de asumir de buena fe que nos encontramos ante un usuario legítimo. Las tablas
+14-3 y 14-4 listan todos los campos y métodos, respectivamente, de los objetos
+de la clase ``User``.
+
+Campos de los objetos ``User``
+
+.. table:: Tabla 14-3. Campos de los objetos ``User``
+
+    ==================  =============================================================
+        Campo               Descripción
+    ==================  =============================================================
+        ``username``        Obligatorio; 30 caracteres como máximo. Sólo acepta
+                            caracteres alfanuméricos (letras, dígitos y el
+                            carácter subrayado).
+
+      ``first_name``        Opcional; 30 caracteres como máximo.
+
+        ``last_name``       Opcional; 30 caracteres como máximo.
+
+        ``email``           Opcional. Dirección de correo electrónico.
+
+        ``password``        Obligatorio. Un código de comprobación (*hash*),
+                            junto con otros metadatos de la contraseña. Django
+                            nunca almacena la contraseña en crudo. Véase la
+                            sección "`Cambia contraseñas`_" para más información
+
+        ``is_staff``        Booleano. Indica que el usuario puede acceder
+                            a las secciones de administración.
+
+       ``is_active``        Booleano. Indica que la cuenta puede ser usada para
+                            identificarse. Se puede poner a ``False`` para
+                            deshabilitar a un usuario sin tener que borrarlo
+                            de la tabla.
+
+    ``is_superuser``        Booleano. Señala que el usuario tiene todos los
+                            permisos, aún cuando no se le hayan asignado
+                            explícitamente
+
+      ``last_login``        Fecha y hora de la última vez que el usuario se
+                            identificó. Se asigna automáticamente a la
+                            fecha actual por defecto.
+
+     ``date_joined``        Fecha y hora en que fue creada esta cuenta de
+                            usuario. Se asigna automáticamente a la
+                            fecha actual en su momento.
+
+    ==================  =============================================================
+
+Métodos de los objetos ``User``
+
+.. table:: Tabla 14-4. Métodos de los objetos ``User``
+
+    ================================  ================================================
+        Método                            Descripción
+    ================================  ================================================
+        ``is_authenticated()``            Siempre devuelve ``True`` para usuario
+                                          reales. Es una forma de determinar si el
+                                          usuario se ha identificado. esto no
+                                          implica que posea ningún permiso, y
+                                          tampoco comprueba que la cuenta esté
+                                          activa. Sólo indica que el usuario se
+                                          ha identificado con éxito.
+
+        ``is_anonymous()``                Devuelve ``True`` sólo para usuarios
+                                          anónimos, y ``False`` para usuarios
+                                          "reales". En general, es preferible
+                                          usar el método ``is_authenticated()``.
+
+        ``get_full_name()``               Devuelve la concatenación de los
+                                          campos ``first_name`` y
+                                          ``last_name``, con un espacio
+                                          en medio.
+
+        ``set_password(passwd)``          Cambia la contraseña del usuario a
+                                          la cadena de texto en claro indicada,
+                                          realizando internamente las
+                                          operaciones necesarias para calcular
+                                          el código de comprobación o *hash*
+                                          necesario. Este método *no* guarda el
+                                          objeto ``User``.
+
+        ``check_password(passwd)``        devuelve ``True`` si la cadena de
+                                          texto en claro que se le pasa
+                                          coincide con la contraseña
+                                          del usuario. Realiza internamente
+                                          las operaciones necesarias para
+                                          calcular los códigos de comprobación
+                                          o *hash* necesarios.
+
+        ``get_group_permissions()``       Devuelve una lista con los permisos que
+                                          tiene un usuario, obtenidos a través del
+                                          grupo o grupos a las que pertenezca.
+
+        ``get_all_permissions()``         Devuelve una lista con los permisos que
+                                          tiene concedidos un usuario, ya sea a
+                                          través de los grupos a los que pertenece
+                                          o bien asignados directamente.
+
+        ``has_perm(perm)``                Devuelve ``True`` si el usuario tiene el
+                                          permiso indicado. El valor de ``perm``
+                                          está en el
+                                          formato ```"package.codename"``. Si el
+                                          usuario no está activo, siempre
+                                          devolverá ``False``.
+
+        ``has_perms(perm_list)``          Devuelve ``True`` si el usuario tiene
+                                          *todos* los permisos indicados. Si el
+                                          usuario no está activo, siempre
+                                          devolverá ``False``.
+
+     ``has_module_perms(app_label)``      Devuelve ``True`` si el usuario tiene
+                                          algún permiso en la etiqueta de
+                                          aplicación indicada, ``app_label``. Si
+                                          el usuario no está activo, siempre
+                                          devolverá ``False``.
+
+     ``get_and_delete_messages()``        Devuelve una lista de mensajes (objetos
+                                          de la clase ``Message``) de la cola del
+                                          usuario, y los borra posteriormente.
+
+        ``email_user(subj, msg)``         Envía un correo electrónico al usuario.
+                                          El mensaje aparece como enviado desde
+                                          la dirección indicada en el valor
+                                          ``DEFAULT_FROM_EMAIL``. Se le puede
+                                          pasar un tercer parámetro opcional,
+                                          ``from_email``, para indicar otra
+                                          dirección de remite distinta.
+    ================================  ================================================
+
+Por último, los objetos de tipo ``User`` mantienen dos campos de relaciones
+múltiples o muchos-a-muchos: Grupos y permisos (``groups`` y ``permissions``). 
+Se puede acceder a estos objetos relacionados de la misma manera en que se usan 
+otros campos múltiples::
+
+        # Set a user's groups:
+        myuser.groups = group_list
+
+        # Add a user to some groups:
+        myuser.groups.add(group1, group2,...)
+
+        # Remove a user from some groups:
+        myuser.groups.remove(group1, group2,...)
+
+        # Remove a user from all groups:
+        myuser.groups.clear()
+
+        # Permissions work the same way
+        myuser.permissions = permission_list
+        myuser.permissions.add(permission1, permission2, ...)
+        myuser.permissions.remove(permission1, permission2, ...)
+        myuser.permissions.clear()
+
+Iniciar y cerrar sesión
+-----------------------
+
+Django proporciona vistas predefinidas para  gestionar la entrada
+del usuario, (el momento en que se identifica), y la salida, (es
+decir, cuando cierra la sesión), además de otros trucos ingeniosos. Pero
+antes de entrar en detalles, veremos como hacer que los usuario puedan
+iniciar y cerrar la sesión "a mano". Django incluye dos funciones
+para realizar estas acciones, en el módulo ``django.contrib.auth``:
+``authenticate()`` y ``login()``.
+
+Para autentificar un identificador de usuario y una contraseña, se utiliza
+la función ``authenticate()``. esta función acepta dos parámetros ,
+``username`` y ``password``, y devuelve un objeto de tipo ``User`` si la
+contraseña es correcta para el identificador de usuario. Si falla la
+comprobación (ya sea porque sea incorrecta la contraseña o porque sea
+incorrecta la identificación del usuario), la función devolverá ``None``::
+
+    >>> from django.contrib import auth
+    >>> user = auth.authenticate(username='john', password='secret')
+    >>> if user is not None:
+    ...     print "Correct!"
+    ... else:
+    ...     print "Oops, that's wrong!"
+
+La llamada a ``authenticate()`` sólo verifica las credenciales del
+usuario. Todavía hay que realizar una llamada a ``login()`` para
+completar el inicio de sesión. La llamada a ``login()`` acepta un
+objeto de la clase ``HttpRequest`` y un objeto ``User`` y almacena
+el identificador del usuario en la sesión, usando el entorno de
+sesiones de Django.
+
+El siguiente ejemplo muestra el uso de ambas funciones, ``authenticate()`` y 
+``login()``, dentro de una vista::
+
+    from django.contrib import auth
+
+    def login_view(request):
+        username = request.POST.get('username', '')
+        password = request.POST.get('password', '')
+        user = auth.authenticate(username=username, password=password)
+        if user is not None and user.is_active:
+            # Correct password, and the user is marked "active"
+            auth.login(request, user)
+            # Redirect to a success page.
+            return HttpResponseRedirect("/account/loggedin/")
+        else:
+            # Show an error page
+            return HttpResponseRedirect("/account/invalid/")
+
+Para cerrar la sesión, se puede llamar a ``django.contrib.auth.logout()``
+dentro de una vista. Necesita que se le pase como parámetro un objeto
+de tipo ``HttpRequest``, y no devuelve ningún valor::
+
+    from django.contrib import auth
+
+    def logout(request):
+        auth.logout(request)
+        # Redirect to a success page.
+        return HttpResponseRedirect("/account/loggedout/")
+
+La llamada a ``logout()`` no produce ningún error, aun si no hubiera
+ningún usuario conectado.
+
+En la práctica, no es normalmente necesario escribir tus propias
+funciones para realizar estas tareas; el sistema de autentificación
+viene con un conjunto de vistas predefinidas para ello.
+
+El primer paso para utilizar las vistas de autentificación es
+mapearlas en tu URLconf. Necesitas modificar tu código hasta
+tener algo parecido a esto::
+
+    from django.contrib.auth.views import login, logout
+
+    urlpatterns = [
+        # mas patrones aqui...
+        url(r'^accounts/login/$',  login),
+        url(r'^accounts/logout/$', logout),
+    ]
+
+``/accounts/login/`` y ``/accounts/logout/`` son las URL por defecto
+que usa Django para estas vistas.
+
+Por defecto, la vista de ``login`` utiliza la plantilla definida en
+``registration/login.html`` (puedes cambiar el nombre de la plantilla
+utilizando un parámetro opcional, ``template_name``). El formulario
+necesita contener un campo llamado ``username`` y otro llamado
+``password``. Una plantilla de ejemplo podría ser esta:
+
+.. code-block:: html
+
+    {% extends "base.html" %}
+
+    {% block content %}
+
+      {% if form.errors %}
+        <p class="error">Sorry, that's not a valid username or password</p>
+      {% endif %}
+
+      <form action="" method="post">
+        <label for="username">User name:</label>
+        <input type="text" name="username" value="" id="username">
+        <label for="password">Password:</label>
+        <input type="password" name="password" value="" id="password">
+
+        <input type="submit" value="login" />
+        <input type="hidden" name="next" value="{{ next|escape }}" />
+      </form>
+
+    {% endblock %}
+
+Si el usuario se identifica correctamente, su navegador será redirigido
+a ``/accounts/profile/``. Puedes indicar una dirección distinta especificando
+un tercer campo (normalmente oculto) que se llame ``next``, cuyo valor
+debe ser la URL a redireccionar después de la identificación. También puedes
+pasar este valor como un parámetro ``GET`` a la vista de identificación
+y se añadirá automáticamente su valor al contexto en una variable
+llamada ``next``, que puedes incluir ahora en un campo oculto.
+
+La vista de cierre de sesión se comporta de forma un poco diferente. Por 
+defecto utiliza la plantilla definida en ``registration/logged_out.html`` 
+(que normalmente contiene un mensaje del tipo "Ha cerrado su sesión"). No 
+obstante, se puede llamar a esta vista con un parámetro extra, llamado 
+``next_page``, que indicaría la vista a la que se debe redirigir una vez 
+efectuado el cierre de la sesión.
+
+Limitar el acceso a los usuarios identificados
+----------------------------------------------
+
+Por supuesto, la razón de haber implementado todo este sistema es permitirnos 
+limitar el acceso a determinadas partes de nuestro sitio.
+
+La forma más simple y directa de limitar este acceso es comprobar el resultado 
+de llamar a la función ``request.user.is_authenticated()`` y redirigir a una 
+página de identificación, si procede::
+
+    from django.http import HttpResponseRedirect
 
     def my_view(request):
-        if settings.SITE_ID == 3:
-            # Do something.
-        else:
-            # Do something else.
+        if not request.user.is_authenticated():
+            return HttpResponseRedirect('/login/?next=%s' % request.path)
+        # ...
 
-Por supuesto, es horrible meter en el código el ID del sitio de esa
-manera. Una forma levemente más limpia de lograr lo mismo, es chequear
-el dominio actual del sitio::
-
-    from django.conf import settings
-    from django.contrib.sites.models import Site
+O quizás mostrar un mensaje de error::
 
     def my_view(request):
-        current_site = Site.objects.get(id=settings.SITE_ID)
-        if current_site.domain == 'foo.com':
-            # Do something
-        else:
-            # Do something else.
+        if not request.user.is_authenticated():
+            return render_to_response('myapp/login_error.html')
+        # ...
 
-Este fragmento de código usado para obtener el objeto ``Site`` según
-el valor de ``settings.SITE_ID`` es tan usado, que el administrador de
-modelos de ``Site`` (``Site.objects``) tiene un método
-``get_current()``. El siguiente ejemplo es equivalente al anterior::
+Si se desea abreviar, se puede usar el decorador ``login_required``
+sobre las vistas que nos interese proteger::
 
-    from django.contrib.sites.models import Site
+    from django.contrib.auth.decorators import login_required
 
+    @login_required
     def my_view(request):
-        current_site = Site.objects.get_current()
-        if current_site.domain == 'foo.com':
-            # Do something
+        # ...
+
+Esto es lo que hace el decorador ``login_required``:
+
+* Si el usuario no está identificado, redirige a la dirección 
+  ``/accounts/login/``, incluyendo la url actual como un parámetro con 
+  el nombre ``next``, por ejemplo ``/accounts/login/?next=/polls/3/``.
+
+* Si el usuario está identificado, ejecuta la vista sin ningún cambio. La 
+  vista puede asumir sin problemas que el usuario está identificado 
+  correctamente.
+
+Limitar el acceso a usuarios que pasan una prueba
+-------------------------------------------------
+
+Se puede limitar el acceso basándose en ciertos permisos o en algún otro
+tipo de prueba, o proporcionar una página de identificación distinta de la 
+vista por defecto, y las dos cosas se hacen de manera similar.
+
+La forma más cruda es ejecutar las pruebas que queremos hacer directamente
+en el código de la vista. Por ejemplo, para comprobar que el usuario está
+identificado y que, además, tenga asignado el permiso ``polls.can_vote``
+(se explicará esto de los permisos con más detalle dentro de poco )
+haríamos::
+
+    def vote(request):
+        if request.user.is_authenticated() and request.user.has_perm('polls.can_vote')):
+            # vote here
         else:
-            # Do something else.
+            return HttpResponse("You can't vote in this poll.")
 
-.. nota::
+De nuevo, Django proporciona una forma abreviada llamada ``user_passes_test``. 
+Requiere que se la pasen unos argumentos y genera un decorador especializado 
+para cada situación en particular::
 
-    En este último ejemplo, no hay necesidad de importar
-    ``django.conf.settings``.
+    def user_can_vote(user):
+        return user.is_authenticated() and user.has_perm("polls.can_vote")
 
-Obtención del dominio actual para ser mostrado
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    @user_passes_test(user_can_vote, login_url="/login/")
+    def vote(request):
+        # Code here can assume a logged-in user with the correct permission.
+        ...
 
-Una forma DRY (acrónimo del inglés *Don't Repeat Yourself*, "no te repitas") de
-guardar el nombre del sitio y del dominio, como explicamos en "Escenario 2:
-alojamiento del nombre/dominio de tu sitio en un solo lugar", se logra
-simplemente haciendo referencia a ``name`` y a ``domain`` del objeto ``Site``
-actual. Por ejemplo::
+El decorador ``user_passes_test`` tiene un parámetro obligatorio: un objeto que
+se pueda llamar (normalmente una función) y que a su vez acepte como parámetro 
+un objeto del tipo ``User``, y devuelva ``True`` si el usuario puede acceder y 
+``False`` en caso contrario. Es importante destacar que ``user_passes_test`` 
+no comprueba automáticamente que el usuario esté identificado; esa es una 
+comprobación que se debe hacer explícitamente.
 
-    from django.contrib.sites.models import Site
-    from django.core.mail import send_mail
+En este ejemplo, hemos usado también un segundo parámetro opcional,
+``login_url``, que te permite indicar la url de la página que el
+usuario debe utilizar para identificarse (``/accounts/login/``
+por defecto).
 
-    def register_for_newsletter(request):
-        # Check form values, etc., and subscribe the user.
-        # ...
-        current_site = Site.objects.get_current()
-        send_mail('Thanks for subscribing to %s alerts' % current_site.name,
-            'Thanks for your subscription. We appreciate it.\n\n-The %s team.' % current_site.name,
-            'editor@%s' % current_site.domain,
-            [user_email])
-        # ...
+Comprobar si un usuario posee un determinado permiso es una tarea muy frecuente,
+así que Django proporciona una forma abreviada para estos casos: El decorador 
+``permission_required()``. Usando este decorador, el ejemplo anterior se podría 
+codificar así::
 
-Continuando con nuestro ejemplo de LJWorld.com y Lawrence.com, en
-Lawrence.com el correo electrónico tiene como sujeto la línea "Gracias
-por suscribirse a las alertas de lawrence.com". En LJWorld.com, en
-cambio, el sujeto es "Gracias por suscribirse a las alertas de
-LJWorld.com". Este comportamiento específico para cada sitio, también
-se aplica al cuerpo del correo electrónico.
+    from django.contrib.auth.decorators import permission_required
 
-Una forma aún más flexible (aunque un poco más pesada) de hacer lo
-mismo, es usando el sistema de plantillas de Django. Asumiendo que
-Lawrence.com y LJWorld.com tienen distintos directorios de plantillas
-(``TEMPLATE_DIRS``), puedes simplemente delegarlo al sistema de
-plantillas así::
-
-    from django.core.mail import send_mail
-    from django.template import loader, Context
-
-    def register_for_newsletter(request):
-        # Check form values, etc., and subscribe the user.
-        # ...
-        subject = loader.get_template('alerts/subject.txt').render(Context({}))
-        message = loader.get_template('alerts/message.txt').render(Context({}))
-        send_mail(subject, message, 'do-not-reply@example.com', [user_email])
+    @permission_required('polls.can_vote', login_url="/login/")
+    def vote(request):
         # ...
 
-En este caso, debes crear las plantillas ``subject.txt`` y
-``message.txt`` en ambos directorios de plantillas, el de LJWorld.com
-y el de Lawrence.com .  Como mencionamos anteriormente, eso te da más
-flexibilidad, pero también es más complejo.
-
-Una buena idea es explotar los objetos ``Site`` lo más posible, para
-que no haya una complejidad y una redundancia innecesarias.
-
-Obtención del dominio actual para las URLs completas
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-La convención de Django de usar ``get_absolute_url()`` para obtener
-las URLs de los objetos sin el dominio, está muy bien. Pero en en
-algunos casos puedes querer mostrar la URL completa -- con ``http://``
-y el dominio, y todo -- para un objeto.  Para hacerlo, puedes usar el
-*framework* *sites*. Este es un ejemplo::
-
-    >>> from django.contrib.sites.models import Site
-    >>> obj = MyModel.objects.get(id=3)
-    >>> obj.get_absolute_url()
-    '/mymodel/objects/3/'
-    >>> Site.objects.get_current().domain
-    'example.com'
-    >>> 'http://%s%s' % (Site.objects.get_current().domain, obj.get_absolute_url())
-    'http://example.com/mymodel/objects/3/'
-
-CurrentSiteManager
-------------------
-
-Si los ``Site`` juegan roles importantes en tu aplicación, considera el
-uso del útil ``CurrentSiteManager`` en tu modelo (o modelos). Es un
-administrador de modelos (consulta el Apéndice B) que filtra
-automáticamente sus consultas para incluir sólo los objetos asociados
-al ``Site`` actual.
-
-Usa ``CurrentSiteManager`` agregándolo a tu modelo explícitamente. Por
-ejemplo::
-
-    from django.db import models
-    from django.contrib.sites.models import Site
-    from django.contrib.sites.managers import CurrentSiteManager
-
-    class Photo(models.Model):
-        photo = models.FileField(upload_to='/home/photos')
-        photographer_name = models.CharField(maxlength=100)
-        pub_date = models.DateField()
-        site = models.ForeignKey(Site)
-        objects = models.Manager()
-        on_site = CurrentSiteManager()
-
-Con este modelo, ``Photo.objects.all()`` retorna todos los objetos ``Photo`` de
-la base de datos, pero ``Photo.on_site.all()`` retorna sólo los objetos
-``Photo`` asociados con el sitio actual, de acuerdo a la opción de configuración
-``SITE_ID``.
-
-En otras palabras, estas dos sentencias son equivalentes::
-
-    Photo.objects.filter(site=settings.SITE_ID)
-    Photo.on_site.all()
-
-¿Cómo supo ``CurrentSiteManager`` cuál campo de ``Photo`` era el ``Site``?  Por
-defecto busca un campo llamado ``site``. Si tu modelo tiene un campo
-``ForeignKey`` o un campo ``ManyToManyField`` llamado de otra forma que
-``site``, debes pasarlo explícitamente como el parámetro para
-``CurrentSiteManager``.  El modelo a continuación, que tiene un campo llamado
-``publish_on``, lo demuestra::
-
-    from django.db import models
-    from django.contrib.sites.models import Site
-    from django.contrib.sites.managers import CurrentSiteManager
-
-    class Photo(models.Model):
-        photo = models.FileField(upload_to='/home/photos')
-        photographer_name = models.CharField(maxlength=100)
-        pub_date = models.DateField()
-        publish_on = models.ForeignKey(Site)
-        objects = models.Manager()
-        on_site = CurrentSiteManager('publish_on')
-
-Si intentas usar ``CurrentSiteManager`` y pasarle un nombre de campo que no
-existe, Django lanzará un ``ValueError``.
-
-.. nota::
-
-    Probablemente querrás tener un ``Manager`` normal (no específico al sitio)
-    en tu modelo, incluso si usas ``CurrentSiteManager``. Como se explica en el
-    Apéndice B, si defines un *manager* manualmente, Django no creará
-    automáticamente el *manager* ``objects = models.Manager()``.
-
-    Además, algunas partes de Django -- el sitio de administración y las vistas
-    genéricas -- usan el *manager* que haya sido definido *primero* en el
-    modelo. Así que si quieres que el sitio de administración tenga acceso a
-    todos los objetos (no sólo a los específicos al sitio actual), pon un
-    ``objects = models.Manager()`` en tu modelo, antes de definir
-    ``CurrentSiteManager``.
-
-El uso que hace Django del *framework* Sites
---------------------------------------------
-
-Si bien no es necesario que uses el *framework* *sites*, es extremadamente
-recomendado, porque Django toma ventaja de ello en algunos lugares. Incluso si
-tu instalación de Django está alimentando a un solo sitio, deberías tomarte unos
-segundos para crear el objeto *site* con tu ``domain`` y ``name``, y apuntar su
-ID en tu opción de configuración ``SITE_ID``.
-
-Este es el uso que hace Django del *framework* *sites*:
-
-    * En el *framework* *redirects* (consulta la sección "`Redirects`_" más
-      adelante), cada objeto *redirect* está asociado con un sitio en
-      particular. Cuando Django busca un *redirect*, toma en cuenta el
-      ``SITE_ID`` actual.
-
-    * En el *framework* *comments*, cada comentario está asociado con un sitio
-      en particular. Cuando un comentario es posteado, su ``site`` es asignado
-      al ``SITE_ID`` actual, y cuando los comentarios son listados con la
-      etiqueta de plantillas apropiada, sólo los comentarios del sitio actual
-      son mostrados.
-
-    * En el *framework* *flatpages* (consulta la sección "`Flatpages`_" más
-      adelante), cada página es asociada con un sitio en particular. Cuando una
-      página es creada, tú especificas su ``site``, y el *middleware* de
-      *flatpage* chequea el ``SITE_ID`` actual cuando se traen páginas para ser
-      mostradas.
-
-    * En el *framework* *syndication* (consulta el `Capítulo 11`_), las plantillas
-      para ``title`` y ``description`` tienen acceso automático a la variable
-      ``{{ site }}``, que es el objeto ``Site`` que representa al sitio actual.
-      Además, la conexión para proporcionar las URLs de los elementos usan el
-      ``domain`` dede el objeto ``Site`` actual si no especificas un *fully
-      qualified domain*.
-
-    * En el *framework* *authentication* (consulta el `Capítulo 12`_), la vista
-      ``django.contrib.auth.views.login`` le pasa el nombre del ``Site`` actual
-      a la plantilla como ``{{ site_name }}``.
-
-Flatpages
-=========
-
-A menudo tendrás una aplicación Web impulsada por bases de datos ya funcionando,
-pero necesitarás agregar un par de páginas estáticas, tales como una página
-*Acerca de* o una página de Política de Privacidad. Sería posible usar un
-servidor Web estándar como por ejemplo Apache para servir esos archivos como
-archivos HTML planos, pero eso introduce un nivel extra de complejidad en tu
-aplicación, porque entonces tienes que preocuparte de la configuración de
-Apache, tienes que preparar el acceso para que tu equipo pueda editar esos
-archivos, y no puedes sacar provecho del sistema de plantillas de Django para
-darle estilo a las páginas.
-
-La solución a este problema es la aplicación flatpages de Django, la cual
-reside en el paquete ``django.contrib.flatpages``. Esta aplicación te permite
-manejar esas páginas aisladas mediante el sitio de administración de Django, y
-te permite especificar plantillas para las mismas usando el sistema de
-plantillas de Django. Detrás de escena usa modelos Django, lo que significa que
-almacena las páginas en una base de datos, de la misma manera que el resto de
-tus datos, y puedes acceder a las flatpages con la API de bases de datos
-estándar de Django.
-
-Las flatpages son identificadas por su URL y su sitio. Cuando creas una
-flatpage, especificas con cual URL está asociada, junto con en cuál(es) sitio(s)
-está (para más información acerca de sitios, consulta la sección "`Sites`_").
-
-Usar flatpages
---------------
-
-Para instalar la aplicación flatpages, sigue estos pasos:
-
-    1. Agrega ``'django.contrib.flatpages'`` a tu ``INSTALLED_APPS``.
-       ``django.contrib.flatpages`` depende de ``django.contrib.sites``, asique
-       asegúrate de que ambos paquetes se encuentren en ``INSTALLED_APPS``.
-
-    2. Agrega ``'django.contrib.flatpages.middleware.FlatpageFallbackMiddleware'``
-       a tu variable de configuración ``MIDDLEWARE_CLASSES``.
-
-    3. Ejecuta el comando ``manage.py syncdb`` para instalar las dos tables
-       necesarias en tu base de datos.
-
-La aplicación flatpages crea dos tablas en tu base de datos: ``django_flatpage``
-y ``django_flatpage_sites``. ``django_flatpage`` simplemente mantiene una
-correspondencia entre URLs y títulos más contenido de texto.
-``django_flatpage_sites`` es una tabla muchos a muchos que asocia una flatpage
-con uno o más sitios.
-
-La aplicación incluye un único modelo ``FlatPage``, definido en
-``django/contrib/flatpages/models.py``. El mismo se ve así::
-
-    from django.db import models
-    from django.contrib.sites.models import Site
-
-    class FlatPage(models.Model):
-        url = models.CharField(maxlength=100)
-        title = models.CharField(maxlength=200)
-        content = models.TextField()
-        enable_comments = models.BooleanField()
-        template_name = models.CharField(maxlength=70, blank=True)
-        registration_required = models.BooleanField()
-        sites = models.ManyToManyField(Site)
-
-Examinemos cada uno de los campos:
-
-    * ``url``: La URL donde reside esta flatpage, excluyendo el nombre del
-      dominio pero incluyendo la barra (``/``) inicial (por ej.
-      ``/about/contact/``).
-
-    * ``title``: El título de la flatpage. El framework no usa esto para nada en
-      especial. Es tu responsabilidad visualizarlo en tu plantilla.
-
-      ``content``: El contenido de la flatpage (por ej. el HTML de la página).
-      El framework no usa esto para nada en especial. Es tu responsabilidad
-      visualizarlo en tu plantilla.
-
-    * ``enable_comments``: Indica si deben activarse los comentarios e esta
-      flatpage. El framework no usa esto para nada en especial. Puedes comprobar
-      este valor en tu plantilla y mostrar un formulario de comentario si es
-      necesario.
-
-    * ``template_name``: El nombre de la plantilla a usarse para renderizar esta
-      flatpage. Es opcional; si no se indica o si esta plantilla no existe, el
-      framework usará la plantilla ``flatpages/default.html``.
-
-    * ``registration_required``: Indica si se requerirá registro para ver esta
-      flatpage. Esto se integra con el framework de autenticación/usuarios de
-      Django, el cual se trata en el `Capítulo 12`_.
-
-    * ``sites``: Los sitios en los cuales reside esta flatpage. Esto se integra
-      con el framework sites de Django, el cual se trata en la sección "`Sites`_"
-      en este capítulo.
-
-Puedes crear flatpages ya sea a través de la interfaz de administración de
-Django o a través de la API de base de datos de Django. Para más información,
-examina la sección "`Agregando, modificando y eliminando flatpages`_".
-
-Una vez que has creado flatpages, ``FlatpageFallbackMiddleware`` se encarga de
-todo el trabajo. Cada vez que cualquier aplicación Django lanza un error, este
-middleware verifica como último recurso la base de datos de flatpages en
-búsqueda de la URL que se ha requerido.  Específicamente busca una flatpage con
-la URL en cuestión y con un identificador de sitio que coincida con la variable
-de configuración ``SITE_ID``.
-
-Si encuentra una coincidencia, carga la plantilla de la flatpage, o
-``flatpages/default.html`` si la flatpage no ha especificado una plantilla
-personalizada. Le pasa a dicha plantilla una única variable de contexto:
-``flatpage``, la cual es el objeto flatpage. Usa ``RequestContext`` para
-renderizar la plantilla.
-
-Si ``FlatpageFallbackMiddleware`` no encuentra una coincidencia, el proceso de
-la petición continúa normalmente.
-
-.. nota::
-
-    Este middleware sólo se activa para errores 404 (página no encontrada) -- no
-    para errores 500 (error en servidor) u otras respuestas de error. Nota
-    también que el orden de ``MIDDLEWARE_CLASSES`` es relevante. Generalmente,
-    puedes colocar el ``FlatpageFallbackMiddleware`` cerca o en el final de la
-    lista, debido a que se trata de una opción de último recurso.
-
-Agregar, modificar y eliminar flatpages
----------------------------------------
-
-Puedes agregar, cambiar y eliminar flatpages de dos maneras:
-
-Vía la interfaz de administración
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Si has activado la interfaz automática de administración de Django, deberías
-ver una sección "Flatpages" en la página de índice de la aplicación admin. Edita
-las flatpages como lo harías con cualquier otro objeto en el sistema.
-
-Vía la API Python
-~~~~~~~~~~~~~~~~~
-
-Como ya se describió, las flatpages se representan mediante un modelo Django
-estándar que reside en ``django/contrib/flatpages/models.py``. Por lo tanto
-puede acceder a objetos flatpage mediante la API de base de datos Django, por
-ejemplo::
-
-    >>> from django.contrib.flatpages.models import FlatPage
-    >>> from django.contrib.sites.models import Site
-    >>> fp = FlatPage(
-    ...     url='/about/',
-    ...     title='About',
-    ...     content='<p>About this site...</p>',
-    ...     enable_comments=False,
-    ...     template_name='',
-    ...     registration_required=False,
-    ... )
-    >>> fp.save()
-    >>> fp.sites.add(Site.objects.get(id=1))
-    >>> FlatPage.objects.get(url='/about/')
-    <FlatPage: /about/ -- About>
-
-Usar plantillas de flatpages
-----------------------------
-
-Por omisión, las flatpages son renderizadas vía la plantilla
-``flatpages/default.html``, pero puedes cambiar eso para cualquier flatpage  con
-el campo ``template_name`` en el objeto ``FlatPage``.
-
-Es tu responsabilidad el crear la plantilla ``flatpages/default.html``. En tu
-directorio de plantillas, crea un directorio ``flatpages`` que contenga un
-archivo ``default.html``.
-
-A las plantillas de flatpages se les pasa una única variable de contexto:
-``flatpage``, la cual es el objeto flatpage.
-
-Este es un ejemplo de una plantilla ``flatpages/default.html``::
-
-    <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
-        "http://www.w3.org/TR/REC-html40/loose.dtd">
-    <html>
-    <head>
-    <title>{{ flatpage.title }}</title>
-    </head>
-    <body>
-    {{ flatpage.content }}
-    </body>
-    </html>
-
-Redirects
-=========
-
-El framework redirects de Django te permite administrar las redirecciones con
-facilidad almacenándolos en una base de datos y tratándolos como cualquier otro
-objeto modelo de Django. Por ejemplo puedes usar el framework redirects para
-indicarle a Django "Redirecciona cualquier petición de ``/music/`` a
-``/sections/arts/music/``.". Esto es útil cuando necesitas cambiar las cosas de
-lugar en tu sitio; los desarrolladores Web deberían hacer lo que esté en sus
-manos para evitar los enlaces rotos.
-
-Usar el framework redirects
----------------------------
-
-Para instalar la aplicación redirects, sigue estos pasos:
-
-    1. Agrega ``'django.contrib.redirects'`` a tu ``INSTALLED_APPS``.
-
-    2. Agrega ``'django.contrib.redirects.middleware.RedirectFallbackMiddleware'``
-       a tu variable de configuración ``MIDDLEWARE_CLASSES``.
-
-    3. Ejecuta el comando ``manage.py syncdb`` para instalar la única tabla
-       necesaria a tu base de datos.
-
-``manage.py syncdb`` crea una tabla ``django_redirect`` en tu base de datos.
-Esta se trata sencillamente de una tabla de búsqueda con campos ``site_id``,
-``old_path`` y ``new_path``.
-
-Puedes crear redirecciones tanto a través de la interfaz de administración como
-a través de la API de base de datos de Django. Para más información puedes leer
-la sección "`Agregando, modificando y eliminando redirecciones`_".
-
-Una vez que has creado redirecciones, la clase ``RedirectFallbackMiddleware`` se
-encarga de todo el trabajo. Cada vez que cualquier aplicación Django lanza un
-error 404, este middleware verifica como último recurso la base de datos de
-redirects en búsqueda de la URL que se ha requerido.  Específicamente busca un
-redirect con el ``old_path`` provisto y con un identificador de sitio que
-coincida con la variable de configuración ``SITE_ID``. (para más información
-acerca de ``SITE_ID`` y el framework sites, consulta la sección "`Sites`_"). Luego
-entonces realiza los siguientes pasos:
-
-    * Si encuentra una coincidencia y ``new_path`` no está vacío, redirecciona
-      la petición a ``new_path``.
-
-    * Si encuentra una coincidencia y ``new_path`` está vació, envía una
-      cabecera HTTP 410 ("Ausente") y una respuesta vacía (sin contenido).
-
-    * Si no encuentra una coincidencia, el procesamiento de la petición continúa
-      normalmente.
-
-El middleware sólo se activa ante errores 404 -- no en errores 500 o respuestas
-con otros códigos de estado.
-
-Notar que el orden de ``MIDDLEWARE_CLASSES`` es relevante. Generalmente puedes
-colocar ``RedirectFallbackMiddleware`` cerca del final de la lista, debido a que
-se trata de una opción de último recurso.
-
-.. nota::
-
-    Si usas los middlewares redirect y flatpages, analiza cual de los dos
-    (redirect o flatpages) desearías sea ejecutado primero. Sugerimos configurar
-    flatpages antes que redirects (o sea colocar el middleware flatpages antes
-    que el middleware redirects) pero tu podrías decidir lo contrario.
-
-Agregar, modificar y eliminar redirecciones
--------------------------------------------
-
-Puedes agregar, modificar y eliminar redirecciones de dos maneras:
-
-Vía la interfaz de administración
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Si has activado la interfaz automática de administración de Django, deberías
-ver una sección "Redirects" en la página de índice de la aplicación admin. Edita
-las redirecciones como lo harías con cualquier otro objeto en el sistema.
-
-Vía la API Python
-~~~~~~~~~~~~~~~~~
-
-Las redirecciones se representan mediante un modelo estándar Django que reside
-en ``django/contrib/redirects/models.py``. Por lo tanto puedes acceder a los
-objetos redirect vía la API de base de datos de Django, por ejemplo::
-
-    >>> from django.contrib.redirects.models import Redirect
-    >>> from django.contrib.sites.models import Site
-    >>> red = Redirect(
-    ...     site=Site.objects.get(id=1),
-    ...     old_path='/music/',
-    ...     new_path='/sections/arts/music/',
-    ... )
-    >>> red.save()
-    >>> Redirect.objects.get(old_path='/music/')
-    <Redirect: /music/ ---> /sections/arts/music/>
-
-Protección contra CSRF
-======================
-
-El paquete ``django.contrib.csrf`` provee protección contra *Cross-site request
-forgery* (CSRF) (falsificación de peticiones inter-sitio).
-
-CSRF, también conocido como *"session riding"* (montado de sesiones) es un exploit
-de seguridad en sitios Web. Se presenta cuando un sitio Web malicioso induce a
-un usuario a cargar sin saberlo una URL desde un sitio al cual dicho usuario ya
-se ha autenticado, por lo tanto saca ventaja de su estado autenticado.
-Inicialmente esto puede ser un poco difícil de entender así que en esta sección
-recorreremos un par de ejemplos.
-
-Un ejemplo simple de CSRF
--------------------------
-
-Supongamos que posees una cuenta de *webmail* en ``example.com``. Este sitio
-proveedor de *webmail* tiene un botón *Log Out*  que apunta a la URL
-``example.com/logout`` -- esto es, la única acción que necesitas realizar para
-desconectarte (*log out*) es visitar la página ``example.com/logout``.
-
-Un sitio malicioso puede coercerte a visitar la URL ``example.com/logout``
-incluyendo esa URL como un ``<iframe>`` oculto en su propia página maliciosa. De
-manera que si estás conectado (*logged in*) a tu cuenta de *webmail* del sitio
-``example.com`` y visitas la página maliciosa, el hecho de visitar la misma te
-desconectará de ``example.com``.
-
-Claramente, ser desconectado de un sitio de *webmail* contra tu voluntad no es un
-incidente de seguridad aterrorizante, pero este tipo de exploit puede sucederle
-a *cualquier* sitio que "confía" en sus usuarios, tales como un sitio de un
-banco o un sitio de comercio electrónico.
-
-Un ejemplo más complejo de CSRF
--------------------------------
-
-En el ejemplo anterior, el sitio ``example.com`` tenía parte de la culpa debido
-a que permitía que se pudiera solicitar un cambio de estado (la desconexión del
-sitio) mediante el método HTTP ``GET``. Es una práctica mucho mejor el requerir
-el uso de un ``POST`` HTTP para cada petición que cambie el estado en el
-servidor. Pero aun los sitios Web que requieren el uso de ``POST`` para acciones
-que signifiquen cambios de estado son vulnerables a CSRF.
-
-Supongamos que ``example.com`` ha mejorado su funcionalidad de desconexión  de
-manera que "Log Out" es ahora un botón de un ``<form>`` que es enviado vía un
-``POST`` a la URL ``example.com/logout``. Adicionalmente, el ``<form>`` de
-desconexión incluye un campo oculto::
-
-    <input type="hidden" name="confirm" value="true" />
-
-Esto asegura que un simple ``POST`` a la URL ``example.com/logout`` no
-desconectará a un usuario; para que los usuarios puedan desconectarse, deberán
-enviar una petición a ``example.com/logout`` usando ``POST`` *y* enviar la
-variable ``POST`` ``confirm`` con el valor ``'true'``.
-
-Bueno, aun con dichas medidas extra de seguridad, este esquema también puede ser
-atacado mediante CSRF -- la página maliciosa sólo necesita hacer un poquito
-más de trabajo. Los atacantes pueden crear un formulario completo que envíe su
-petición a tu sitio, ocultar el mismo en un ``<iframe>`` invisible y luego usar
-JavaScript para enviar dicho formulario en forma automática.
-
-Previniendo la CSRF
--------------------
-
-Entonces, ¿Cómo puede tu sitio defenderse de este exploit?. El primer paso es
-asegurarse que todas las peticiones ``GET`` no posean efectos colaterales. De
-esa forma, si un sitio malicioso incluye una de tus páginas como un
-``<iframe>``, esto no tendrá un efecto negativo.
-
-Esto nos deja con las peticiones ``POST``. El segundo paso es dotar a cada
-``<form>`` que se enviará vía POST un campo oculto cuyo valor sea secreto y sea
-generado en base al identificador de sesión del usuario. Entonces luego, cuando
-se esté realizando el procesamiento del formulario en el servidor, comprobar
-dicho campo secreto y generar un error si dicha comprobación no es exitosa.
-
-Esto es precisamente lo que hace la capa de prevención de CSRF de Django, tal
-como se explica en la siguiente sección.
-
-Usar el middleware CSRF
-~~~~~~~~~~~~~~~~~~~~~~~
-
-El paquete ``django.contrib.csrf``  contiene sólo un módulo: ``middleware.py``.
-Este módulo contiene una clase middleware Django: ``CsrfMiddleware`` la cual
-implementa la protección contra CSRF.
-
-Para activar esta proteccion, agrega
-``'django.contrib.csrf.middleware.CsrfMiddleware'`` a la variable de
-configuración ``MIDDLEWARE_CLASSES`` en tu archivo de configuración. Este
-middleware necesita procesar la respuesta *después* de ``SessionMiddleware``,
-así que ``CsrfMiddleware`` debe aparecer *antes* que ``SessionMiddleware``
-en la lista (esto es debido que el middleware de respuesta es procesado de
-atrás hacia adelante). Por otra parte, debe procesar la respuesta antes que la
-misma sea comprimida o alterada de alguna otra forma, de manera que
-``CsrfMiddleware`` debe aparecer después de ``GZipMiddleware``. Una vez que has
-agregado eso a tu ``MIDDLEWARE_CLASSES`` ya estás listo. Revisa la sección
-"`Orden de MIDDLEWARE_CLASSES`_" en el `Capítulo 13`_ si necesitas conocer más sobre
-el tema.
-
-En el caso en el que estés interesado, así es como trabaja ``CsrfMiddleware``.
-Realiza estas dos cosas:
-
-    1. Modifica las respuestas salientes a peticiones agregando un campo de
-       formulario oculto a todos los formularios ``POST``, con el nombre
-       ``csrfmiddlewaretoken`` y un valor que es un *hash* del identificador
-       de sesión más una clave secreta. El middleware *no* modifica la respuesta
-       si no existe un identificador de sesión, de manera que el costo en
-       rendimiento es despreciable para peticiones que no usan sesiones.
-
-    2. Para todas las peticiones ``POST`` que porten la cookie de sesión,
-       comprueba que ``csrfmiddlewaretoken`` esté presente y tenga un valor
-       correcto. Si no cumple estas condiciones, el usuario recibirá un error
-       ``HTTP`` 403. El contenido de la página de error es el mensaje "Cross
-       Site Request Forgery detected. Request aborted."
-
-Esto asegura que solamente se puedan usar formularios que se hayan originado en
-tu sitio Web para enviar datos vía POST al mismo.
-
-Este middleware deliberadamente trabaja solamente sobre peticiones HTTP ``POST``
-(y sus correspondientes formularios POST). Como ya hemos explicado, las
-peticiones ``GET`` nunca deberían tener efectos colaterales; es tu
-responsabilidad asegurar eso.
-
-Las peticiones ``POST`` que no estén acompañadas de una cookie de sesión no son
-protegidas simplemente porque no tiene sentido protegerlas, un sitio Web
-malicioso podría de todas formas generar ese tipo de peticiones.
-
-Para evitar alterar peticiones no HTML, el middleware revisa la cabecera
-``Content-Type`` de la respuesta antes de modificarla. Sólo modifica las páginas
-que son servidas como ``text/html`` o ``application/xml+xhtml``.
-
-Limitaciones del middleware CSRF
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``CsrfMiddleware`` necesita el framework de sesiones de Django para poder
-funcionar. (Revisa el `Capítulo 12`_ para obtener más información sobre sesiones).
-Si estás usando un framework de sesiones o autenticación personalizado que
-maneja en forma manual las cookies de sesión, este middleware no te será de
-ayuda.
-
-Si tu aplicación crea páginas HTML y formularios con algún método inusual (por
-ej. si envía fragmentos de HTML en sentencias JavaScript ``document.write``),
-podrías estár salteandote el filtro que agrega el campo oculto al formulario. De
-presentarse esta situación, el envío del formulario fallará siempre. (Esto
-sucede porque ``CsrfMiddleware`` usa una expresión regular para agregar el campo
-``csrfmiddlewaretoken`` a tu HTML antes de que la página sea enviada al cliente,
-y la expresión regular a veces no puede manejar código HTML muy extravagante).
-Si sospechas que esto podría estar sucediendo, sólo examina el código en tu
-navegador Web para ver si es que ``csrfmiddlewaretoken`` ha sido insertado en tu
-``<form>``.
-
-Para más información y ejemplos sobre CSRF, visita
-http://en.wikipedia.org/wiki/CSRF.
-
-Hacer los datos más humanos
-===========================
-
-Esta aplicación aloja un conjunto de filtros de plantilla útiles a la hora de
-agregar un "toque humano" a los datos. Para activar esos filtros, agrega
-``django.contrib.humanize`` a tu variable de configuración ``INSTALLED_APPS``.
-Una vez que has hecho eso, usa ``{% load humanize %}`` en una plantilla, y
-tendrás acceso a los filtros que se describen en las siguientes secciones.
-
-apnumber
+El decorador ``permission_required()`` también acepta el parámetro opcional 
+``login_url``, de nuevo con el valor ``/accounts/login/`` en caso de omisión.
+
+.. admonition:: Limitar el acceso a vistas genéricas
+
+    Una de las preguntas más frecuentes en la lista de usuarios de
+    Django trata de cómo limitar el acceso a una vista genérica. Para
+    conseguirlo, tienes que usar un recubrimiento sencillo
+    alrededor de la vista que quieres proteger, y apuntar en tu
+    URLconf al recubrimiento en vez de a la vista genérica::
+
+        from dango.contrib.auth.decorators import login_required
+        from django.views.generic.list_detail import object_detail
+
+        @login_required
+        def limited_object_detail(*args, **kwargs):
+            return object_detail(*args, **kwargs)
+
+Puedes cambiar el decorador ``login_required`` por cualquier otro
+que quieras usar, como es lógico.
+
+
+Gestionar usuarios, permisos y grupos
+-------------------------------------
+
+La forma más fácil de gestionar el sistema de autentificación es a través
+de la interfaz de administración ``admin``. Él :doc:`capítulo 6<chapter06>` 
+describe como usar esta interfaz para modificar los datos de los usuarios y 
+controlar sus permisos y accesos, y la mayor parte del tiempo esa es la forma
+más adecuada de gestión.
+
+A veces, no obstante, hace falta un mayor control, y para eso podemos utilizar 
+las llamadas a bajo nivel que describiremos en este capítulo.
+
+Crear usuarios
+~~~~~~~~~~~~~~
+
+Puedes crear usuarios con el método ``create_user``::
+
+    >>> from django.contrib.auth.models import User
+    >>> user = User.objects.create_user(username='john',
+    ...                                 email='jlennon@beatles.com',
+    ...                                 password='glass onion')
+
+En este momento, ``user`` es una instancia de la clase ``User``, preparada
+para ser almacenada en la base de datos (``create_user()`` no llama al
+método ``save()``). Este te permite cambiar algunos de sus atributos
+antes de guardarlos, si quieres::
+
+    >>> user.is_staff = True
+    >>> user.save()
+
+Cambia contraseñas
+~~~~~~~~~~~~~~~~~~
+
+Puedes cambiar las contraseña de un usuario llamando a ``set_password()``::
+
+    >>> user = User.objects.get(username='john')
+    >>> user.set_password('goo goo goo joob')
+    >>> user.save()
+
+No debes modificar directamente el atributo ``password``, a no ser que
+tengas muy claro lo que estás haciendo. La contraseña se almacena en
+la base de datos en forma de código de comprobación (*salted
+hash*) y, por tanto, debe ser modificada sólo a través de este método.
+
+Para ser más exactos, el atributo ``password`` de un objeto ``User`` es una
+cadena de texto con el siguiente formato::
+
+    hashtype$salt$hash
+
+Es decir, el tipo de hash, el grano de sal (*salt*) y el código hash
+propiamente dicho, separados entre sí por el carácter dólar ($).
+
+El valor de ``hashtype`` puede ser ``sha1`` (por defecto) o ``md5``, el
+algoritmo usado para realizar una transformación *hash* de un solo sentido
+sobre la contraseña. El grano de sal es una cadena de texto
+aleatoria que se utiliza para aumentar la resistencia de esta codificación
+frente a un ataque por diccionario. Por ejemplo::
+
+    sha1$a1976$a36cc8cbf81742a8fb52e221aaeab48ed7f58ab4
+
+Las funciones ``User.set_password()`` y ``User.check_password()`` manejan
+todos estos detalles y comprobaciones de forma transparente.
+
+.. admonition:: ¿Tengo que echar sal a mi ordenador?
+
+    No, la sal de la que hablamos no tiene nada que ver con ninguna
+    receta de cocina; es una forma habitual de aumentar la
+    seguridad a la hora de almacenar una contraseña. Una
+    función *hash* es una función criptográfica, que se
+    caracteriza por ser de un solo sentido; es decir, es fácil
+    calcular el código *hash* de un determinado valor, pero es prácticamente
+    imposible reconstruir el valor original partiendo únicamente del
+    código hash.
+
+    Si almacenáramos las contraseñas como texto en claro, cualquiera que
+    pudiera obtener acceso a la base de datos podría saber sin ninguna
+    dificultad todas las contraseñas al instante. Al guardar las
+    contraseñas en forma de códigos *hash* se reduce el peligro en caso
+    de que se comprometa la seguridad de la base de datos.
+
+    No obstante, un atacante que pudiera acceder a la base de datos
+    podría ahora realizar un ataque por fuerza bruta, calculando
+    los códigos *hash* de millones de contraseñas distintas y comparando
+    esos códigos con los que están almacenados en la base de datos. Este
+    llevará algo de tiempo, pero menos de lo que parece, los ordenadores
+    son increíblemente rápidos.
+
+    Para empeorar las cosas, hay disponibles públicamente lo que se
+    conoce como tablas arco iris (*rainbow tables*), que consisten en
+    valores *hash* precalculados de millones de contraseñas de uso
+    habitual. Usando una tabla arco iris, un atacante puede romper
+    la mayoría de las contraseñas en segundos.
+
+    Para aumentar la seguridad, se añade un valor inicial aleatorio
+    y diferente a cada contraseña antes de obtener el código *hash*. Este
+    valor aleatorio es el "grano de sal". Como cada grano de sal es
+    diferente para cada password se evita el uso de tablas arco iris, lo
+    que obliga al atacante a volver al sistema de ataque por fuerza
+    bruta, que a su vez es más complicado al haber aumentado la entropía
+    con el grano de sal. Otra ventaja es que si dos usuarios eligen
+    la misma contraseña, al añadir el grano de sal los códigos hash
+    resultantes serán diferentes.
+
+    Aunque esta técnica no es, en términos absolutos, la más segura
+    posible, ofrece un buen compromiso entre seguridad y conveniencia.
+
+El alta del usuario
+~~~~~~~~~~~~~~~~~~~
+
+Podemos usar estas herramientas de bajo nivel para crear vistas que
+permitan al usuario darse de alta. Prácticamente todos los desarrolladores
+quieren implementar el alta del usuario a su manera, por
+lo que Django da la opción de crearte tu propia vista para ello.
+Afortunadamente, es muy fácil de hacer.
+
+La forma más sencilla es escribir una pequeña vista que pregunte al
+usuario los datos que necesita y con ellos se cree directamente
+el usuario. Django proporciona un formulario prefabricado que se puede
+usar con este fin, como se muestra en el siguiente ejemplo::
+
+    from django import forms
+    from django.contrib.auth.forms import UserCreationForm
+    from django.http import HttpResponseRedirect
+    from django.shortcuts import render
+
+    def register(request):
+        if request.method == 'POST':
+            form = UserCreationForm(request.POST)
+            if form.is_valid():
+                new_user = form.save()
+                return HttpResponseRedirect("/books/")
+        else:
+            form = UserCreationForm()
+        return render(request, "registration/register.html", {
+            'form': form,
+        })
+
+Este formulario asume que existe una plantilla llamada
+``registration/register.html``. esa plantilla podría
+consistir en algo parecido a esto:
+
+.. code-block:: html
+
+  {% extends "base.html" %}
+
+  {% block title %}Create an account{% endblock %}
+
+  {% block content %}
+    <h1>Create an account</h1>
+
+    <form action="" method="post">
+        {{ form.as_p }}
+        <input type="submit" value="Create the account">
+    </form>
+  {% endblock %}
+
+
+Usar información de autentificación en plantillas
+-------------------------------------------------
+
+El usuario actual, así como sus permisos, están disponibles
+en el contexto de la plantilla cuando usas ``RequestContext`` (véase
+:doc:`Capítulo 10<chapter10>`).
+
+.. admonition:: Nota
+
+    Técnicamente hablando, estas variables están disponibles en el contexto
+    de la plantilla sólo si usas ``RequestContext`` *y* en la configuración
+    está incluido el valor ``"django.core.context_processors.auth"`` en
+    la opción ``TEMPLATE_CONTEXT_PROCESSORS``, que es el valor que viene
+    predefinido cuando se crea un proyecto. Como ya se comentó, véase
+    él :doc:`capítulo 10<chapter10>` para más información.
+
+Cuando se usa ``RequestContext``, el usuario actual (ya sea una instancia de
+``User`` o de ``AnonymousUser``) es accesible en la plantilla con el
+nombre ``{{ user }}``::
+
+    {% if user.is_authenticated %}
+      <p>Welcome, {{ user.username }}. Thanks for logging in.</p>
+    {% else %}
+      <p>Welcome, new user. Please log in.</p>
+    {% endif %}
+
+Los permisos del usuario se almacenan en la variable ``{{ perms }}``. En realidad,
+es una forma simplificada de acceder a un par de métodos sobre los permisos
+que veremos en breve.
+
+Hay dos formas de usar este objeto ``perms``. Puedes usar ``{{ perms.polls }}`` para
+comprobar si un usuario tienen *algún* permiso para una determinada aplicación, o se
+puede usar una forma más específica, como ``{{ perms.polls.can_vote }}``, para
+comprobar si el usuario tiene concedido un permiso en concreto.
+
+Por lo tanto, se pueden usar estas comprobaciones en sentencias ``{% if %}``:
+
+.. code-block:: html
+
+    {% if perms.polls %}
+      <p>You have permission to do something in the polls app.</p>
+      {% if perms.polls.can_vote %}
+        <p>You can vote!</p>
+      {% endif %}
+    {% else %}
+      <p>You don't have permission to do anything in the polls app.</p>
+    {% endif %}
+
+El resto de detalles: permisos, grupos, mensajes
+================================================
+
+Hay unas cuantas cosas que pertenecen al entorno de autentificación
+y que hasta ahora sólo hemos podido ver de pasada. En esta sección las
+veremos con un poco más de detalle.
+
+Permisos
 --------
 
-Para números entre 1 y 9, este filtro retorna la representación textual del
-número. Caso contrario retorna el numeral. Esto cumple con el estilo Associated
-Press.
+Los permisos son una forma sencilla de "marcar" que determinados usuarios
+o grupos pueden realizar una acción. Se usan normalmente para la parte de
+administración de Django, pero puedes usarlos también en tu código.
 
-Ejemplos:
+El sistema de administración de Django utiliza  los siguientes permisos:
 
-    * 1 se convierte en "uno".
-    * 2 se convierte en "dos".
-    * 10 se convierte en "10".
+* Acceso a visualizar el formulario "Añadir", y Añadir objetos, está
+  limitado a los usuarios que tengan el permiso *add* para ese
+  tipo de objeto.
 
-Puedes pasarle ya sea un entero o una representación en cadena de un entero.
+* El acceso a la lista de cambios, ver el formulario de cambios
+  y cambiar un objeto está limitado a los usuarios que tengan
+  el permisos *change* para ese tipo de objeto.
 
-intcomma
+* Borrar objetos está limitado a los usuarios que tengan el
+  permiso *delete* para ese tipo de objeto.
+
+Los permisos se definen a nivel de las clases o tipos de objetos,
+no a nivel de instancias. Por ejemplo, se puede decir "María puede
+modificar los reportajes nuevos", pero no "María solo puede
+modificar los reportajes nuevos que haya creado ella", ni "María
+sólo puede cambiar los reportajes que tengan un determinado
+estado, fecha de publicación o identificador".
+
+Estos tres permisos básicos, añadir, cambiar y borrar, se crean
+automáticamente para cualquier modelo Django que incluya una
+clase ``Admin``. Entre bambalinas, los permisos se agregan a la
+tabla ``auth_permission`` cuando ejecutas ``manage.py migrate``.
+
+Estos permisos se crean con el siguiente formato:
+``"<app>.<action>_<object_name>"``. Por ejemplo, si tienes una
+aplicación llamada ``encuestas``, con un modelo llamado
+``Respuesta``, se crearan automáticamente los tres
+permisos con los nombres ``"encuestas.add_respuesta"``,
+``"encuestas.change_respuesta"`` y
+``"encuestas.delete_respuesta"``.
+
+Igual que con los usuarios, los permisos se implementa en un modelo Django
+que reside en el módulo ``django.contrib.auth.models``. Esto significa
+que puedes usar la API de acceso a la base de datos para interactuar
+con los permisos de la forma que quieras.
+
+Grupos
+------
+
+Los grupos son una forma genérica de trabajar con varios usuarios
+a la vez, de forma que se les pueda asignar permisos o etiquetas
+en bloque. Un usuario puede pertenecer a varios grupos a la vez.
+
+Un usuario que pertenezca a un grupo recibe automáticamente todos
+los permisos que se la hayan otorgado al grupo. Por ejemplo, si el
+grupo ``Editores`` tiene el permiso ``can_edit_home_page``, cualquier
+usuario que pertenezca a dicho grupo también tiene ese permiso.
+
+Los grupos también son una forma cómoda de categorizar a los usuarios
+para asignarles una determinada etiqueta, o para otorgarles una funcionalidad
+extra. Por ejemplo, se puede crear un grupo ``Usuarios especiales``, y
+utilizar código para permitir el acceso a determinadas porciones de
+tu sitio sólo a los miembros de ese grupo, o para enviarles un correo
+electrónico sólo a ellos.
+
+Al igual que con los usuarios, la manera más sencilla de gestionar los
+grupos es usando la interfaz de administración de Django. Los grupos, en
+cualquier caso, son modelos Django que residen en el módulo
+``django.contrib.auth.models`` así que, al igual que en el caso
+anterior, puedes usar la API de acceso a la base de datos para trabajar
+con los grupos a bajo nivel.
+
+Mensajes
 --------
 
-Este filtro convierte un entero a una cadena conteniendo comas cada tres
-dígitos.
+El sistema de mensajes es un forma muy ligera y sencilla de enviarle
+mensajes a un usuario. Cada usuario tiene asociada una cola de
+mensajes, de forma que los mensajes lleguen en el orden en que fueron
+enviados. Los mensajes no tienen ni fecha de caducidad ni fecha de envío.
 
-Ejemplos:
+La interfaz de administración de Django usa los mensajes para notificar
+que determinadas acciones han podido ser llevadas a cabo con éxito. Por
+ejemplo, al crear un objeto, verás que aparece un mensaje en lo alto
+de la página de administración, indicando que se ha podido crear el objeto
+sin problemas.
 
-    * 4500 se convierte en "4,500".
-    * 45000 se convierte en "45,000".
-    * 450000 se convierte en "450,000".
-    * 4500000 se convierte en "4,500,000".
+Puedes usar la misma API para enviar o mostrar mensajes en tu propia
+aplicación. Las llamadas de la API son bastante simples:
 
-Puedes pasarle ya sea un entero o una representación en cadena de un entero.
+* Para crear un nuevo mensaje usa
+  ``user.message_set.create(message='message_text')``.
 
-intword
--------
+* Para recuperar/eliminar mensajes usa ``user.get_and_delete_messages()``,
+  la cual retorna una lista de objetos ``Message`` en la cola del usuario
+  (si es que existiera alguno) y elimina el mensaje de la misma.
 
-Este filtro convierte un entero grande a una representación amigable en texto.
-Funciona mejor con números mayores a un millón.
+En el siguiente ejemplo, la vista guarda un mensaje para el usuario después de
+crear una lista de reproducción::
 
-Ejemplos:
+    def create_playlist(request, songs):
+        # Create the playlist with the given songs.
+        # ...
+        request.user.message_set.create(
+            message="Your playlist was added successfully."
+        )
+        return render_to_response("playlists/create.html",
+            context_instance=RequestContext(request))
 
-    * 1000000 se convierte en "1.0 millón".
-    * 1200000 se convierte en "1.2 millón".
-    * 1200000000 se convierte en "1.2 millardos".
+Al usar ``RequestContext``, los mensajes del usuario actual, si los
+tuviera, están accesibles desde la variable de contexto usando el
+nombre ``{{ messages }}``. El siguiente ejemplo representa un fragmento
+de código que muestras los mensajes:
 
-Se admiten valores hasta un billardo (1,000,000,000,000,000).
+.. code-block:: html
 
-Puedes pasarle ya sea un entero o una representación en cadena de un entero.
+    {% if messages %}
+    <ul>
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
 
-ordinal
--------
+Hay que hacer notar que ``RequestContext`` llama a ``get_and_delete_messages``
+de forma implícita, por lo que los mensajes serán borrados, aún si no se
+muestran en pantalla.
 
-Este filtro convierte un entero a una cadena cuyo valor es su ordinal.
-
-Ejemplos:
-
-    * 1 se convierte en "1st".
-    * 2 se convierte en "2nd".
-    * 3 se convierte en "3rd".
-
-Puedes pasarle ya sea un entero o una representación en cadena de un entero.
-
-Filtros de marcado
-==================
-
-La siguiente colección de filtros de plantilla implementa lenguajes comunes de
-marcado:
-
-    * ``textile``: Implementa Textile
-      (http://en.wikipedia.org/wiki/Textile_%28markup_language%29)
-
-    * ``markdown``: Implementa Markdown (http://en.wikipedia.org/wiki/Markdown)
-
-    * ``restructuredtext``: Implementa ReStructured Text
-      (http://en.wikipedia.org/wiki/ReStructuredText)
-
-En cada caso el filtro espera el texto con formato de marcado como una cadena y
-retorna una cadena representando el texto con formato. Por ejemplo el filtro
-``textile`` convierte texto marcado con formato Textile a HTML::
-
-    {% load markup %}
-    {{ object.content|textile }}
-
-Para activar estos filtros, agrega ``django.contrib.markup`` a tu variable de
-configuración ``INSTALLED_APPS``. Una vez que hayas hecho esto, usa
-``{% load markup %}`` en una plantilla y tendrás acceso a dichos filtros. Para
-más detalles examina el código fuente en
-``django/contrib/markup/templatetags/markup.py.``
+Por último, el sistema de mensajería sólo funciona para usuarios de la base de
+datos. Para enviar mensajes a usuarios anónimos hay que usar en entorno de
+sesiones directamente.
 
 ¿Qué sigue?
 ===========
 
-Muchos de estos frameworks contribuidos (CSRF, el sistema de autenticación,
-etc.) hacen su magia proveyendo una pieza de middleware. El middleware es
-esencialmente código que se ejecuta antes y/o después  de cada petición y puede
-modificar cada petición y respuesta a voluntad. :doc:`A continuación<chapter15>` trataremos el
-middleware incluido con Django y explicaremos cómo puedes crear el tuyo propio.
+La verdad es que el sistema de autorización tiene tela de donde cortar. 
+Sin embargo la mayoría de las veces no tendrás que preocuparte por todos 
+los detalles que se describen en este capítulo, pero si alguna vez tienes 
+que gestionar interacciones complicadas con los usuarios, agradecerás tener 
+a la mano todas estas utilidades disponibles.
 
-
+En él :doc:`próximo capítulo<chapter15>`, echaremos un vistazo a una parte de 
+Django que necesita la infraestructura que proporciona el sistema de cache, el
+cual es una forma conveniente para mejorar el funcionamiento de tus
+aplicaciones.

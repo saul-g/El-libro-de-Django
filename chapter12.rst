@@ -1,1517 +1,1111 @@
-==============================================
-Capítulo 12: Sesiones, usuario e inscripciones
-==============================================
-
-Tenemos que confesar algo: hasta el momento hemos ignorado un aspecto
-absolutamente importante del desarrollo web. Hemos hecho la
-suposición de que el tráfico que visita nuestra web está compuesto
-por una masa amorfa de usuarios anónimos, que se precipitan contra nuestras
-cuidadosamente diseñadas páginas.
-
-Esto no es verdad, claro. Los navegadores que consultan nuestras
-páginas tienen a personas reales detrás (la mayor parte del tiempo, al
-menos). Este es un hecho importantísimo y que no debemos ignorar: Lo
-mejor de Internet es que sirve para conectar *personas*, no máquinas. Si
-queremos desarrollar un sitio web realmente competitivo, antes o después
-tendremos que plantearnos como tratar a las personas que están
-detrás del navegador.
-
-Por desgracia, no es tan fácil como podría parecer. El protocolo HTTP
-se diseñó específicamente para que fuera un protocolo *sin estado*, es
-decir, que cada petición y respuesta está totalmente aislada de las
-demás. No hay persistencia entre una petición y la siguiente, y ninguno
-de los atributos de la petición (dirección IP, identificador del
-agente, etc...) nos permite discriminar de forma segura y consistente
-las peticiones de una persona de las del resto.
-
-En este capítulo aprenderemos como solucionar esta carencia de
-estados. Empezaremos al nivel más bajo (*cookies*), e iremos ascendiendo
-hasta las herramientas de alto nivel que nos permitirán gestionar
-sesiones, usuarios y altas o inscripciones de los mismos.
-
-Cookies
-=======
-
-Los desarrolladores de navegadores hace tiempo que se dieron cuenta de que esta
-carencia de estados iba a representar un problema para los desarrolladores
-web, y así fue como nacieron las *cookies* (literalmente *galleta*). Una
-cookie es una pequeña cantidad de información que el servidor delega
-en el navegador, de forma que este la almacena. Cada vez que el cliente
-web solicita una página del servidor, se le envía de
-vuelta la cookie.
-
-Veamos con un poco más de detalle el funcionamiento. Cuando abrimos
-nuestro navegador y escribimos ``google.com``, el navegador envía
-una solicitud HTTP a Google que empieza más o menos así::
-
-    GET / HTTP/1.1
-    Host: google.com
-    ...
-
-Cuando Google responde, la respuesta contiene algo parecido a esto::
-
-    HTTP/1.1 200 OK
-    Content-Type: text/html
-    Set-Cookie: PREF=ID=5b14f22bdaf1e81c:TM=1167000671:LM=1167000671;
-                expires=Sun, 17-Jan-2038 19:14:07 GMT;
-                path=/; domain=.google.com
-    Server: GWS/2.1
-    ...
-
-Fíjate en la línea que comienza con ``Set-Cookie``. El navegador almacenará
-el valor indicado (``PREF=ID=5b14f22bdaf1e81c:TM=1167000671:LM=1167000671``) y
-se lo volverá a enviar a Google cada vez que vuelva a acceder a alguna de
-sus páginas; de esa forma, la próxima vez que vuelvas a Google, la petición
-que enviará el navegador se parecerá a esta::
-
-    GET / HTTP/1.1
-    Host: google.com
-    Cookie: PREF=ID=5b14f22bdaf1e81c:TM=1167000671:LM=1167000671
-    ...
-
-Google puede saber ahora, gracias al valor de la *Cookie*, que eres la misma
-persona que accedió un rato antes. Este valor puede ser, por ejemplo, una
-clave en una tabla de la base de datos que almacene los datos del
-usuario. Con esa información, Google puede hacer aparecer tu nombre
-en la página (de hecho, lo hace).
-
-Cómo definir y leer los valores de las cookies
-----------------------------------------------
-
-A la hora de utilizar las capacidades de persistencia de Django, lo más
-probable es que uses las prestaciones de alto nivel para la gestión de
-sesiones y de usuarios, prestaciones que discutiremos un poco más
-adelante en este mismo capítulo. No obstante, ahora vamos a hacer
-una breve parada y veremos como leer y definir *cookies* a bajo
-nivel. Esto debería ayudarte a entender como funcionan el resto
-de las herramientas que veremos en el capítulo, y te será de utilidad
-si alguna vez tienes que trabajar con las cookies directamente.
-
-Obtener los valores de las cookies que ya están definidas es muy fácil. Cada
-objeto de tipo petición, ``request``, contiene un objeto ``COOKIES`` que se
-comporta como un diccionario; puedes usarlo para leer cualquier *cookie* que el
-navegador haya enviado a la vista::
-
-    def show_color(request):
-        if "favorite_color" in request.COOKIES:
-            return HttpResponse("Your favorite color is %s" % \
-                request.COOKIES["favorite_color"])
-        else:
-            return HttpResponse("You don't have a favorite color.")
-
-Definir los valores de las cookies es sólo un poco más complicado. Debes
-usar el método ``set_cookie()`` en un objeto de tipo ``HttpResponse``. He
-aquí un ejemplo que define la *cookie* ``favorite_color`` utilizando
-el valor que se le pasa como parámetro ``GET``::
-
-    def set_color(request):
-        if "favorite_color" in request.GET:
-
-            # Create an HttpResponse object...
-            response = HttpResponse("Your favorite color is now %s" % \
-                request.GET["favorite_color"])
-
-            # ... and set a cookie on the response
-            response.set_cookie("favorite_color",
-                                request.GET["favorite_color"])
-
-            return response
-
-        else:
-            return HttpResponse("You didn't give a favorite color.")
-
-Hay una serie de parámetros opcionales que puedes pasar
-a ``response.set_cookie()`` y que te permiten controlar determinadas
-características de la *cookie*, tal y como se muestra en la
-tabla 12-1.
-
-.. tabla:: Tabla 12-1: Opciones de las Cookies
-
-==============  =================  ===================================================
- Parámetro      Valor por omisión  Descripción
-==============  =================  ===================================================
-  ``max_age``       ``None``       El tiempo (en segundos) que la cookie
-                                   debe permanecer activa. Si este
-                                   parámetro es la *cookie*, desaparecerá
-                                   automáticamente cuando se cierre el
-                                   navegador.
-
-
- ``expires``       ``None``       La fecha y hora en que la cookie debe
-                                   expirar. Debe estar en el formato
-                                   ``"Wdy, DD-Mth-YY HH:MM:SS GMT"``. Si
-                                   se utiliza este parámetro, su valor
-                                   tiene preferencia sobre el definido
-                                   mediante ``max_age``.
-
-    ``path``        ``"/"``        La ruta o *path* para la cual es válida la
-                                   cookie. Los navegadores solo reenviarán la
-                                   cookie a las páginas que estén en dicha
-                                   ruta. Esto impide que se envíe esta cookie
-                                   a otras secciones de la web.
-
-                                   Es especialmente útil si no se tiene el control
-                                   del nivel superior de directorios del
-                                   servidor web.
-
-    ``domain``      ``None``       El dominio para el cual es válida la cookie. Se
-                                   puede usar este parámetro para definir una
-                                   cookie que sea apta para varios dominios. Por
-                                   ejemplo, definiendo ``domain=".example.com"``
-                                   la cookie será enviada a los dominios
-                                   ``www.example.com``, ``www2.example.com`` y
-                                   ``aun.otro.subdominio.example.com``.
-
-                                   Si a este parámetro no se le asigna ningún valor, 
-                                   la cookie solo será enviada al dominio que la
-                                   definió.
-
-    ``secure``      ``False``      Si este valor se define como ``True``, se le indica
-                                   al navegador que sólo retorne esta cookie a las 
-                                   páginas que se accedan de forma segura
-                                   (protocolo HTTPS en vez de   HTTP).
-==============  =================  ===================================================
-
-Las cookies tienen doble filo
------------------------------
-
-Puede que te hayas dado cuenta de algunos de los problemas potenciales
-que se presentan con esto de las cookies; vamos a ver algunos de los
-más importantes:
-
-* El almacenamiento de los cookies es voluntario; los navegadores
-  no dan ninguna garantía. De hecho, los navegadores permiten al
-  usuario definir una política de aceptación o rechazo de las
-  mismas. Para darte cuenta de lo muy usadas que son las cookies
-  en la web actual, simplemente activa la opción de "Avisar antes
-  de aceptar cualquier cookie" y date un paseo por Internet.
-
-  A pesar de su uso habitual, las cookies son el ejemplo perfecto
-  de algo que no es confiable. Esto significa que el desarrollador debe
-  comprobar que el usuario está dispuesto a aceptar las cookies
-  antes de confiar en ellas.
-
-  Aún más importante, *nunca* debes almacenar información fundamental
-  en las cookies. La Web rebosa de historias de terror acerca
-  de desarrolladores que guardaron información irrecuperable
-  en las cookies del usuario, solo para encontrarse con que el
-  navegador había borrado todos esos datos por cualequier razón.
-
-* Las Cookies (especialmente aquellas que no se envían mediante HTTPS)
-  no son seguras. Dado que los datos enviados viajan en texto claro,
-  están expuestas a que terceras personas lean esa información, lo
-  que se llama ataques de tipo *snooping* (por *snoop*, fisgonear, husmear).
-  Por lo tanto, un atacante que tenga acceso al medio puede interceptar la
-  cookie y leer su valor. El resultado de esto es que nunca se debe almacenar
-  información confidencial en una cookie.
-
-  Hay otro tipo de ataque, aún más insidioso, conocido como
-  ataque *man-in-the-middle* o MitM (ataque de tipo Hombre-en-medio o
-  Intermediario). Aquí, el atacante no solo intercepta la cookie,
-  sino que además la usa para actuar ante el servidor como si fuera
-  el usuario legítimo. El :doc:`Capítulo 19<chapter19>` describe en profundidad
-  este tipo de ataques, así como formas de prevenirlo.
-
-* Las Cookies ni siquiera son seguras para los servidores. La mayoría de los
-  navegadores permiten manipular y editar de forma sencilla los contenidos
-  de cookies individuales, y existen herramientas como mechanize
-  (http://wwwsearch.sourceforge.net/mechanize/) que permiten a cualquiera
-  que esté lo suficientemente motivado construir solicitudes HTTP
-  a mano.
-
-Así que tampoco debemos almacenar en las cookies datos que sean
-fáciles de falsificar. El error habitual en este escenario
-consiste en almacenar algo así como  ``IsLoggedIn=1`` en una cookie
-cuando el usuario se ha validado. Te sorprendería saber cuantos sitios
-web cometen este tipo de error; no lleva más de unos segundos
-engañar a sus sistemas de "seguridad".
-
-El entorno de sesiones de Django
-================================
-
-Con todas estas limitaciones y agujeros potenciales de seguridad, es obvio
-que la gestión de las cookies y de las sesiones persistentes es el origen
-de muchos dolores de cabeza para los desarrolladores web. Por supuesto,
-uno de los objetivos de Django es evitar eficazmente estos dolores de cabeza, así
-que dispone de un entorno de sesiones diseñado para suavizar y facilitar todas
-estas cuestiones por vos.
-
-El entorno de sesiones te permite almacenar y recuperar cualquier dato
-que quieras basándote en la sesión del usuario. Almacena la información relevante solo en el
-servidor y abstrae todo el problema del envío y recepción de las
-cookies. Estas solo almacenan una versión codificada (*hash*) del identificador
-de la sesión, y ningún otro dato, lo cual te aisla de la mayoría de los
-problemas asociados con las cookies.
-
-Veamos como activar las sesiones, y como usarlas en nuestras vistas.
-
-Activar sesiones
-----------------
-
-Las sesiones se implementan mediante un poco de *middleware* (véase `Capítulo 15`_)
-y un modelo Django. Para activar las sesiones, necesitas seguir los
-siguientes pasos:
-
-    #. Editar el valor de ``MIDDLEWARE_CLASSES`` de forma que contenga
-       ``'django.contrib.sessions.middleware.SessionMiddleware'``.
-
-    #. Comprobar que ``'django.contrib.sessions'`` esté incluido
-       en el valor de ``INSTALLED_APPS`` (y ejecutar ``manage.py syncdb``
-       si lo tuviste que añadir).
-
-Los valores por defecto creados por ``startproject`` ya tienes estas dos
-características habilitadas, así que a menos que las hayas borrado, es
-muy probable que no tengas que hacer nada para empezar a usar las
-sesiones.
-
-Si lo que quieres en realidad es no usar sesiones, deberías quitar
-la referencia a ``SessionMiddleware`` de ``MIDDLEWARE_CLASSES`` y
-borrar ``'django.contrib.sessions'`` de ``INSTALLED_APPS``. Esto
-te ahorrará sólo un poco de sobrecarga, pero toda ayuda es buena.
-
-Usar las sesiones en una vista
-------------------------------
-
-Cuando están activadas las sesiones, los objetos ``HttpRequest`` --el
-primer argumento de cualquier función que actúe como una vista en Django--
-tendrán un atributo llamado ``session``, que se comporta igual
-que un diccionario. Se puede leer y escribir en él de la misma forma
-en que lo harías con un diccionario normal. Por ejemplo, podrías usar
-algo como esto en una de tus vistas::
-
-    # Set a session value:
-    request.session["fav_color"] = "blue"
-
-    # Get a session value -- this could be called in a different view,
-    # or many requests later (or both):
-    fav_color = request.session["fav_color"]
-
-    # Clear an item from the session:
-    del request.session["fav_color"]
-
-    # Check if the session has a given key:
-    if "fav_color" in request.session:
-        ...
-
-También puedes usar otros métodos propios de un diccionario como ``keys()``
-o ``items()`` en ``request.session``.
-
-Hay dos o tres reglas muy sencillas para usar eficazmente las sesiones en Django:
-
-* Debes usar sólo cadenas de texto normales como valores de clave
-  en ``request.session``, en vez de, por ejemplo, enteros, objetos, etc. Esto
-  es más un convenio que un regla en el sentido estricto, pero merece la pena
-  seguirla.
-
-* Los valores de las claves de una sesión que empiecen con el carácter
-  subrayado están reservadas para uso interno de Django. En la práctica, sólo
-  hay unas pocas variables así, pero, a no ser que sepas lo que estás
-  haciendo (y estés dispuesto a mantenerte al día en los cambios internos
-  de Django), lo mejor que puedes hacer es evitar usar el carácter subrayado
-  como prefijo en tus propias variables; eso impedirá que Django
-  pueda interferir con tu aplicación,
-
-* Nunca reemplaces ``request.session`` por otro objeto, y nunca accedas
-  o modifiques sus atributos. Utilízalo sólo como si fuera un diccionario.
-
-Veamos un ejemplo rápido. Esta vista simplificada define una variable
-``has_commented`` como ``True`` después de que el usuario haya publicado
-un comentario. Es una forma sencilla (aunque no particularmente segura) de
-impedir que el usuario publique dos veces el mismo comentario::
-
-    def post_comment(request, new_comment):
-        if request.session.get('has_commented', False):
-            return HttpResponse("You've already commented.")
-        c = comments.Comment(comment=new_comment)
-        c.save()
-        request.session['has_commented'] = True
-        return HttpResponse('Thanks for your comment!')
-
-Esta vista simplificada permite que un usuario se identifique
-como tal en nuestras páginas::
-
-    def login(request):
-        try:
-            m = Member.objects.get(username__exact=request.POST['username'])
-            if m.password == request.POST['password']:
-                request.session['member_id'] = m.id
-                return HttpResponse("You're logged in.")
-        except Member.DoesNotExist:
-            return HttpResponse("Your username and password didn't match.")
-
-Y esta le permite cerrar o salir de la sesión::
-
-    def logout(request):
-        try:
-            del request.session['member_id']
-        except KeyError:
-            pass
-        return HttpResponse("You're logged out.")
-
-.. nota::
-
-    En la práctica, esta sería una forma pésima de validar a tus
-    usuarios. El mecanismo de autentificación que presentaremos
-    un poco más adelante realiza esta tarea de forma mucho más
-    segura y robusta. Los ejemplo son deliberadamente simples
-    para que se comprendan con más facilidad.
-
-Comprobar que las *cookies* sean utilizables
---------------------------------------------
-
-Como ya mencionamos, no se puede confiar en que cualquier navegador
-sea capaz de aceptar *cookies*. Por ello, Django incluye una forma fácil
-de comprobar que el cliente del usuario disponga de esta capacidad. Sólo
-es necesario llamar a la función ``request.session.set_test_cookie()``
-en una vista, y comprobar posteriormente, en otra vista distinta, el
-resultado de llamar a ``request.session.test_cookie_worked()``.
-
-Esta división un tanto extraña entre las llamadas a ``set_test_cookie()`` y ``test_cookie_worked()`` se debe a la forma es que trabajan las *cookies*. Cuando
-se define una *cookie*, no tienes forma de saber si el navegador la ha aceptado
-realmente hasta la siguiente solicitud.
-
-Es una práctica recomendable llamar a la función ``delete_test_cookie()`` para
-limpiar la cookie de prueba después de haberla usado. Lo mejor es hacerlo
-justo después de haber verificado que las *cookies* funcionan.
-
-He aquí un ejemplo típico de uso::
-
-    def login(request):
-
-        # If we submitted the form...
-        if request.method == 'POST':
-
-            # Check that the test cookie worked (we set it below):
-            if request.session.test_cookie_worked():
-
-                # The test cookie worked, so delete it.
-                request.session.delete_test_cookie()
-
-                # In practice, we'd need some logic to check username/password
-                # here, but since this is an example...
-                return HttpResponse("You're logged in.")
-
-            # The test cookie failed, so display an error message. If this
-            # was a real site we'd want to display a friendlier message.
-            else:
-                return HttpResponse("Please enable cookies and try again.")
-
-        # If we didn't post, send the test cookie along with the login form.
-        request.session.set_test_cookie()
-        return render_to_response('foo/login_form.html')
-
-
-.. admonition:: Nota
-
-    De nuevo, las funciones de autentificación ya definidas en el entorno
-    realizan estos chequeos por vos.
-
-Usar las sesiones fuera de las vistas
--------------------------------------
-
-Internamente, cada sesión es simplemente un modelo de entidad de
-Django como cualquier otro, definido en ``django.contrib.sessions.models``. Cada
-sesión se identifica gracias a un *hash* pseudo-aleatorio de 32 caracteres, que
-es el valor que se almacena en la cookie. Dado que es un modelo normal, puedes
-acceder a las propiedades de las sesiones usando la API de acceso a la
-base de datos de Django::
-
-    >>> from django.contrib.sessions.models import Session
-    >>> s = Session.objects.get(pk='2b1189a188b44ad18c35e113ac6ceead')
-    >>> s.expire_date
-    datetime.datetime(2005, 8, 20, 13, 35, 12)
-
-Para poder acceder a los datos de la sesión, hay que usar el método
-``get_decoded()``. Esto se debe a que estos datos, que consistían en
-un diccionario, están almacenados codificados::
-
-    >>> s.session_data
-    'KGRwMQpTJ19hdXRoX3VzZXJfaWQnCnAyCkkxCnMuMTExY2ZjODI2Yj...'
-    >>> s.get_decoded()
-    {'user_id': 42}
-
-Cuándo se guardan las sesiones
-------------------------------
-
-Django, en principio, solo almacena la sesión en la base de datos si ésta
-ha sido modificada; es decir, si cualquiera de los valores almacenados
-en el diccionario es asignado o borrado. Esto puede dar lugar a algunos
-errores sutiles, como se indica en el último ejemplo::
-
-    # Session is modified.
-    request.session['foo'] = 'bar'
-
-    # Session is modified.
-    del request.session['foo']
-
-    # Session is modified.
-    request.session['foo'] = {}
-
-    # Gotcha: Session is NOT modified, because this alters
-    # request.session['foo'] instead of request.session.
-    request.session['foo']['bar'] = 'baz'
-
-Se puede cambiar este comportamiento, especificando la opción
-``SESSION_SAVE_EVERY_REQUEST`` a ``True``. Si lo hacemos así, Django
-almacenará la sesión en la base de datos en cada petición, incluso si
-no se ha modificado ninguno de sus valores.
-
-Fíjate que la cookie de sesión sólo se envía cuando se ha creado o
-modificado una sesión. Si ``SESSION_SAVE_EVERY_REQUEST`` está como ``True``, la
-cookie de sesión será reenviada en cada petición. De forma similar, la sección
-de expiración (''expires'') se actualizará cada vez que se reenvíe la
-cookie.
-
-Sesiones breves frente a sesiones persistentes
-----------------------------------------------
-
-Es posible que te hayas fijado en que la cookie que nos envió Google al
-principio del capítulo contenía el siguiente texto ``expires=Sun,
-17-Jan-2038 19:14:07 GMT;``. Las Cookies pueden incluir opcionalmente
-una fecha de expiración, que informa al navegador el momento en que se
-debe desechar por inválida. Si la cookie no contiene ningún
-valor de expiración, el navegador entiende que esta debe expirar
-en el momento en que se cierra el propio navegador. Se puede controlar
-el comportamiento del entorno para que use cookies de este tipo, breves, ajustando
-en valor de la opción ``SESSION_EXPIRE_AT_BROWSER_CLOSE``.
-
-El valor por omisión de la opción ``SESSION_EXPIRE_AT_BROWSER_CLOSE`` es
-``False``, lo que significa que las cookies serán almacenadas en el
-navegador del usuario durante ``SESSION_COOKIE_AGE`` segundos (cuyo
-valor por defecto es de dos semanas, o 1.209.600 segundos). Estos
-valores son adecuados si no quieres obligar a tus usuarios a validarse
-cada vez que abran el navegador y accedan a tu página.
-
-Si ``SESSION_EXPIRE_AT_BROWSER_CLOSE`` se establece a ``True``, Django
-usará cookies que se invalidarán cuando el usuario cierre el navegador.
-
-Otras características de las sesiones
--------------------------------------
-
-Además de las características ya mencionadas, hay otros valores de configuración que
-influyen en la gestión de sesiones con Django, tal y como se muestra en
-la tabla 12-2.
-
-.. tabla:: Tabla 12-2. Valores de configuración que influyen en el comportamiento de las cookies
-
-==========================  =============================  =================
-  Opción                      Descripción                  Valor por defecto
-==========================  =============================  =================
-``SESSION_COOKIE_DOMAIN``   El Dominio a utilizar por la   ``None``
-                            cookie de sesión. Se puede
-                            utilizar, por ejemplo, el
-                            valor ``".lawrence.com"``
-                            para utilizar la cookie en
-                            diferentes subdominios. El
-                            valor ``None`` indica una
-                            cookie estándar.
-
-``SESSION_COOKIE_NAME``     El nombre de la cookie de       ``"sessionid"``
-                            sesiones. Puede ser cualquier
-                            cadena de texto.
-
-``SESSION_COOKIE_SECURE``   Indica si se debe usar una       ``False``
-                            cookie segura para la cookie
-                            de sesión. Si el valor es
-                            ``True``, la cookie se
-                            marcará como segura, lo que
-                            significa que sólo se podrá
-                            utilizar mediante el
-                            protocolo HTTPS.
-==========================  =============================  =================
-
-.. admonition:: Detalles técnicos
-
-    Para los más curiosos, he aquí una serie de notas técnicas acerca de algunos
-    aspectos interesantes de la gestión interna de las sesiones:
-
-* El diccionario de la sesión acepta cualquier objeto Python capaz de
-  ser serializado con ``pickle``. Véase la documentación del módulo
-  ``pickle`` incluido en la biblioteca estándar de Python para más información.
-
-* Los datos de la sesión se almacenan en una tabla en la base de datos llamada
-  ``django_session``.
-
-* Los datos de la sesión son suministrados bajo demanda. Si nunca accedes al
-  atributo ``request.session``, Django nunca accederá a la base de datos.
-
-* Django sólo envía la cookie si tiene que hacerlo. Si no modificas ningún
-  valor de la sesión, no reenvía la cookie (a no ser que hayas definido
-  ``SESSION_SAVE_EVERY_REQUEST`` como ``True``).
-
-* El entorno de sesiones de Django se basa entera y exclusivamente en
-  las cookies. No almacena la información de la sesión en las URL, como recurso
-  extremo en el caso de que no se puedan utilizar las cookies, como hacen
-  otros entornos (PHP, JSP).
-
-  Esta es una decisión tomada de forma consciente. Poner los
-  identificadores de sesión en las URL no solo hace que las
-  direcciones sean más feas, también hace que el sistema sea
-  vulnerable ante un tipo de ataque en que se roba el
-  identificador de la sesión utilizando la cabecera
-  ``Referer``.
-
-  Si aun te pica la curiosidad, el código fuente es bastante directo y claro, mira
-  en ``django.contrib.sessions`` para más detalles.
-
-
-Usuarios e identificación
-=========================
-
-Estamos ya a medio camino de poder conectar los navegadores con la Gente
-de Verdad™. Las sesiones nos permiten almacenar información a lo largo de
-las diferentes peticiones del navegador; la segunda parte de la ecuación
-es utilizar esas sesiones para validar al usuario, es decir, permitirle
-hacer *login*. Por supuesto, no podemos simplemente confiar en que
-los usuarios sean quien dicen ser, necesitamos autentificarlos de alguna
-manera.
-
-Naturalmente, Django nos proporciona las herramientas necesarias para
-tratar con este problema tan habitual (y con muchos otros). El sistema
-de autentificación de usuarios de Django maneja cuentas de usuarios, grupos,
-permisos y sesiones basadas en cookies. El sistema también es llamada sistema
-*aut/aut* (autenticaficación y autorización). El nombre implica que, a
-menudo, tratar con los usuarios implica dos procesos. Se necesita:
-
-* Verificar (*autentificación*) que un usuario es quien dice
-  ser (Normalmente comprobando un nombre de usuario y una
-  contraseña contra una tabla de una base de datos)
-
-* Verificar que el usuario está autorizado (*autorización*) a
-  realizar una operación determinada (normalmente
-  comprobando una tabla de permisos)
-
-Siguiendo estos requerimientos, el sistema aut/aut de Django consta de los
-siguientes componentes:
-
-* *Usuarios*: Personas registradas en tu sitio web
-
-* *Permisos*: Valores binarios (Si/No) que indican si un usuario
-  puede o no realizar una tarea determinada.
-
-* *grupos*: Una forma genérica de aplicar etiquetas y permisos a
-  más de un usuario.
-
-* *mensajes*: Un mecanismo sencillo que permite enviar y mostrar
-  mensajes del sistema usando una cola.
-
-* *Perfiles*: Un mecanismo que permite extender los objetos de
-  tipo usuario con campos adicionales.
-
-Si ya has utilizado la herramienta de administración (descrita en el
-:doc:`Capítulo <chapter06>6`), habrás visto muchas de estas utilidades, y si has
-modificado usuarios y grupos con dicha herramienta, ya has modificado
-las tablas en las que se basa el sistema aut/aut.
-
-Habilitar el soporte para autentificación
------------------------------------------
-
-Al igual que ocurría con las sesiones, el sistema de autentificación
-viene incluido como una aplicación en el módulo ``django.contrib``, y
-necesita ser instalado. De igual manera, viene instalado por defecto, por
-lo que solo es necesario seguir los siguientes pasos si previamente
-la has desinstalado:
-
-* Comprueba que el sistema de sesiones esté activo, tal y como
-  se explico previamente en este capítulo. Seguir la pista de
-  los usuario implica usar cookies, y por lo tanto necesitamos
-  el entorno de sesiones operativo.
-
-* Incluye ``'django.contrib.auth'`` dentro de tu ``INSTALLED_APPS`` y
-  ejecuta  ``manage.py syncdb``.
-
-* Asegúrate de que
-  ``'django.contrib.auth.middleware.AuthenticationMiddleware'`` está
-  incluido en ``MIDDLEWARE_CLASSES`` *después de*
-  ``SessionMiddleware``.
-
-Una vez resuelto este tema, ya estamos preparados para empezar a lidiar
-con los usuarios en nuestras vistas. La principal interfaz que
-usarás para trabajar con los datos del usuario dentro de una vista es
-``request.user``; es un objeto que representa al usuario que está conectado
-en ese momento. Si no hay ningún usuario conectado, este objeto será
-una instancia de la clase ``AnonymousUser`` (veremos más sobre esta clase
-un poco más adelante).
-
-Puedes saber fácilmente si el usuario está identificado o no con el método
-``is_authenticated()``::
-
-    if request.user.is_authenticated():
-        # Do something for authenticated users.
-    else:
-        # Do something for anonymous users.
-
-Utilizando usuarios
-===================
-
-Una vez que ya tienes un usuario (normalmente mediante ``request.user``, pero
-también puede ser por otros métodos, que se describirán en breve) dispondrás
-de una serie de campos de datos y métodos asociados al mismo. Los objetos de la clase
-``AnonymousUser`` emulan *parte* de esta interfaz, pero no toda, por lo que es
-preferible comprobar el resultado de ``user.is_authenticated()`` antes
-de asumir de buena fe que nos encontramos ante un usuario legítimo. Las tablas
-12-3 y 12-4 listan todos los campos y métodos, respectivamente, de los objetos
-de la clase ``User``.
-
-.. tabla:: Tabla 12-3. Campos de los objetos ``User``
-
-Campos de los objetos ``User``
-
-==================  =============================================================
-    Campo               Descripción
-==================  =============================================================
-    ``username``        Obligatorio; 30 caracteres como máximo. Sólo acepta
-                        caracteres alfanuméricos (letras, dígitos y el
-                        carácter subrayado).
-
-  ``first_name``        Opcional; 30 caracteres como máximo.
-
-    ``last_name``       Opcional; 30 caracteres como máximo.
-
-    ``email``           Opcional. Dirección de correo electrónico.
-
-    ``password``        Obligatorio. Un código de comprobación (*hash*),
-                        junto con otros metadatos de la contraseña. Django
-                        nunca almacena la contraseña en crudo. Véase la
-                        sección "`Cambia contraseñas`_" para más información
-
-    ``is_staff``        Booleano. Indica que el usuario puede acceder
-                        a las secciones de administración.
-
-   ``is_active``        Booleano. Indica que la cuenta puede ser usada para
-                        identificarse. Se puede poner a ``False`` para
-                        deshabilitar a un usuario sin tener que borrarlo
-                        de la tabla.
-
-``is_superuser``        Booleano. Señala que el usuario tiene todos los
-                        permisos, aún cuando no se le hayan asignado
-                        explícitamente
-
-  ``last_login``        Fecha y hora de la última vez que el usuario se
-                        identificó. Se asigna automáticamente a la
-                        fecha actual por defecto.
-
- ``date_joined``        Fecha y hora en que fue creada esta cuenta de
-                        usuario. Se asigna automáticamente a la
-                        fecha actual en su momento.
-
-==================  =============================================================
-
-.. tabla:: Tabla 12-4. Métodos de los objetos ``User``
-
-Metodos de los objetos ``User``
-
-================================  ================================================
-    Método                            Descripción
-================================  ================================================
-    ``is_authenticated()``            Siempre devuelve ``True`` para usuario
-                                      reales. Es una forma de determinar si el
-                                      usuario se ha identificado. esto no
-                                      implica que posea ningún permiso, y
-                                      tampoco comprueba que la cuenta esté
-                                      activa. Sólo indica que el usuario se
-                                      ha identificado con éxito.
-
-    ``is_anonymous()``                Devuelve ``True`` sólo para usuarios
-                                      anónimos, y ``False`` para usuarios
-                                      "reales". En general, es preferible
-                                      usar el método ``is_authenticated()``.
-
-    ``get_full_name()``               Devuelve la concatenación de los
-                                      campos ``first_name`` y
-                                      ``last_name``, con un espacio
-                                      en medio.
-
-    ``set_password(passwd)``          Cambia la contraseña del usuario a
-                                      la cadena de texto en claro indicada,
-                                      realizando internamente las
-                                      operaciones necesarias para calcular
-                                      el código de comprobación o *hash*
-                                      necesario. Este método *no* guarda el
-                                      objeto ``User``.
-
-    ``check_password(passwd)``        devuelve ``True`` si la cadena de
-                                      texto en claro que se le pasa
-                                      coincide con la contraseña
-                                      del usuario. Realiza internamente
-                                      las operaciones necesarias para
-                                      calcular los códigos de comprobación
-                                      o *hash* necesarios.
-
-    ``get_group_permissions()``       Devuelve una lista con los permisos que
-                                      tiene un usuario, obtenidos a través del
-                                      grupo o grupos a las que pertenezca.
-
-    ``get_all_permissions()``         Devuelve una lista con los permisos que
-                                      tiene concedidos un usuario, ya sea a
-                                      través de los grupos a los que pertenece
-                                      o bien asignados directamente.
-
-    ``has_perm(perm)``                Devuelve ``True`` si el usuario tiene el
-                                      permiso indicado. El valor de ``perm``
-                                      está en el
-                                      formato ```"package.codename"``. Si el
-                                      usuario no está activo, siempre
-                                      devolverá ``False``.
-
-    ``has_perms(perm_list)``          Devuelve ``True`` si el usuario tiene
-                                      *todos* los permisos indicados. Si el
-                                      usuario no está activo, siempre
-                                      devolverá ``False``.
-
- ``has_module_perms(app_label)``      Devuelve ``True`` si el usuario tiene
-                                      algún permiso en la etiqueta de
-                                      aplicación indicada, ``app_label``. Si
-                                      el usuario no está activo, siempre
-                                      devolverá ``False``.
-
- ``get_and_delete_messages()``        Devuelve una lista de mensajes (objetos
-                                      de la clase ``Message``) de la cola del
-                                      usuario, y los borra posteriormente.
-
-    ``email_user(subj, msg)``         Envía un correo electrónico al usuario.
-                                      El mensaje aparece como enviado desde
-                                      la dirección indicada en el valor
-                                      ``DEFAULT_FROM_EMAIL``. Se le puede
-                                      pasar un tercer parámetro opcional,
-                                      ``from_email``, para indicar otra
-                                      dirección de remite distinta.
-
-    ``get_profile()``                 Devuelve un perfil del usuario
-                                      específico para el sitio. En la sección
-                                      "`Perfiles`_" se explicará con más detalle
-                                      este método.
-================================  ================================================
-
-Por último, los objetos de tipo ``User`` mantienen dos campos de relaciones
-múltiples o muchos-a-muchos: Grupos y permisos (``groups`` y ``permissions``). Se puede
-acceder a estos objetos relacionados de la misma manera en que se usan otros
-campos múltiples::
-
-        # Set a user's groups:
-        myuser.groups = group_list
-
-        # Add a user to some groups:
-        myuser.groups.add(group1, group2,...)
-
-        # Remove a user from some groups:
-        myuser.groups.remove(group1, group2,...)
-
-        # Remove a user from all groups:
-        myuser.groups.clear()
-
-        # Permissions work the same way
-        myuser.permissions = permission_list
-        myuser.permissions.add(permission1, permission2, ...)
-        myuser.permissions.remove(permission1, permission2, ...)
-        myuser.permissions.clear()
-
-Iniciar y cerrar sesión
+﻿=============================
+Capitulo 12: Desplegar Django
+=============================
+
+Este capítulo cubre el último paso esencial para construir una aplicación
+Django: **el despliegue en un servidor de producción**.
+
+.. Warning: Esta pagina esta en progreso, existen errores y se esta agregando contenido adicional.
+
+Si has estado siguiendo los ejemplos presentados, probablemente has estado usando
+``runserver``, como ya sabes este comando inicia el servidor web y hace que las
+cosas sean realmente muy fáciles -- con ``runserver``, no tienes que  preocuparte
+por instalar un servidor Web. Sin embargo ``runserver`` está diseñado únicamente
+para ser usado en el desarrollo de forma local, no para exponerlo en un sitio
+publico Web. Para desplegar una aplicación Django, es necesario enlazarla a un
+servidor Web poderoso  tal como Apache. En este capítulo te mostraremos como
+hacerlo  -- pero primero, es necesario comprobar una lista de cosas que hacer
+en el código antes de llevarlo a un entorno de producción.
+
+Prepara tu código base para producción
+======================================
+
+Afortunadamente el comando ``runserver`` es bastante parecido a un servidor
+"real", por lo que no necesitas realizar  muchos cambios a tu aplicación Django
+para dejarla lista para producción. Sin embargo hay algunas *cosas esenciales*
+que necesitas conocer antes de servirla en producción.
+
+Desactiva el Modo Debug
 -----------------------
 
-Django proporciona vistas predefinidas para  gestionar la entrada
-del usuario, (el momento en que se identifica), y la salida, (es
-decir, cuando cierra la sesión), además de otros trucos ingeniosos. Pero
-antes de entrar en detalles, veremos como hacer que los usuario puedan
-iniciar y cerrar la sesión "a mano". Django incluye dos funciones
-para realizar estas acciones, en el módulo ``django.contrib.auth``:
-``authenticate()`` y ``login()``.
+Cuando creamos un proyecto en el  :doc:`capítulo 2<chapter02>`,  el comando
+``django-admin.py startproject`` creo un archivo llamado ``settings.py`` el
+cual contiene la variable ``DEBUG`` fijada en  ``True`` por defecto, es decir
+que esta en modo de depuración. Muchas de las partes internas de Django
+comprueban esta configuración y cambian su comportamiento  si el modo
+``DEBUG`` esta activado. Por ejemplo, si ``DEBUG`` está fijado en ``True``,
+entonces:
 
-Para autentificar un identificador de usuario y una contraseña, se utiliza
-la función ``authenticate()``. esta función acepta dos parámetros ,
-``username`` y ``password``, y devuelve un objeto de tipo ``User`` si la
-contraseña es correcta para el identificador de usuario. Si falla la
-comprobación (ya sea porque sea incorrecta la contraseña o porque sea
-incorrecta la identificación del usuario), la función devolverá ``None``::
+* Todas las consultas a la base de datos se guardan en memoria como objetos
+  ``django.db.connection.queries``. Como puedes imaginar, ¡esto consume mucha
+  memoria!
 
-    >>> from django.contrib import auth
-    >>> user = auth.authenticate(username='john', password='secret')
-    >>> if user is not None:
-    ...     print "Correct!"
-    ... else:
-    ...     print "Oops, that's wrong!"
+* Cualquier error 404, renderizara una página especial, a decir una página
+  no encontrada (cubierta en el capítulo 3) más que retornar una apropiada
+  respuesta 404. Esta página contiene información potencialmente sensible y
+  *no* debe ser expuesta al público en Internet.
 
-La llamada a ``authenticate()`` sólo verifica las credenciales del
-usuario. Todavía hay que realizar una llamada a ``login()`` para
-completar el inicio de sesión. La llamada a ``login()`` acepta un
-objeto de la clase ``HttpRequest`` y un objeto ``User`` y almacena
-el identificador del usuario en la sesión, usando el entorno de
-sesiones de Django.
+* Cualquier excepción no atrapada en tu aplicación Django -- desde errores básicos
+  en la sintaxis Python, errores de la base de datos o en la sintaxis de la
+  plantilla -- serán renderizados por la páginas de errores bonitas de Django
+  que probablemente adoras. Esta página contiene *mas* información sensible
+  incluso que las páginas 404, por lo que *nunca* deben ser expuestas al
+  publico.
 
-El siguiente ejemplo muestra el uso de ambas funciones,
-``authenticate()`` y ``login()``, dentro de una vista::
+Resumiendo, la variable de configuración ``DEBUG`` = ``True`` le dice a Django
+que asuma que únicamente desarrolladores confiables están usando el sitio.
+La internet está llena de personas poco fiables, y la primera cosa que debes
+hacer cuando estés preparando tu aplicación para el despliegue en producción
+es fijar la variable ``DEBUG`` a ``False``.
 
-    from django.contrib import auth
+Desactiva el modo Debug de la plantillas
+----------------------------------------
 
-    def login(request):
-        username = request.POST['username']
-        password = request.POST['password']
-        user = auth.authenticate(username=username, password=password)
-        if user is not None and user.is_active:
-            # Correct password, and the user is marked "active"
-            auth.login(request, user)
-            # Redirect to a success page.
-            return HttpResponseRedirect("/account/loggedin/")
-        else:
-            # Show an error page
-            return HttpResponseRedirect("/account/invalid/")
+De igual forma, es necesario fijar la variable ``TEMPLATE_DEBUG`` a ``False``
+en producción. Esto para desactivar el modo depuración de las plantillas.
+Ya que si está fijada en ``True``, esta configuración le dice al
+sistema de plantillas de Django que guarde información extra acerca de cada
+plantilla, para mostrarla en las útiles páginas de error, si el modo
+``DEBUG``=``True`` (esta activado).
 
-Para cerrar la sesión, se puede llamar a ``django.contrib.auth.logout()``
-dentro de una vista. Necesita que se le pase como parámetro un objeto
-de tipo ``HttpRequest``, y no devuelve ningún valor::
 
-    from django.contrib import auth
+Implementa una plantilla 404
+----------------------------
 
-    def logout(request):
-        auth.logout(request)
-        # Redirect to a success page.
-        return HttpResponseRedirect("/account/loggedout/")
+Si ``DEBUG`` es ``True``, Django mostrara una muy útil página de error 404. Pero
+si ``DEBUG`` es ``False``, hará algo completamente diferente: renderizara
+una plantilla llamada ``404.html`` en la raíz del directorio de plantillas.
+Entonces, cuando estás listo para  el despliegue, necesitas crear esta
+plantilla y ponerle algo útil,  como  un mensaje  de "Página no encontrada".
 
-La llamada a ``logout()`` no produce ningún error, aun si no hubiera
-ningún usuario conectado.
+Aquí está un ejemplo de una  página ``404.html``, puedes usarla como el punto
+de partida, para crear tu propia plantilla. La plantilla asume que estas
+usando la herencia de plantillas y  tiene definida  una plantilla ``base.html``
+con bloques llamados ``titulo`` y ``contenido``.
 
-En la práctica, no es normalmente necesario escribir tus propias
-funciones para realizar estas tareas; el sistema de autentificación
-viene con un conjunto de vistas predefinidas para ello.
-
-El primer paso para utilizar las vistas de autentificación es
-mapearlas en tu URLconf. Necesitas modificar tu código hasta
-tener algo parecido a esto::
-
-    from django.contrib.auth.views import login, logout
-
-    urlpatterns = patterns('',
-        # existing patterns here...
-        (r'^accounts/login/$',  login),
-        (r'^accounts/logout/$', logout),
-    )
-
-``/accounts/login/`` y ``/accounts/logout/`` son las URL por defecto
-que usa Django para estas vistas.
-
-Por defecto, la vista de ``login`` utiliza la plantilla definida en
-``registration/login.html`` (puedes cambiar el nombre de la plantilla
-utilizando un parámetro opcional, ``template_name``). El formulario
-necesita contener un campo llamado ``username`` y otro llamado
-``password``. Una plantilla de ejemplo podría ser esta:
-
-.. code-block:: html
+.. code-block:: html+django
 
     {% extends "base.html" %}
 
+    {% block title %}Página no encontrada {% endblock %}
+
     {% block content %}
+    <h1>Página no encontrada</h1>
 
-      {% if form.errors %}
-        <p class="error">Sorry, that's not a valid username or password</p>
-      {% endif %}
-
-      <form action='.' method='post'>
-        <label for="username">User name:</label>
-        <input type="text" name="username" value="" id="username">
-        <label for="password">Password:</label>
-        <input type="password" name="password" value="" id="password">
-
-        <input type="submit" value="login" />
-        <input type="hidden" name="next" value="{{ next|escape }}" />
-      <form action='.' method='post'>
-
+    <p>Lo sentimos, pero la página que buscas no ha sido encontrada.</p>
     {% endblock %}
 
-Si el usuario se identifica correctamente, su navegador será redirigido
-a ``/accounts/profile/``. Puedes indicar una dirección distinta especificando
-un tercer campo (normalmente oculto) que se llame ``next``, cuyo valor
-debe ser la URL a redireccionar después de la identificación. También puedes
-pasar este valor como un parámetro ``GET`` a la vista de identificación
-y se añadirá automáticamente su valor al contexto en una variable
-llamada ``next``, que puedes incluir ahora en un campo oculto.
-
-La vista de cierre de sesión se comporta de forma un poco diferente. Por defecto
-utiliza la plantilla definida en ``registration/logged_out.html`` (que normalmente
-contiene un mensaje del tipo "Ha cerrado su sesión"). No obstante, se
-puede llamar a esta vista con un parámetro extra, llamado ``next_page``, que
-indicaría la vista a la que se debe redirigir una vez efectuado el cierre de
-la sesión.
-
-Limitar el acceso a los usuarios identificados
-----------------------------------------------
-
-Por supuesto, la razón de haber implementado todo este
-sistema es permitirnos limitar el acceso a determinadas
-partes de nuestro sitio.
-
-La forma más simple y directa de limitar este acceso es
-comprobar el resultado de llamar a la función
-``request.user.is_authenticated()`` y redirigir
-a una página de identificación, si procede::
-
-    from django.http import HttpResponseRedirect
-
-    def my_view(request):
-        if not request.user.is_authenticated():
-            return HttpResponseRedirect('/login/?next=%s' % request.path)
-        # ...
-
-O quizás mostrar un mensaje de error::
-
-    def my_view(request):
-        if not request.user.is_authenticated():
-            return render_to_response('myapp/login_error.html')
-        # ...
-
-Si se desea abreviar, se puede usar el decorador ``login_required``
-sobre las vistas que nos interese proteger::
-
-    from django.contrib.auth.decorators import login_required
-
-    @login_required
-    def my_view(request):
-        # ...
-
-Esto es lo que hace el decorador ``login_required``:
-
-    * Si el usuario no está identificado, redirige a la
-      dirección ``/accounts/login/``, incluyendo la
-      url actual como un parámetro con el nombre ``next``, por
-      ejemplo ``/accounts/login/?next=/polls/3/``.
-
-    * Si el usuario está identificado, ejecuta la vista
-      sin ningún cambio. La vista puede asumir sin problemas
-      que el usuario esta identificado correctamente
-
-Limitar el acceso a usuarios que pasan una prueba
--------------------------------------------------
-
-Se puede limitar el acceso basándose en ciertos permisos o en algún otro
-tipo de prueba, o proporcionar una página de identificación
-distinta de la vista por defecto, y las dos cosas se hacen
-de manera similar.
-
-La forma más cruda es ejecutar las pruebas que queremos hacer directamente
-en el código de la vista. Por ejemplo, para comprobar que el usuario está
-identificado y que, además, tenga asignado el permiso ``polls.can_vote``
-(se explicará esto de los permisos con más detalle dentro de poco )
-haríamos::
-
-    def vote(request):
-        if request.user.is_authenticated() and request.user.has_perm('polls.can_vote')):
-            # vote here
-        else:
-            return HttpResponse("You can't vote in this poll.")
-
-De nuevo, Django proporciona una forma abreviada llamada
-``user_passes_test``. Requiere que se la pasen unos argumentos
-y genera un decorador especializado para cada situación en
-particular::
-
-    def user_can_vote(user):
-        return user.is_authenticated() and user.has_perm("polls.can_vote")
-
-    @user_passes_test(user_can_vote, login_url="/login/")
-    def vote(request):
-        # Code here can assume a logged-in user with the correct permission.
-        ...
-
-El decorador ``user_passes_test`` tiene un parámetro obligatorio: un
-objeto que se pueda llamar (normalmente una función) y que a su vez
-acepte como parámetro un objeto del tipo ``User``, y devuelva ``True``
-si el usuario puede acceder y ``False`` en caso contrario. Es importante
-destacar que ``user_passes_test`` no comprueba automáticamente que el
-usuario esté identificado; esa es una comprobación que se debe hacer
-explícitamente.
-
-En este ejemplo, hemos usado también un segundo parámetro opcional,
-``login_url``, que te permite indicar la url de la página que el
-usuario debe utilizar para identificarse (``/accounts/login/``
-por defecto).
-
-Comprobar si un usuario posee un determinado permiso es una tarea
-muy frecuente, así que Django proporciona una forma abreviada
-para estos casos: El decorador ``permission_required()``. Usando
-este decorador, el ejemplo anterior se podría codificar así::
-
-    from django.contrib.auth.decorators import permission_required
-
-    @permission_required('polls.can_vote', login_url="/login/")
-    def vote(request):
-        # ...
-
-El decorador ``permission_required()`` también acepta el parámetro
-opcional ``login_url``, de nuevo con el valor ``/accounts/login/``
-en caso de omisión.
-
-.. exhortacion:: Limitar el acceso a vistas genéricas
-
-    Una de las preguntas más frecuentes en la lista de usuarios de
-    Django trata de cómo limitar el acceso a una vista genérica. Para
-    conseguirlo, tienes que usar un recubrimiento sencillo
-    alrededor de la vista que quieres proteger, y apuntar en tu
-    URLconf al recubrimiento en vez de a la vista genérica::
-
-        from dango.contrib.auth.decorators import login_required
-        from django.views.generic.list_detail import object_detail
-
-        @login_required
-        def limited_object_detail(*args, **kwargs):
-            return object_detail(*args, **kwargs)
-
-    Puedes cambiar el decorador ``login_required`` por cualquier otro
-    que quieras usar, como es lógico.
-
-
-Gestionar usuarios, permisos y grupos
--------------------------------------
-
-La forma más fácil de gestionar el sistema de autentificación es a través
-de la interfaz de administración ``admin``. El `Capítulo 6`_ describe como
-usar esta interfaz para modificar los datos de los usuarios y controlar
-sus permisos y accesos, y la mayor parte del tiempo esa es la forma
-más adecuada de gestión.
-
-A veces, no obstante, hace falta un mayor control, y para eso podemos
-utilizar las llamadas a bajo nivel que describiremos en este
-capítulo.
-
-Crear usuarios
-~~~~~~~~~~~~~~
-
-Puedes crear usuarios con el método ``create_user``::
-
-    >>> from django.contrib.auth.models import User
-    >>> user = User.objects.create_user(username='john',
-    ...                                 email='jlennon@beatles.com',
-    ...                                 password='glass onion')
-
-En este momento, ``user`` es una instancia de la clase ``User``, preparada
-para ser almacenada en la base de datos (``create_user()`` no llama al
-método ``save()``). Este te permite cambiar algunos de sus atributos
-antes de guardarlos, si quieres::
-
-    >>> user.is_staff = True
-    >>> user.save()
-
-Cambia contraseñas
-~~~~~~~~~~~~~~~~~~
-
-Puedes cambiar las contraseña de un usuario llamando a ``set_password()``::
-
-    >>> user = User.objects.get(username='john')
-    >>> user.set_password('goo goo goo joob')
-    >>> user.save()
-
-No debes modificar directamente el atributo ``password``, a no ser que
-tengas muy claro lo que estás haciendo. La contraseña se almacena en
-la base de datos en forma de código de comprobación (*salted
-hash*) y, por tanto, debe ser modificada sólo a través de este método.
-
-Para ser más exactos, el atributo ``password`` de un objeto ``User`` es una
-cadena de texto con el siguiente formato::
-
-    hashtype$salt$hash
-
-Es decir, el tipo de hash, el grano de sal (*salt*) y el código hash
-propiamente dicho, separados entre si por el carácter dolar ($).
-
-El valor de ``hashtype`` puede ser ``sha1`` (por defecto) o ``md5``, el
-algoritmo usado para realizar una transformación *hash* de un solo sentido
-sobre la contraseña. El grano de sal es una cadena de texto
-aleatoria que se utiliza para aumentar la resistencia de esta codificación
-frente a un ataque por diccionario. Por ejemplo::
-
-    sha1$a1976$a36cc8cbf81742a8fb52e221aaeab48ed7f58ab4
-
-Las funciones ``User.set_password()`` y ``User.check_password()`` manejan
-todos estos detalles y comprobaciones de forma transparente.
-
-.. admonition:: ¿Tengo que echar sal a mi ordenador?
-
-    No, la sal de la que hablamos no tiene nada que ver con ninguna
-    receta de cocina; es una forma habitual de aumentar la
-    seguridad a la hora de almacenar una contraseña. Una
-    función *hash* es una función criptográfica, que se
-    caracteriza por ser de un solo sentido; es decir, es fácil
-    calcular el código *hash* de un determinado valor, pero es prácticamente
-    imposible reconstruir el valor original partiendo únicamente del
-    código hash.
-
-    Si almacenáramos las contraseñas como texto en claro, cualquiera que
-    pudiera obtener acceso a la base de datos podría saber sin ninguna
-    dificultad todas las contraseñas al instante. Al guardar las
-    contraseñas en forma de códigos *hash* se reduce el peligro en caso
-    de que se comprometa la seguridad de la base de datos.
-
-    No obstante, un atacante que pudiera acceder a la base de datos
-    podría ahora realizar un ataque por fuerza bruta, calculando
-    los códigos *hash* de millones de contraseñas distintas y comparando
-    esos códigos con los que están almacenados en la base de datos. Este
-    llevará algo de tiempo, pero menos de lo que parece, los ordenadores
-    son increíblemente rápidos.
-
-    Para empeorar las cosas, hay disponibles públicamente lo que se
-    conoce como tablas arco iris (*rainbow tables*), que consisten en
-    valores *hash* precalculados de millones de contraseñas de uso
-    habitual. Usando una tabla arco iris, un atacante puede romper
-    la mayoría de las contraseñas en segundos.
-
-    Para aumentar la seguridad, se añade un valor inicial aleatorio
-    y diferente a cada contraseña antes de obtener el código *hash*. Este
-    valor aleatorio es el "grano de sal". Como cada grano de sal es
-    diferente para cada password se evita el uso de tablas arco iris, lo
-    que obliga al atacante a volver al sistema de ataque por fuerza
-    bruta, que a su vez es más complicado al haber aumentado la entropía
-    con el grano de sal. Otra ventaja es que si dos usuarios eligen
-    la misma contraseña, al añadir el grano de sal los códigos hash
-    resultantes serán diferentes.
-
-    Aunque esta técnica no es, en términos absolutos, la más segura
-    posible, ofrece un buen compromiso entre seguridad y conveniencia.
-
-El alta del usuario
-~~~~~~~~~~~~~~~~~~~
-
-Podemos usar estas herramientas de bajo nivel para crear vistas que
-permitan al usuario darse de alta. Prácticamente todos los desarrolladores
-quieren implementar el alta del usuario a su manera, por
-lo que Django da la opción de crearte tu propia vista para ello.
-Afortunadamente, es muy fácil de hacer.
-
-La forma más sencilla es escribir una pequeña vista que pregunte al
-usuario los datos que necesita y con ellos se cree directamente
-el usuario. Django proporciona un formulario prefabricado que se puede
-usar con este fin, como se muestra en el siguiente ejemplo::
-
-    from django import oldforms as forms
-    from django.http import HttpResponseRedirect
-    from django.shortcuts import render_to_response
-    from django.contrib.auth.forms import UserCreationForm
-
-    def register(request):
-        form = UserCreationForm()
-
-        if request.method == 'POST':
-            data = request.POST.copy()
-            errors = form.get_validation_errors(data)
-            if not errors:
-                new_user = form.save(data)
-                return HttpResponseRedirect("/books/")
-        else:
-            data, errors = {}, {}
-
-        return render_to_response("registration/register.html", {
-            'form' : forms.FormWrapper(form, data, errors)
-        })
-
-Este formulario asume que existe una plantilla llamada
-``registration/register.html``. esa plantilla podría
-consistir en algo parecido a esto:
+Para probar que la plantilla ``404.html`` funciona, solo cambia el modo ``DEBUG``
+a ``False`` y visita una URL que no exista. (Esto trabaja de igual forma en
+el servidor de desarrollo con ``runserver``, que en un servidor de producción.)
+
+Implementa una plantilla 500
+----------------------------
+
+De igual forma si ``DEBUG`` es ``False``, Django no mostrara la útil página
+de traza de errores, en caso de excepciones no manejadas. En su lugar mostrara y
+renderizara una plantilla llamada ``500.html``. Tal como la página ``404.html``,
+esta plantilla debe de localizarse en la raíz del directorio de plantillas.
+
+Hay una ligera trampa acerca de las páginas ``500.html``. Nunca puedes
+estar seguro por qué se renderiza esta plantilla, así que no deberías hacer
+nada que requiere una conexión a la base de datos o confiar en cualquier parte
+potencialmente rota de la infraestructura. (Por ejemplo, no deberías usar
+etiquetas personalizadas en la plantilla.) Si usas la  herencia de plantillas,
+entonces la plantilla padre,  no debería poder conectarse a la infraestructura
+potencialmente rota. Por consiguiente, la mejor forma de aprovechar esto, es
+evitar la herencia de  plantillas y usar algo muy simple y solo en HTML. Aquí
+hay un  ejemplo de una página ``500.html``, como un punto de partida, para que
+diseñes la tuya:
 
 .. code-block:: html
 
-  {% extends "base.html" %}
+    <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+        "http://www.w3.org/TR/html4/strict.dtd">
+    <html lang="en">
+    <head>
+        <title>Página no disponible</title>
+    </head>
+    <body>
+        <h1>Página no disponible</h1>
 
-  {% block title %}Create an account{% endblock %}
+        <p>Lo sentimos, pero la página pedida no está disponible por que
+        el servidor tiene hipo.</p>
 
-  {% block content %}
-    <h1>Create an account</h1>
-    <form action="." method="post">
-      {% if form.error_dict %}
-        <p class="error">Please correct the errors below.</p>
-      {% endif %}
+        <p>Los ingenieros han sido notificados, así que vuelva a revisar más
+        tarde</p>
+    </body>
+    </html>
 
-      {% if form.username.errors %}
-        {{ form.username.html_error_list }}
-      {% endif %}
-      <label for="id_username">Username:</label> {{ form.username }}
+Establece errores de alerta
+---------------------------
 
-      {% if form.password1.errors %}
-        {{ form.password1.html_error_list }}
-      {% endif %}
-      <label for="id_password1">Password: {{ form.password1 }}
+Cuando tu sitio creado con Django está corriendo y se lanza una excepción,
+necesitas estar al tanto, para poder corregir cualquier defecto. Por omisión,
+Django está configurado para enviar un e-mail a los desarrolladores del sitio,
+cuando el código lanza una excepción; pero necesitas hacer algunas cosas para
+configurarlo.
 
-      {% if form.password2.errors %}
-        {{ form.password2.html_error_list }}
-      {% endif %}
-      <label for="id_password2">Password (again): {{ form.password2 }}
+* Primero cambia la configuración  ``ADMINS`` para incluir la dirección de e-mail,
+  con las direcciones de cada una de las personas que necesitan ser notificadas.
+  Esta configuración es una tupla del tipo  ``(nombre, email)``, la tupla puede
+  ser así ::
 
-      <input type="submit" value="Create the account" />
-    </label>
-  {% endblock %}
-
-.. nota::
-    ``django.contrib.auth.forms.UserCreationForm`` es, a la hora de publicar esto,
-    un formulario del estilo *oldforms*. Véase
-    http://www.djangoproject.com/documentation/0.96/forms/ para más
-    detalles sobre *oldforms*. La transición al nuevo sistema, tal y como
-    se explica en el capítulo siete, será completada muy pronto.
-
-Usar información de autentificación en plantillas
--------------------------------------------------
-
-El usuario actual, así como sus permisos, están disponibles
-en el contexto de la plantilla cuando usas ``RequestContext`` (véase
-:doc:`Capítulo 10<chapter10>`).
-
-.. admonition:: Nota
-
-    Técnicamente hablando, estas variables están disponibles en el contexto
-    de la plantilla sólo si usas ``RequestContext`` *y* en la configuración
-    está incluido el valor ``"django.core.context_processors.auth"`` en
-    la opción ``TEMPLATE_CONTEXT_PROCESSORS``, que es el valor que viene
-    predefinido cuando se crea un proyecto. Como ya se comentó, véase
-    el :doc:`Capítulo <chapter10>10` para más información.
-
-Cuando se usa ``RequestContext``, el usuario actual (ya sea una instancia de
-``User`` o de ``AnonymousUser``) es accesible en la plantilla con el
-nombre ``{{ user }}``::
-
-    {% if user.is_authenticated %}
-      <p>Welcome, {{ user.username }}. Thanks for logging in.</p>
-    {% else %}
-      <p>Welcome, new user. Please log in.</p>
-    {% endif %}
-
-Los permisos del usuario se almacenan en la variable ``{{ perms }}``. En realidad,
-es una forma simplificada de acceder a un par de métodos sobre los permisos
-que veremos en breve.
-
-Hay dos formas de usar este objeto ``perms``. Puedes usar ``{{ perms.polls }}`` para
-comprobar si un usuario tienen *algún* permiso para una determinada aplicación, o se
-puede usar una forma más específica, como ``{{ perms.polls.can_vote }}``, para
-comprobar si el usuario tiene concedido un permiso en concreto.
-
-Por lo tanto, se pueden usar estas comprobaciones en sentencias ``{% if %}``:
-
-.. code-block:: html
-
-    {% if perms.polls %}
-      <p>You have permission to do something in the polls app.</p>
-      {% if perms.polls.can_vote %}
-        <p>You can vote!</p>
-      {% endif %}
-    {% else %}
-      <p>You don't have permission to do anything in the polls app.</p>
-    {% endif %}
-
-El resto de detalles: permisos, grupos, mensajes y perfiles
-===========================================================
-
-Hay unas cuantas cosas que pertenecen al entorno de autentificación
-y que hasta ahora sólo hemos podido ver de pasada. En esta sección las
-veremos con un poco más de detalle.
-
-Permisos
---------
-
-Los permisos son una forma sencilla de "marcar" que determinados usuarios
-o grupos pueden realizar una acción. Se usan normalmente para la parte de
-administración de Django, pero puedes usarlos también en tu código.
-
-El sistema de administración de Django utiliza  los siguientes permisos:
-
-* Acceso a visualizar el formulario "Añadir", y Añadir objetos, está
-  limitado a los usuarios que tengan el permiso *add* para ese
-  tipo de objeto.
-
-* El acceso a la lista de cambios, ver el formulario de cambios
-  y cambiar un objeto está limitado a los usuarios que tengan
-  el permisos *change* para ese tipo de objeto.
-
-* Borrar objetos está limitado a los usuarios que tengan el
-  permiso *delete* para ese tipo de objeto.
-
-Los permisos se definen a nivel de las clases o tipos de objetos,
-no a nivel de instancias. Por ejemplo, se puede decir "María puede
-modificar los reportajes nuevos", pero no "María solo puede
-modificar los reportajes nuevos que haya creado ella", ni "María
-sólo puede cambiar los reportajes que tengan un determinado
-estado, fecha de publicación o identificador".
-
-Estos tres permisos básicos, añadir, cambiar y borrar, se crean
-automáticamente para cualquier modelo Django que incluya una
-clase ``Admin``. Entre bambalinas, los permisos se agregan a la
-tabla ``auth_permission`` cuando ejecutas ``manage.py syncdb``.
-
-Estos permisos se crean con el siguiente formato:
-``"<app>.<action>_<object_name>"``. Por ejemplo, si tienes una
-aplicación llamada ``encuestas``, con un modelo llamado
-``Respuesta``, se crearan automáticamente los tres
-permisos con los nombres ``"encuestas.add_respuesta"``,
-``"encuestas.change_respuesta"`` y
-``"encuestas.delete_respuesta"``.
-
-Hay que tener cuidado de que el modelo tenga creada una
-clase ``Admin`` a la hora de ejecutar ``syncdb``. Si no la tiene, no se crearán
-los permisos. Si has inicializado la base de datos y has añadido
-la clase ``Admin`` con posterioridad, debes ejecutar otra
-vez ``syncdb`` para crear los permisos.
-
-También puedes definir tus propios permisos para un modelo, usando el atributo
-``permissions`` en la clase ``Meta``. El siguiente ejemplo crea tres
-permisos hechos a medida::
-
-    class USCitizen(models.Model):
-        # ...
-        class Meta:
-            permissions = (
-                # Permission identifier     human-readable permission name
-                ("can_drive",               "Can drive"),
-                ("can_vote",                "Can vote in elections"),
-                ("can_drink",               "Can drink alcohol"),
-            )
-
-Esto permisos sólo se crearán cuando ejecutes ``syncdb``. Es responsabilidad
-tuya comprobar estos permisos en tus vistas.
-
-Igual que con los usuarios, los permisos se implementa en un modelo Django
-que reside en el módulo ``django.contrib.auth.models``. Esto significa
-que puedes usar la API de acceso a la base de datos para interactuar
-con los permisos de la forma que quieras.
-
-Grupos
-------
-
-Los grupos son una forma genérica de trabajar con varios usuarios
-a la vez, de forma que se les pueda asignar permisos o etiquetas
-en bloque. Un usuario puede pertenecer a varios grupos a la vez.
-
-Un usuario que pertenezca a un grupo recibe automáticamente todos
-los permisos que se la hayan otorgado al grupo. Por ejemplo, si el
-grupo ``Editores`` tiene el permiso ``can_edit_home_page``, cualquier
-usuario que pertenezca a dicho grupo también tiene ese permiso.
-
-Los grupos también son una forma cómoda de categorizar a los usuarios
-para asignarles una determinada etiqueta, o para otorgarles una funcionalidad
-extra. Por ejemplo, se puede crear un grupo ``Usuarios especiales``, y
-utilizar código para permitir el acceso a determinadas porciones de
-tu sitio sólo a los miembros de ese grupo, o para enviarles un correo
-electrónico sólo a ellos.
-
-Al igual que con los usuarios, la manera más sencilla de gestionar los
-grupos es usando la interfaz de administración de Django. Los grupos, en
-cualquier caso, son modelos Django que residen en el módulo
-``django.contrib.auth.models`` así que, al igual que en el caso
-anterior, puedes usar la API de acceso a la base de datos para trabajar
-con los grupos a bajo nivel.
-
-Mensajes
---------
-
-El sistema de mensajes es un forma muy ligera y sencilla de enviarle
-mensajes a un usuario. Cada usuario tiene asociada una cola de
-mensajes, de forma que los mensajes lleguen en el orden en que fueron
-enviados. Los mensajes no tienen ni fecha de caducidad ni fecha de envío.
-
-La interfaz de administración de Django usa los mensajes para notificar
-que determinadas acciones han podido ser llevadas a cabo con éxito. Por
-ejemplo, al crear un objeto, verás que aparece un mensaje en lo alto
-de la página de administración, indicando que se ha podido crear el objeto
-sin problemas.
-
-Puedes usar la misma API para enviar o mostrar mensajes en tu propia
-aplicación. Las llamadas de la API son bastante simples:
-
-* Para crear un nuevo mensaje usa
-  ``user.message_set.create(message='message_text')``.
-
-* Para recuperar/eliminar mensajes usa ``user.get_and_delete_messages()``,
-  la cual retorna una lista de objetos ``Message`` en la cola del usuario
-  (si es que existiera alguno) y elimina el mensaje de la misma.
-
-En el siguiente ejemplo, la vista guarda un mensaje para el usuario después de
-crear una lista de reproducción::
-
-    def create_playlist(request, songs):
-        # Create the playlist with the given songs.
-        # ...
-        request.user.message_set.create(
-            message="Your playlist was added successfully."
+        ADMINS = (
+            ('John Lennon', 'jlennon@example.com'),
+            ('Paul McCartney', 'pmacca@example.com'),
         )
-        return render_to_response("playlists/create.html",
-            context_instance=RequestContext(request))
 
-Al usar ``RequestContext``, los mensajes del usuario actual, si los
-tuviera, están accesibles desde la variable de contexto usando el
-nombre ``{{ messages }}``. El siguiente ejemplo representa un fragmento
-de código que muestras los mensajes::
+* Segundo, asegúrate de que tu servidor este configurado para enviar e-mails.
+  Configurar ``postfix``, ``sendmail`` o cualquier otro servidor de e-mails, esta
+  fuera del alcance de este libro, pero del lado de Django, debes de asegurarte
+  de configurar ``EMAIL_HOST`` y establecer el "hostname" apropiado  para tu
+  servidor de correo. Si lo estableces a ``'localhost'``  por defecto, trabajara
+  fuera de la caja  en muchos entornos de servicios compartidos. También es
+  necesario que establezcas los parámetros de las siguientes configuraciones:
+  ``EMAIL_HOST_USER``, ``EMAIL_HOST_PASSWORD``, ``EMAIL_PORT`` o ``EMAIL_USE_TLS``,
+  dependiendo de la complejidad de tu infraestructura.
 
-    {% if messages %}
-    <ul>
-        {% for message in messages %}
-        <li>{{ message }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
+* Por último, también establece el prefijo con ``EMAIL_SUBJECT_PREFIX`` el cual
+  controla el nombre que Django usa delante de los errores en los correos
+  electrónicos. Por defecto esta establecido en ``'[Django] '``.
 
-Hay que hacer notar que ``RequestContext`` llama a ``get_and_delete_messages``
-de forma implícita, por lo que los mensajes serán borrados, aún si no se
-muestran en pantalla.
+Estable alertas para enlaces rotos
+----------------------------------
 
-Por último, el sistema de mensajería sólo funciona para usuarios de la base de
-datos. Para enviar mensajes a usuarios anónimos hay que usar en entorno de
-sesiones directamente.
+Si tienes la clase  ``CommonMiddleware`` instalada (en tu archivo de configuración en
+la variable ``MIDDLEWARE_CLASSES`` que incluye
+``'django.middleware.common.CommonMiddleware'``,  lo cual ocurre  por defecto)
+tienes la opción de recibir un e-mail cada vez que alguien visita una página
+creada con Django que lanze un error 404 con una referencia a no-vacía -- esto
+es cada vez que encuentre enlaces rotos. Si quieres activar esta característica,
+establece ``SEND_BROKEN_LINK_EMAILS`` a ``True`` (esta es ``False`` por defecto)
+y establece en la configuración ``MANAGERS`` a la persona o personas que recibirán
+esos e-mails de enlaces rotos. ``MANAGERS`` usa la misma sintaxis que
+``ADMINS``, un tupla.  por ejemplo::
 
-Perfiles
---------
+    MANAGERS = (
+        ('George Harrison', 'gharrison@example.com'),
+        ('Ringo Starr', 'ringo@example.com'),
+    )
 
-La parte final de nuestro puzzle consiste en el sistema de perfiles. Para
-entender mejor que es este sistema y para que sirve, veamos primero el
-problema que se supone tiene que resolver.
+Nota que los e-mails de errores pueden llegar a ser muy molestos; no son para todo el
+mundo.
 
-El resumen sería este: Muchos sitios en Internet necesitan almacenar
-más información acerca de sus usuarios de la que está disponible en
-un objeto de la clase ``User``. Para resolver este problema, otros
-entornos definen una serie de campos "extra". Django, por el contrario, ha
-optado por proporcionar un mecanismo sencillo que permita crear un perfil con
-los datos que queramos, y que queda enlazado con la cuenta de usuario. Estos
-perfiles pueden incluso ser diferentes según cada proyecto, y también se
-pueden gestionar diferentes perfiles para sitios diferentes usando la
-misma base de datos.
+Como usar diferentes configuraciones para producción
+====================================================
 
-El primer paso para crear un perfil es definir el modelo que va a almacenar
-la información que queremos guardar. El único requerimiento que Django
-impone a este modelo es que disponga de una campo de tipo ``ForeignKey``, que
-sea único (``unique=True``) y que lo vincule con el modelo ``User``. Además, el
-campo debe llamarse ``user``. Aparte de eso, puedes usar tantos y tan variados
-campos de datos como quieres. El siguiente ejemplo muestra un perfil
-absolutamente arbitrario::
+Hasta ahora en este libro, hemos tratado únicamente con un simple archivo
+de configuraciones: ``settings.py`` generado por el comando ``django-admin.py
+startproject``. Pero como estamos listos para desplegarlo, probablemente
+nos encontremos con la necesidad de usar múltiples archivos de configuraciones
+para mantener el entorno de desarrollo  aislado del ambiente de producción.
+(Por ejemplo, probablemente no quieras cambiar  ``DEBUG`` de ``False`` a
+``True`` cada vez que quieras probar los cambios al código,  en tu maquina de
+forma local.) Django hace esto muy sencillo, permitiéndote usar múltiples archivos
+de configuraciones.
 
-    from django.db import models
-    from django.contrib.auth.models import User
+Si quieres organizar tus archivos de configuraciones, dividiéndolos en
+"desarrollo" y "producción", puedes lograrlo usando una de las siguientes tres
+formas.
 
-    class MySiteProfile(models.Model):
-        # This is the only required field
-        user = models.ForeignKey(User, unique=True)
+* Establece dos archivos de configuraciones completos, de forma independiente.
 
-        # The rest is completely up to you...
-        favorite_band = models.CharField(maxlength=100, blank=True)
-        favorite_cheese = models.CharField(maxlength=100, blank=True)
-        lucky_number = models.IntegerField()
+* Establece un archivo de configuraciones "base" (uno para desarrollo) y un
+  segundo (para producción) el archivo de configuraciones  simplemente importa
+  del primero y define lo que necesita y lo que debe sobrescribirse.
 
-El siguiente paso es decirle a Django donde buscar estos perfiles. Para ello
-asigna a la variable de configuración ``AUTH_PROFILE_MODULE`` el identificador
-de tu modelo. Así, si el perfil que definimos en el ejemplo anterior residiera
-en una aplicación llamada "myapp", pondrías esto en tu fichero de
-configuración::
+* Usa únicamente un archivo de configuraciones y deja que Python se encargue de
+  la lógica y haga los cambios a las configuraciones, basado en el contexto.
 
-    AUTH_PROFILE_MODULE = "myapp.mysiteprofile"
+Veamos estas tres opciones, una por una.
 
-Una vez hecho esto, se puede acceder al perfil del usuario llamando a
-``user.get_profile()``. Esta función elevará una excepción de tipo
-``DoesNotExist`` si el usuario no tiene creado el perfil (puedes
-atrapar esta excepción y crear el perfil en ese momento).
+Primero, la forma más básica para aprovechar esto, es definir dos archivos
+separados. Si estas siguiendo esto, ya tienes un archivo ``settings.py``. Ahora
+solo es necesario realizar una copia llamada ``settings_production.py``.( Si no
+te gusta el nombre, puedes llamarlo como quieras) En este nuevo archivo,
+cambia las variables necesarias como ``DEBUG``, etc.
+
+La segunda forma de aprovechar esto es muy parecida, pero reduce algo de
+redundancia, En lugar de tener dos archivos de configuraciones con contenido
+similar, tratamos solo con un archivo "base" y creamos otro archivo que lo
+importe. Por ejemplo::
+
+    # settings.py
+
+    DEBUG = True
+    TEMPLATE_DEBUG = DEBUG
+
+    DATABASE_ENGINE = 'postgresql_psycopg2'
+    DATABASE_NAME = 'devdb'
+    DATABASE_USER = ''
+    DATABASE_PASSWORD = ''
+    DATABASE_PORT = ''
+
+    # ...
+
+    # settings_produccion.py
+
+    from settings import *
+
+    DEBUG = TEMPLATE_DEBUG = False
+    DATABASE_NAME = 'production'
+    DATABASE_USER = 'app'
+    DATABASE_PASSWORD = 'dejameentrar'
+
+Aquí tenemos que ``settings_production.py`` importa cualquier cosa de
+``settings.py`` y solo redefine las configuraciones que son usadas especialmente
+en producción. En este caso ``DEBUG`` está fijado en ``False``,   pero también
+hemos fijado diversos parámetros, como el acceso a la base de datos para
+configurarla  en  producción. (Mas adelante te mostraremos como redefinir
+*cualquier* configuración, no únicamente las básicas como ``DEBUG``. )
+
+Finalmente, la forma más concisa para lograr tener dos entornos de
+configuraciones es usar un solo archivo,  que se ramifique basado en el entorno.
+Una de las formas de lograr esto es comprobar el actual "hostname."
+Por ejemplo::
+
+    # settings.py
+
+    import socket
+
+    if socket.gethostname() == 'my-laptop':
+        DEBUG = TEMPLATE_DEBUG = True
+    else:
+        DEBUG = TEMPLATE_DEBUG = False
+
+    # ...
+
+Aquí, importamos el modulo ``socket`` de la librería estándar de Python y lo
+usamos para comprobar el nombre actual  del sistema. Podemos comprobar el
+"nombre" para determinar si el código está siendo ejecutado en un servidor de
+producción.
+
+La lección central, es que el archivo de configuraciones es *solo código Python*.
+Que puede importar otros archivos, puede ejecutar lógica arbitraria, etc. Solo
+asegúrate de que el código Python en tu archivo de configuraciones sea a prueba
+de balas. Si lanza una excepción, Django probablemente  se estrellara de
+fea manera.
+
+.. admonition:: Renombrar settings.py
+
+
+    Siéntete libre de renombrar tu archivo ``settings.py`` a ``settings_dev.py``
+    o ``settings/dev.py`` o ``foobar.py`` -- A Django no le importa como lo
+    llames, solo necesita saber que archivo estas usando para usarl las
+    configuraciones.
+
+    Solo ten en cuenta que si renombras el archivo ``settings.py`` que es
+    generado por el comando ``django-admin.py startproject``, te encontraras con
+    que ``manage.py`` lanza un mensaje de error, diciendo que no puede encontrar
+    el archivo de configuraciones. Esto es debido a que trata de importar un
+    modulo llamado ``settings``.  Puedes arreglar esto editando ``manage.py`` y
+    cambiándole  el nombre de ``settings`` por el nombre de tu modulo o usando
+    ``django-admin.py``  en lugar de ``manage.py``. En este último caso, necesitas
+    fijar ``DJANGO_SETTINGS_MODULE``  con las variables de entorno de la ruta
+    de búsqueda Python en tu archivo de configuraciones (por ejemplo
+    ``'misitio.settings'``)
+
+Cuando usas Django tienes que indicarle qué configuración estás usando. Haz esto
+mediante el uso de de la variable de entorno ``DJANGO_SETTINGS_MODULE``.
+El valor de ``DJANGO_SETTINGS_MODULE`` debe respetar la sintaxis de rutas de Python
+(por ej. misitio.settings. Observa que el módulo de configuración debe de
+encontrarse en la ruta de búsqueda para las importaciones de Python (PYTHONPATH).
+
+DJANGO_SETTINGS_MODULE
+======================
+
+Con todos estos cambios en el código, la siguiente parte de este capítulo se
+centra en las instrucciones especificas para desplegar distintos entornos, tal
+como Apache, Gunicorn... Las instrucciones son diferentes para cada entorno, pero
+una cosa es la misma: en cada caso necesitas decirle al servidor Web cuál es tu:
+``DJANGO_SETTINGS_MODULE``. Este es el punto de entrada de tu aplicación Django.
+``DJANGO_SETTINGS_MODULE`` enlaza tu archivo de configuraciones, el cual apunta
+a ``ROOT_URLCONF``, que a su vez enlaza tus vistas y así sucesivamente.
+
+El objeto application
+---------------------
+
+El concepto clave para implementar usando ``WSGI``  es el llamable ``application``
+que es el servidor de aplicaciones utiliza para comunicarse con el código. Este
+comúnmente se  provee como un objeto llamado ``application`` el cual es un
+modulo Python accesible por el servidor.
+
+El comando  ``startproject`` crea un archivo llamado **wsgi.py** este contiene
+una ``application`` llamable. Este es usado tanto en el servidor de  desarrollo,
+como en el despliegue para producción, por lo que no necesitas crearlo.
+
+El servidor WSGI obtiene la ruta de el llamable ``application`` de su
+configuración. El servidor de desarrollo "runserver" lee la configuración  de
+``WSGI_APPLICATION``, la cual enlaza a el llamable ``application`` en el archivo
+``wsgi.py``, lo mismo pasa con un servidor en producción.
+
+Configura el modulo settings
+----------------------------
+
+Cuando el servidor WSGI carga tu aplicación, Django necesita importar
+el modulo de configuraciones ``settings``  -- que es donde se define
+completamente la aplicación.
+
+Django usa la variable de entorno ``DJANGO_SETTINGS_MODULE`` que contiene la
+ruta para localizar apropiadamente  este modulo. Puedes usar diferentes valores
+para desarrollo y producción; todo depende de cómo organices tus configuraciones.
+
+Si esta variable no está establecida, el valor por defecto es ``misitio.settings``,
+donde ``misitio`` es el nombre de tu proyecto y ``settings`` es el nombre del archivo
+``settings.py``. Esta es la forma en que ``runserver`` carga el archivo de
+configuraciones por defecto.
+
+Como desplegar con WSGI
+=======================
+
+La plataforma dominante de implementación para Django es WSGI_, el estándar
+Python para servidores y aplicaciones Web.
+
+.. _WSGI: http://www.wsgi.org
+
+El comando administrativo  ``startproject``  establece por defecto, un simple
+archivo de configuración WSGI, el cual puedes personalizarse según las
+necesidades de tu proyecto, y directamente adaptarse a cualquier servidor que
+ofrezca soporte para WSGI, como los siguientes servidores:
+
+* mod_wsgi
+* apache
+* gunicorn
+* uwsgi
+
+Usando Django con Apache y mod_wsgi
+===================================
+
+Desplegar Django con Apache_ y `mod_wsgi`_  es la manera probada y comprobada de
+usar Django en un servidor en producción.
+
+.. _Apache: http://httpd.apache.org/
+.. _mod_wsgi: http://code.google.com/p/modwsgi/
+
+mod_wsgi es un modulo de Apache que puede hospedar cualquier aplicación Python
+WSGI_, incluyendo Django. El cual trabaja con cualquier versión de Apache que
+soporte mod_wsgi.
+
+.. _WSGI: http://www.wsgi.org
+
+La `Documentación oficial`_ es fantástica, y el código fuente incluye detalles sobre
+el modo de usar mod_wsgi. Por lo que probablemente quieras empezar por leer
+`la documentación sobre instalación y configuración`_.
+
+.. _Documentación oficial: http://code.google.com/p/modwsgi/
+.. _la documentación sobre instalación y configuración: http://code.google.com/p/modwsgi/wiki/InstallationInstructions
+
+Configuración básica
+====================
+
+Para configurar Django con mod_wsgi, primero debes asegurarte de que tienes
+instalado  Apache con el módulo mod_wsgi activado. Esto usualmente significa
+tener una directiva LoadModule en tu archivo de configuración de Apache.
+Parecida a esta:::
+
+    LoadModule wsgi_module  /modules/mod_wsgi.so
+
+
+.. # LoadModule foo_module modules/mod_foo.so
+
+Una vez que has instalado y activado mod_wsgi, edita el archivo ``httpd.conf``
+de tu servidor Web Apache y agrega lo siguiente. Si estas usando una versión
+de Apache anterior a la 2.4, remplaza  ``Require all granted`` con
+``Allow from all`` y tambien agrega la línea ``Order deny,allow`` arriba de esta.
+
+.. code-block:: apache
+
+    WSGIScriptAlias / /path/to/mysite.com/mysite/wsgi.py
+    WSGIPythonPath /path/to/mysite.com
+
+    <Directory /path/to/mysite.com/mysite>
+    <Files wsgi.py>
+    Require all granted
+    </Files>
+    </Directory>
+
+El primer fragmento de la línea ``WSGIScriptAlias`` es la ruta base que quieres
+servir tu aplicaciones  en (``/`` indica la raíz de la url) y la segunda es la
+localización de el "archivo WSGI" --ver más abajo  en tu sistema, usualmente
+dentro del paquete de tu proyecto (``misitio`` en este ejemplo.) Esto le dice
+al servidor Apache “Usa mod_wsgi para cualquier petición URL en ‘/’ o bajo ella,
+usando la aplicación WSGI definida en ese archivo".
+
+La línea ``WSGIPythonPath`` se asegura que el paquete del proyecto este
+disponible para importar la ruta de búsqueda de Python; en otras palabras se
+asegura que ``import misitio`` trabaje.
+
+La  pieza ``<Directory>`` solo  se asegura de que Apache pueda acceder al archivo
+``wsgi.py``, ya que se utiliza para apuntar a lugares de nuestra sistema de
+archivos,
+
+Lo siguiente que necesitas hacer, es asegurarte que  exista una archivo
+``wsgi.py``, como seguramente te diste cuenta el comando ``startproject`` crea
+este archivo por defecto al crear el proyecto, de otra forma tendrías que crear
+este archivo manualmente.
+
+.. warning::
+
+   Si varios sitios están siendo ejecutados en un simple proceso mod_wsgi,
+   todos ellos usarán las configuraciones de cualquiera de los procesos que
+   corra primero. Esto puede se solventado con un pequeño cambio en  el archivo
+   ``wsgi.py`` (ve los comentarios en el archivo para detalles) o puedes
+   asegurarte de cada sitio sea ejecutado en un proceso independiente, usando su
+   propio demonio, sobrescribiendo el valor por defecto usando:
+   ``os.environ["DJANGO_SETTINGS_MODULE"] = "misitio.settings"`` en el arhvio
+   ``wsgi.py``
+
+
+Usando virtualenv
+=================
+
+Si has instalado las dependencias Python de tu proyecto dentro de `virtualenv`_,
+necesitas agregar la ruta de "virtualenv's" al directorio ``site-packages``, así
+como el camino de búsqueda. Para hacer esto agrega una ruta de búsqueda adicional
+a la directiva ``WSGIPythonPath``, con las múltiples rutas separadas por dos
+puntos (``:``) si estas usando un sistema del tipo UNIX, o punto y coma  (``;``)
+si estas usando Windows. Si cualquier parte de la ruta al directorio contiene
+caracteres como espacios, la cadena completa de argumentos para ``WSGIPythonPath``
+debe ser citada::
+
+    WSGIPythonPath /path/to/mysite.com:/path/to/your/venv/lib/python3.X/site-packages
+
+Asegúrate de darle la ruta correcta a tu  virtualenv, y remplazar ``python3.X``
+con la versión correcta de Python (por ejemplo ``python3.4``).
+
+.. _virtualenv: http://www.virtualenv.org
+
+Usando mod_wsgi en modo demonio
+===============================
+
+"Modo Demonio" es el modo recomendado para ejecutar mod_wsgi (en plataformas que
+no son Windows). Para crear el grupo de procesos requeridos por el demonio y
+delegar la instancia Django para ejecutarse, necesitas agregar apropiadamente
+las directivas  ``WSGIDaemonProcess`` y  ``WSGIProcessGroup``. Un cambio mas
+es requerido en la anterior configuración si utilizas el modo demonio no
+puedes usar ``WSGIPythonPath``, en lugar de eso debes usar la opción
+``python-path`` para ``WSGIDaemonProcess``, por ejemplo::
+
+    WSGIDaemonProcess example.com python-path=/path/to/mysite.com:/path/to/venv/lib/python2.7/site-packages
+    WSGIProcessGroup example.com
+
+Puedes consultar `La documentación oficial de mode_wsgi`_ para más detalles.
+
+.. _La documentación oficial de mode_wsgi: http://code.google.com/p/modwsgi/wiki/QuickConfigurationGuide#Delegation_To_Daemon_Process
+
+
+Sirviendo archivos
+==================
+
+Django no debería ser utilizado para servir archivos multimedia (imágen, audio,
+video, pdf) por sí mismo; mejor deja ese trabajo a un servidor Web especializado
+en estas tareas.
+
+Recomendamos usar un servidor Web separado (es decir, uno que no
+está corriendo a la vez Django) para servir estos archivos. Estos son algunas
+buenas opciones:
+
+* lighttpd_
+* Nginx_
+* TUX_
+* Una versión personalizada de Apache_
+* Cherokee_
+
+Sin embargo, si no tienes otra opción para servir los archivos multimedia, que
+no sea el mismo ``VirtualHost`` Apache que usa Django, puedes configurar Apache
+para que sirva algunas URLs estáticas y otras usando la interface mod_wsgi
+para Django
+
+Este ejemplo configura Django en la raíz del sitio, pero explícitamente sirve
+``robots.txt``, ``favicon.ico``, y cualquier archivo CSS, y cualquier cosa en
+el espacio de URL ``/static/`` y ``/media/`` será tratado como archivos
+estáticos. Todas las demás URLs será servidas usando mod_wsgi:
+
+.. code-block:: apache
+
+    Alias /robots.txt /path/to/mysite.com/static/robots.txt
+    Alias /favicon.ico /path/to/mysite.com/static/favicon.ico
+
+    AliasMatch ^/([^/]*\.css) /path/to/mysite.com/static/styles/$1
+
+    Alias /media/ /path/to/mysite.com/media/
+    Alias /static/ /path/to/mysite.com/static/
+
+    <Directory /path/to/mysite.com/static>
+    Require all granted
+    </Directory>
+
+    <Directory /path/to/mysite.com/media>
+    Require all granted
+    </Directory>
+
+    WSGIScriptAlias / /path/to/mysite.com/mysite/wsgi.py
+
+    <Directory /path/to/mysite.com/mysite>
+    <Files wsgi.py>
+    Require all granted
+    </Files>
+    </Directory>
+
+Si estas usando una versión de Apache anterior a la 2.4, remplaza
+``Require all granted`` con ``Allow from all`` y tambien agrega la línea
+``Order deny,allow`` arriba de esta.
+
+.. _lighttpd: http://www.lighttpd.net/
+.. _Nginx: http://wiki.nginx.org/Main
+.. _TUX: http://en.wikipedia.org/wiki/TUX_web_server
+.. _Apache: http://httpd.apache.org/
+.. _Cherokee: http://www.cherokee-project.com/
+
+Sirviendo los archivos de la interfaz administrativa
+====================================================
+
+Cuando ``django.contrib.staticfiles`` está en el archivo de configuraciones en
+la variable ``INSTALLED_APPS`` El entorno de desarrollo de Django sirve
+automáticamente los archivos estáticos de la interfaz administrativa (y de
+cualquier aplicación instalada). Este no es el caso cuando usas otro servidor
+para este trabajo. Tu eres responsable de configurar Apache o cualquier  otro
+servidor Web que utilices, para servir los archivos de la interfaz
+administrativa.
+
+Los archivos de la interfaz administrativa se localizan en
+``django/contrib/admin/static/admin``  en la distribucion de Django
+Es *fuertemente* recomendable usar ``django.contrib.staticfiles`` para manejar
+los archivos de la interfaz administrativa (Junto con el servidor Web, esto
+significa que puedes usar el comando ``collectstatic`` para recolectar todos
+los archivos estáticos en  ``STATIC_ROOT``  y luego configurar el servidor Web
+para servir ``STATIC_ROOT``, pero aquí estan otras tres formas de hacer lo mismo:
+
+1. Crea un enlace simbólico a los archivos estáticos de la interfaz
+   administrativa desde la raíz de Apache (esto puede requerir usar
+   ``+FollowSymLinks`` en la configuración de Apache)
+
+2. Usa una directiva ``Alias``, como mostramos arriba, un alias apropiado a la
+   URL (probablemente ``STATIC_URL`` + ``admin/``) a la posición  actual  de los
+   archivos estáticos.
+
+3. Copia los archivos estáticos de la interfaz administrativa de modo que
+   se localicen dentro de la raíz de Apache.
+
+Como usar Django con Gunicorn
+===============================
+
+Gunicorn_ ('Unicornio verde') es un servidor WSGI implementado en Python. No
+tiene dependencias y es fácil de instalar y usar.
+
+.. _Gunicorn: http://gunicorn.org/
+
+Hay dos formas de usar Gunicorn con Django. La primera es tratar a Gunicorn
+simplemente como otra aplicación WSGI. La segunda es usar Gunicorn de forma
+especial `integrándolo con Django`_.
+
+.. _integrándolo con Django: http://docs.gunicorn.org/en/latest/run.html#django-manage-py
+
+Una vez instalado Gunicorn, tenemos disponible un comando ``gunicorn`` que
+inicia el proceso del servidor Gunicorn.  Esto es tan simple, ya que gunicorn
+solo necesita ser llamado con la localización del objeto ``aplication``
+del WSGI.::
+
+    gunicorn [OPTIONS] APP_MODULE
+
+Donde ``APP_MODULE`` es un patron del tipo ``NOMBRE_MODULO:NOMBRE_VARIABLE_``.
+El nombre del modulo debe ser la ruta completa al proyecto, mientras que el
+nombre de la variable se refiere al llamable WSGI el cual debe de encontrarse
+en el modo especificado.
+
+Así para un típico proyecto Django, invocar a gunicorn se vería así::
+
+    gunicorn misitio.wsgi:application
+
+Donde ``misitio`` es el nombre del proyecto y ``application`` es el llamable
+del WSGI.
+
+(Esto requiere que el proyecto este en la ruta de búsqueda de Python;
+la forma más simple de hacer esto, es asegurarse de ejecutar  el comando
+"gunicorn" desde el mismo directorio en que esta el archivo ``manage.py``)
+
+Gunicorn integrado a Django
+===========================
+
+.. admonition:: Nota:
+
+    Es altamente recomendable simplemente ejecutar la aplicación con la interface
+    WSGI usando el comando ``gunicorn``  descrito anteriormente.
+
+Para usar Gunicorn integrado con Django, primero agrega ``"gunicorn"`` a tus
+aplicaciones instaladas, en la variable  ``INSTALLED_APPS``. Luego ejecuta el
+comando ``python manage.py run_gunicorn``
+
+Este ofrece algunas sutiles opciones  específicas para Django.
+
+* Fija el nombre del proceso de gunicorn para ser el del proyecto
+
+* Valida los modelos instalados
+
+* Permite agregar una opción ``--adminmedia`` para pasarle la localización de
+  los archivos media  de la interfaz administrativa.
+
+Puedes consultar la documentación oficial para encontrar consejos adicionales
+sobre cómo empezar a usar y mantener un servidor `Gunicorn`_.
+
+Como usar Django con uWSGI
+==========================
+
+`uWSGI`_  es un servidor rápido codificado en C, autoregenerable y desarrollado
+como una aplicación amigable para los administradores de sistemas.
+
+.. _uWSGI: http://projects.unbit.it/uwsgi/
+
+Prerrequisitos: uWSGI
+=====================
+
+La wiki de WSGI describe algunos `método de instalación`_. Usando pip, el
+manejador de paquetes python puedes instalar cualquier versión de uWSGI con un
+simple comando. Por ejemplo:
+
+.. code-block:: bash
+
+    # Instala la actual versión estable.
+    sudo pip install uwsgi
+
+    # O installa la LTS (Soporte a largo plazo).
+    sudo pip install http://projects.unbit.it/downloads/uwsgi-lts.tar.gz
+
+.. _método de instalación: http://uwsgi-docs.readthedocs.org/en/latest/Install.html
+
+.. warning::
+
+    Algunas distribuciones, incluidas Debían y Ubuntu, incluyen versiones
+    antiguas de uWSGI que no cumplen las especificaciones WSGI. Versiones
+    anteriores a la 1.2.6 no llaman a ``close`` en el objeto de repuesta
+    después de manejar una petición. En estos casos
+    ``django.core.signals.request_finished`` no envía las señales. Esto
+    puede dar lugar a conexiones lentas a los servidores de la base de datos y
+    memcache.
+
+uWSGI model
+-----------
+
+uWSGI opera en un modelo cliente-servidor. El servidor web (por ejemplo
+nginx, Apache) se comunicacn con un proceso del "trabajo" django-uwsgi para
+servir dinámicamente el contexto. Consulta la `documentación a fondo`_ de uWSGI's
+para obtener más detalles.
+
+.. _documentación a fondo: http://projects.unbit.it/uwsgi/wiki/Background
+
+Configurar e iniciar el servidor uWSGI
+--------------------------------------
+
+uWSGI soporta múltiples formas para configurar el proceso. Puede iniciar
+mediante un comando o leyendo un archivo de configuraciones de inicio. Puedes
+consultar más `ejemplos`_ y la documentación de `configuraciones`_ para obtener
+detalles mas específicos.
+
+.. _configuraciones: https://uwsgi.readthedocs.org/en/latest/Configuration.html
+.. _ejemplos: http://projects.unbit.it/uwsgi/wiki/Example
+
+Este es un ejemplo de un comando para iniciar el servidor uWSGI:
+
+.. code-block:: bash
+
+    uwsgi --chdir=/path/to/your/project \
+        --module=misitio.wsgi:application \
+        --env DJANGO_SETTINGS_MODULE=misitio.settings \
+        --master --pidfile=/tmp/project-master.pid \
+        --socket=127.0.0.1:49152 \      # can also be a file
+        --processes=5 \                 # number of worker processes
+        --uid=1000 --gid=2000 \         # if root, uwsgi can drop privileges
+        --harakiri=20 \                 # respawn processes taking more than 20 seconds
+        --max-requests=5000 \           # respawn processes after serving 5000 requests
+        --vacuum \                      # clear environment on exit
+        --home=/path/to/virtual/env \   # optional path to a virtualenv
+        --daemonize=/var/log/uwsgi/yourproject.log      # background the process
+
+
+Este asume que estas situado en el nivel superior de un paquete llamado
+``misitio`` y dentro del existe un modulo wsgi.py, que contienen un objeto
+``application`` WSGI. No deberías tener ningún problema si ejecutaste el comando
+``django-admin.py startproject misitio``, ya que este se encarga de crear la
+estructura del proyecto por default. Si este archivo no existe necesitas
+crearlo.
+
+Las opciones especificas de Django son:
+
+* ``chdir``:  La ruta al directorio, que necesita estar en la ruta de importacion
+  de Python. -- es decir el directorio que contiene el paquete ``misitio``
+
+* ``module``: El modulo WSGI para usar --probablemente  el modulo ``misitio.wsgi``
+  que ``startproject`` creo.
+
+* ``env``: Debe contener por lo menos ``DJANGO_SETTINGS_MODULE``.
+
+* ``home``: Opcionalmente la ruta al proyecto, si estas usando virtualenv.
+
+Ejemplo de un archivo de configuración ini:
+
+.. code-block:: bash
+
+    [uwsgi]
+    chdir=/path/to/your/project
+    module=misitio.wsgi:application
+    master=True
+    pidfile=/tmp/project-master.pid
+    vacuum=True
+    max-requests=5000
+    daemonize=/var/log/uwsgi/yourproject.log
+
+Ejemplo del uso de un archivo de configuración ini::
+
+    uwsgi --ini uwsgi.ini
+
+Consulta el `manejo de procesos uWSGI`_  para más información sobre iniciar,
+detener y recargar los procesos del servidor uWSGI.
+
+.. _manejo de procesos uWSGI: http://uwsgi-docs.readthedocs.org/en/latest/Management.html
+
+Lighttpd
+========
+
+`lighttpd`_ es un servidor Web liviano usado habitualmente para servir archivos
+estáticos. Admite FastCGI en forma nativa y por lo tanto es también una opción
+ideal para servir tanto páginas estáticas como dinámicas, si tu sitio no tiene
+necesidades específicas de Apache.
+
+.. _lighttpd: http://www.lighttpd.net/
+
+Asegúrate que ``mod_fastcgi`` está en tu lista de módulos, en algún lugar
+después de ``mod_rewrite`` y ``mod_access``, pero no antes de ``mod_accesslog``.
+Probablemente desees también ``mod_alias``, para servir los archivos media de
+la interfaz administrativa.
+
+Agrega lo siguiente a tu archivo de configuración de lighttpd:
+
+.. code-block:: lua
+
+    server.document-root = "/home/user/public_html"
+    fastcgi.server = (
+        "/mysite.fcgi" => (
+            "main" => (
+                # Use host / port instead of socket for TCP fastcgi
+                # "host" => "127.0.0.1",
+                # "port" => 3033,
+                "socket" => "/home/user/mysite.sock",
+                "check-local" => "disable",
+            )
+        ),
+    )
+    alias.url = (
+        "/media" => "/home/user/django/contrib/admin/media/",
+    )
+
+    url.rewrite-once = (
+        "^(/media.*)$" => "$1",
+        "^/favicon\.ico$" => "/media/favicon.ico",
+        "^(/.*)$" => "/mysite.fcgi$1",
+    )
+
+Ejecutando Múltiples Sitios Django en Una Instancia lighttpd
+-------------------------------------------------------------
+
+lighttpd te permite usar “configuración condicional” para permitir la
+configuración personalizada para cada host. Para especificar múltiples sitios
+FastCGI, solo agrega un bloque condicional en torno a tu configuración
+FastCGI para cada sitio:
+
+.. code-block:: bash
+
+    # If the hostname is 'www.example1.com'...
+    $HTTP["host"] == "www.example1.com" {
+        server.document-root = "/foo/site1"
+        fastcgi.server = (
+           ...
+        )
+        ...
+    }
+
+    # If the hostname is 'www.example2.com'...
+    $HTTP["host"] == "www.example2.com" {
+        server.document-root = "/foo/site2"
+        fastcgi.server = (
+           ...
+        )
+        ...
+    }
+
+Puedes también ejecutar múltiples instalaciones de Django en el mismo sitio
+simplemente especificando múltiples entradas en la directiva fastcgi.server.
+Agrega un host FastCGI para cada una.
+
+Escalamiento
+============
+
+Ahora que sabes cómo tener a Django ejecutando en un servidor simple, veamos
+como puedes escalar una instalación Django. Esta sección explica cómo puede
+escalar un sitio desde un servidor único a un clúster de gran escala que
+pueda servir millones de hits por hora.
+
+Es importante notar, sin embargo, que cada sitio grande es grande de diferentes
+formas, por lo que escalar es cualquier cosa menos una operación de una solución
+única para todos los casos. La siguiente cobertura debe ser suficiente para
+mostrar el principio general, y cuando sea posible, trataremos de señalar donde
+se puedan elegir distintas opciones.
+
+Primero, haremos una buena presuposición, y hablaremos exclusivamente acerca de
+escalamiento bajo Apache y wsgi. A pesar de que conocemos vario casos exitosos
+de desarrollos FastCGI y mod_python  medios y grandes, estamos mucho más
+familiarizados con Apache.
+
+Ejecutando en un Servidor Único
+-------------------------------
+
+La mayoría de los sitios Web, empiezan ejecutándose en un servidor único, con
+una arquitectura parecida a la de la Figura 12-1.
+
+
+.. figure:: graphics/chapter12/scaling-1.png
+
+   Figure 12-1: Ejecutando únicamente un servidor.
+
+Esto funciona bien para sitios pequeños y medianos, y es relativamente barato
+– puedes instalar un servidor único diseñado para Django por menos de 3,000 dólares.
+
+Sin embargo, a medida que el tráfico se incremente, caerás rápidamente en
+*contención de recursos* entre las diferentes piezas de software. Los
+servidores de base de datos y los servidores Web *adoran* tener el servidor
+entero para ellos, y cuando corren en el mismo servidor siempre terminan
+“peleando” por los mismos recursos (RAM, CPU) que prefieren monopolizar.
+
+Esto se resuelve fácilmente moviendo el servidor de base de datos a una segunda
+máquina, como se explica en la siguiente sección.
+
+Separando el Servidor de Bases de Datos
+----------------------------------------
+
+En lo que tiene que ver con Django, el proceso de separar el servidor de bases
+de datos es extremadamente sencillo: simplemente necesitas cambiar la
+configuración de ``DATABASE_HOST`` a la IP o nombre DNS de tu servidor.
+Probablemente sea una buena idea usar la IP si es posible, ya que depender de
+la DNS para la conexión entre el servidor Web y el servidor de bases de datos
+no se recomienda.
+
+Con un servidor de base de datos separado, nuestra arquitectura ahora se ve
+como en la Figura 12-2.
+
+.. figure:: graphics/chapter12/scaling-2.png
+
+   Figure 12-2: Moviendo la base de datos a un servidor dedicado.
+
+Aquí es donde empezamos a movernos hacia lo que usualmente se llama una
+arquitectura *n-tier*. No te asustes por la terminología – sólo se refiere al
+hecho de que diferentes “tiers” de la pila Web separadas en diferentes máquinas
+físicas.
+
+A esta altura, si anticipas que en algún momento vas a necesitar crecer más
+allá de un servidor de base de datos único, probablemente sea una buena idea
+empezar a pensar en pooling de conexiones y/o replicación de bases de datos.
+Desafortunadamente, no hay suficiente espacio para hacerle justicia a estos
+temas en este libro, así que vas a necesitar consultar la documentación y/o a
+la comunidad de tu base de datos para más información.
+
+Ejecutando un Servidor de Medios Separado
+-----------------------------------------
+
+Aún tenemos un gran problema por delante,  usando únicamente un servidor: servir
+los archivos media  desde la misma caja que maneja el contenido dinámico.
+
+Estas dos actividades tienen su mejor performance bajo distintas circunstancias,
+y encerrándolas en la misma caja terminarás con que ninguna de las dos tendrá
+un buen rendimiento. Así que el siguiente paso es separar los medios – esto es,
+todo lo que *no* es generado por una vista de Django – a un servidor dedicado
+(ver Figura 12-3).
+
+.. figure:: graphics/chapter12/scaling-3.png
+
+   Figure 12-3: Separando el servidor de medios.
+
+Idealmente, este servidor de medios debería ejecutarse en un servidor Web,
+optimizado para la entrega de medios estáticos. lighttpd y tux
+(http://www.djangoproject.com/r/tux/) son dos excelentes elecciones aquí, pero
+un servidor Apache bien ‘personalizado’ también puede funcionar.
+
+Para sitios pesados en contenidos estáticos (fotos, videos, etc.), moverse a
+un servidor de medios separado es doblemente importante y debería ser el *primer*
+paso en el escalamiento hacia arriba.
+
+De todos modos, este paso puede ser un poco delicado. Si tu aplicación
+necesita subir archivos Django necesita poder escribir sobre los medios
+‘subidos’ en el servidor de medios.  (la configuración de MEDIA_ROOT controla
+donde  escriben estos medios). Si un medio habita en otro servidor, de todas
+formas necesitas organizar una forma de que esa escritura se pueda hacer a
+través de la red.
+
+Implementando Balance de Carga y Redundancia
+--------------------------------------------
+
+A esta altura, ya hemos separado las cosas todo lo posible. Esta configuración
+de tres servers debería manejar una cantidad muy grande de tráfico – nosotros
+servimos alrededor de 10 millones de hits por día con una arquitectura de este
+tipo– así que si creces más allá, necesitarás empezar a agregar redundancia.
+
+En realidad, esto es algo bueno. Una mirada a la Figura 20-3 te permitirá ver
+que si falla aunque sea uno solo de los servidores, el sitio entero se cae.
+Así que a medida que agregas servidores redundantes, no sólo incrementas
+capacidad, sino también confiabilidad.
+
+Para este ejemplo, asumamos que el primero que se ve superado en capacidad es
+el servidor Web. Es fácil tener múltiples copias de un sitio Django ejecutando
+en diferente hardware. – simplemente copia el código en varias máquinas, e
+inicia Apache en cada una de ellas.
+
+Sin embargo, necesitas otra pieza de software para distribuir el tráfico entre
+los servidores: un balanceador de carga. Puedes comprar balanceadores de carga
+por hardware caros y propietarios, pero existen algunos balanceadores de carga
+por software de alta calidad que son open source.
+
+mod_proxy de Apache es una opción, pero hemos encontrado que Perlbal
+(http://www.djangoproject.com/r/perlbal/) es simplemente fantástico.
+Es un balanceador de carga y proxy inverso escrito por las mismas personas que
+escribieron memcached.
+
+Con los servidores Web en cluster, nuestra arquitectura en evolución empieza a
+verse más compleja, como se ve en la Figura 12-4.
+
+.. figure:: graphics/chapter12/scaling-4.png
+
+   Figure 12-4: Configuración de un server redundante con balance de carga.
+
+Observar que en el diagrama nos referimos a los servidores Web como “el cluster”
+para indicar que el numero de servidores básicamente es variable. Una vez que
+tienes un balanceador de carga en el frente, puedes agregar y eliminar
+servidores Web back-end sin perder un segundo fuera de servicio.
+
+Vamos a lo grande
+-----------------
+
+En este punto, los siguientes pasos son derivaciones del último:
+
+* A medida que necesites más performance en la base de datos, necesitarás
+  agregar servidores de base de datos replicados. MySQL tiene replicación
+  incorporada; los usuarios de PostgreSQL deberían mirar a Slony
+  (http://www.djangoproject.com/r/slony/) y pgpool
+  (http://www.djangoproject.com/r/pgpool/) para replicación y pooling de
+  conexiones, respectivamente.
+
+* Si un solo balanceador de carga no es suficiente, puedes agregar más
+  máquinas balanceadoras de carga y distribuir entre ellas usando DNS
+  round-robin.
+
+* Si un servidor único de medios no es suficiente, puedes agregar más servidores
+  de medios y distribuir la carga con tu cluster de balanceadores de carga.
+
+* Si necesitas más almacenamiento cache, puedes agregar servidores de cache dedicados.
+
+* En cualquier etapa, si un cluster no tiene buena performance, puedes
+  agregar más servidores al cluster.
+
+Después de algunas de estas iteraciones, una arquitectura de gran escala debe
+verse como en la Figura 12-5
+
+.. figure:: graphics/chapter12/scaling-5.png
+
+   Figure 12-5. Un ejemplo de configuración de Django de gran escala.
+
+A pesar de que mostramos solo dos o tres servidores en cada nivel, no hay un
+límite fundamental a cuantos puedes agregar.
+
+Ajuste de Performance
+---------------------
+
+Si tienes grandes cantidades de dinero, simplemente puedes irle arrojando
+hardware a los problemas de escalado. Para el resto de nosotros, sin embargo,
+el ajuste de performance es una obligación.
+
+.. admonition:: Nota:
+
+   Incidentalmente, si alguien con monstruosas cantidades de dinero está
+   leyendo este libro, por favor considere una donación sustancial al
+   proyecto Django. Aceptamos diamantes en bruto y lingotes de oro.
+
+Desafortunadamente, el ajuste de performance es más un arte que una ciencia,
+y es aun más difícil de escribir sobre eso que sobre escalamiento. Si estás
+pensando seriamente en desplegar una aplicación Django de gran escala,
+deberás pasar un buen tiempo aprendiendo como ajustar cada pieza de tu stack.
+
+Las siguientes secciones, sin embargo, presentan algunos tips específicos del
+ajuste de performance de Django que hemos descubierto a través de los años.
+
+No hay tal cosa como demasí ada RAM
+-----------------------------------
+
+Incluso la RAM más costosa es relativamente costeable en estos días. Compra
+toda la RAM que puedas, y después compra un poco más.
+
+Los procesadores más rápidos no mejoran la performance tanto. La mayoría de los
+servidores Web desperdician el 90% de su tiempo esperando I/O del disco. En
+cuanto empieces a swappear, la performance directamente se muere. Los discos
+más rápidos pueden ayudar levemente, pero son mucho más caros que la RAM,
+así que no cuentan.
+
+Si tienes varios servidores, el primer lugar donde poner tu RAM es en el
+servidor de base de datos. Si puedes, compra suficiente ram como para tener
+toda tu base de datos en memoria. Esto no es tan difícil. Hemos diseñado
+sitios que incluye medio millón de artículos en menos de menos de 2 GB de
+espacio.
+
+Después, maximiza la RAM de tu servidor Web. La situación ideal es aquella en
+la que ningún servidor swapea – nunca. Si llegas a ese punto, debes poder
+manejar la mayor parte del tráfico normal.
+
+Deshabilita Keep-Alive
+----------------------
+
+``Keep-Alive`` es una característica de HTTP que permite que múltiples pedidos
+HTTP sean servidos sobre una conexión TCP única, evitando la sobrecarga de
+conectar y desconectar.
+
+Esto parece bueno a primera vista, pero puede asesinar al performance de un
+sitio Django. Si estás sirviendo medios desde un servidor separado, cada
+usuario que esté navegando tu sitio solo requerirá una página del servidor
+Django cada diez segundos aproximadamente. Esto deja a los servidores HTTP
+esperando el siguiente pedido keep-alive, y un servidor HTTP ocioso consume
+RAM que debería estar usando un servidor activo.
+
+Usa memcached
+-------------
+
+A pesar de que Django admite varios back-ends de cache diferentes, ninguno de
+ellos siquiera se acerca a ser tan rápido como memcached. Si tienes un sitio
+con tráfico alto, ni pierdas tiempo con los otros –- usa directamente memcached.
+
+Usa memcached siempre
+---------------------
+
+Por supuesto, seleccionar memcached no te hace mejor si no lo usas realmente.
+EL :doc:`capítulo  <chapter15>` te dice como usarlo: aprende a usar el framework
+de cache de Django, y úsalo en todas las partes que te sea posible. Un uso de
+cache agresivo y preemptico es usualmente lo único que se puede hacer para
+mantener un sitio Web funcionando bajo el mayor tráfico.
+
+
+Únete a la Conversación
+-----------------------
+
+Cada pieza del stack de Django – desde Linux a Apache a PostgreSQL o MySQL –
+tiene una comunidad maravillosa detrás. Si realmente quieres obtener ese último
+1% de tus servidores, únete a las comunidades open source que están detrás de
+tu software y pide ayuda. La mayoría de los miembros de la comunidad del
+software libre estarán felices de ayudar.
+
+Y también asegúrate de unirte a la comunidad Django. Tus humildes autores son
+solo dos miembros de un grupo increíblemente activo y creciente de
+desarrolladores Django. Nuestra comunidad tiene una enorme cantidad de
+experiencia colectiva para ofrecer.
 
 ¿Qué sigue?
 ===========
 
-Si, la verdad es que el sistema de autorización tiene tela que cortar. La mayor
-parte de las veces no tendrás que preocuparte por todos los detalles que se
-describen en este capítulo, pero si alguna vez tienes que gestionar
-interacciones complicadas con los usuarios, agradecerás tener
-todas las utilidades posibles a mano.
-
-En el :doc:`próximo capítulo<chapter13>`, echaremos un vistazo a una parte de Django que
-necesita la infraestructura que proporciona el sistema de usuarios/sesiones de
-Django: la aplicación de comentarios. Esta aplicación permite añadir, de forma
-muy sencilla, un completo sistema de comentarios -por parte de usuarios
-anónimos o identificados- a cualquier tipo de objeto que queramos. ¡Hasta
-el infinito y más allá!
+El resto de los capítulos se enfocan en otras  características de Django, que
+puedes o no necesitar, dependiendo de tus aplicaciones. Siéntete libre de
+leerlos en el orden que prefieras.
 

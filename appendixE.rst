@@ -1,1033 +1,2308 @@
-======================================
-Apéndice E: Variables de configuración
-======================================
+﻿=========================================================
+Apéndice E: Etiquetas de plantilla y filtros predefinidos
+=========================================================
 
-Tu archivo de configuración contiene toda la configuración de tu instalación de
-Django. Este apéndice explica cómo funcionan las variables de configuración y
-qué variables de configuración están disponibles.
 
-.. admonition:: Nota:
+En él :doc:`capítulo 4<chapter04>` se hace una introducción a las etiquetas de
+plantilla y filtros más utilizados, pero Django incorpora muchos más. En este
+apéndice se listan todas las que estaban incluidas en el momento en que se
+escribió el libro, pero se añaden nuevas etiquetas y filtros de forma regular.
 
-    A medida que Django crece, es ocasionalmente necesario agregar o (raramente)
-    cambiar variables de configuración. Debes siempre buscar la información mas
-    reciente en la documentación de configuración en línea que se encuentra en
-    http://www.djangoproject.com/documentation/0.96/settings/.
+La mejor referencia de todas las etiquetas y filtros disponibles se encuentra
+en la propia página de administración. Allí se incluye una referencia completa
+de todas las etiquetas y filtros que hay disponibles para una determinada
+aplicación.  Para verla, sólo tienes que pulsar con el ratón en el enlace de
+documentación que está en la esquina superior derecha de la página.
 
-Qué es un archivo de configuración
-==================================
+Las secciones de **etiquetas y filtros** de esta documentación incluirán tanto las
+etiquetas y filtros predefinidos (de hecho, las referencias de este apéndice
+vienen directamente de ahí) como aquellas etiquetas y filtros que se hayan
+incluido o escrito para la aplicación.
 
-Un *archivo de configuración* es sólo un módulo Python con variables a nivel de
-módulo.
+Este apéndice será más útil, por tanto, para aquellos que no dispongan de acceso
+a la interfaz de administración. Como Django es altamente configurable, las
+indicaciones de la interfaz de administración deben ser consideradas como la
+documentación más actualizada y, por tanto, la de mayor autoridad.
 
-Un par de ejemplos de variables de configuración::
+Etiquetas predefinidas
+======================
 
-    DEBUG = False
-    DEFAULT_FROM_EMAIL = 'webmaster@example.com'
-    TEMPLATE_DIRS = ('/home/templates/mike', '/home/templates/john')
+.. templatetag:: autoescape
 
-Debido a que un archivo de configuración es un módulo Python, las siguientes
-afirmaciones son ciertas:
+autoescape
+----------
 
-* Debe ser código Python válido; no se permiten los errores de sintaxis.
+Controla el comportamiento actual del auto-escape. Esta etiqueta toma como
+argumento tanto  a:  ``on`` y ``off`` y determina si el auto-escapeo están dentro
+del bloque.
 
-* El mismo puede asignar valores a las variables dinámicamente usando
-  sintaxis normal de Python, por ejemplo::
+Cuando el auto-escapeo esta activado, todas las variables contenidas que contenga
+HTML serán escapadas antes de mostrar el resultado de la salida (pero después de
+que cualquier filtro se haya aplicado). Esto es equivalente a manualmente
+aplicar el filtro ``escape`` a cada variable.
 
-          MY_SETTING = [str(i) for i in range(30)]
+La única excepción son las variables que están marcadas como "safe" para
+autoescape, ya sea por la clave que pobló la variable, o porque se ha aplicado
+el filtro ``safe`` o ``escape``.
 
-* El mismo puede importar valores desde otros archivos de configuración.
+Forma de usarlo:
 
-Valores por omisión
--------------------
+.. code-block:: html+django
 
-No es necesario que un archivo de configuración de Django defina una variable
-de configuración si es que no es necesario. Cada variable de configuración tiene
-un valor por omisión sensato. Dichos valores por omisión residen en el archivo
-``django/conf/global_settings.py``.
+    {% autoescape on %}
+        {{ body }}
+    {% endautoescape %}
 
-Este es el algoritmo que usa Django cuando compila los valores de configuración:
+.. templatetag:: block
 
-* Carga las variables de configuración desde ``global_settings``.
-* Carga las variables de configuración desde el archivo de configuración
-      especificado, reemplazando de ser necesario los valores globales previos.
-
-Nota que un archivo de configuración *no* debe importar desde
-``global_settings``, ya que eso sería redundante.
-
-Viendo cuáles variables de configuración has cambiado
------------------------------------------------------
-
-Existe una manera fácil de ver cuáles de tus variables de configuración difieren
-del valor por omisión. El comando ``manage.py diffsettings`` visualiza las
-diferencias entre el archivo de configuración actual y los valores por omisión
-de Django.
-
-``manage.py`` es descripto con mas detalle en el Apéndice G.
-
-Usando variables de configuración en código Python
---------------------------------------------------
-
-En tus aplicaciones Django, usa variables de configuración importando el objeto
-``django.conf.settings``, por ejemplo::
-
-    from django.conf import settings
-
-    if settings.DEBUG:
-        # Do something
-
-Nota que ``django.conf.settings`` no es un módulo -- es un objeto. De manera
-que no es posible importar variables de configuración individualmente.
-
-    from django.conf.settings import DEBUG  # This won't work.
-
-Ten en cuenta también que tu código *no* debe importar ni desde
-``global_settings`` ni desde tu propio archivo de configuración.
-``django.conf.settings`` provee abstracción para los conceptos de variables de
-configuración por omisión y variables de configuración específicas de un sitio;
-presenta una única interfaz. También desacopla el código que usa variables de
-configuración de la ubicación de dicha configuración.
-
-Modificando variables de configuración en tiempo de ejecución
--------------------------------------------------------------
-
-No debes alterar variables de configuración en tiempo de ejecución. Por ejemplo,
-no hagas esto en una vista::
-
-    from django.conf import settings
-
-    settings.DEBUG = True   # Don't do this!
-
-El único lugar en el que debes asignar valores a ``settings`` es en un archivo
-de configuración.
-
-Seguridad
----------
-
-Debido  que un archivo de configuración contiene información importante, tal
-como la contraseña de la base de datos, debes hacer lo que esté e tus manos para
-limitar el acceso al mismo. Por ejemplo, cambia los permisos de acceso en el
-sistema de archivos de manera que solo tu y el usuario de tu servidor Web puedan
-leerlo. Esto es especialmente importante en un entorno de alojamiento
-compartido.
-
-Creando tus propias variables de configuración
-----------------------------------------------
-
-No existe nada que impida que crees tus propias variables de configuración, para
-tus propias aplicaciones Django. Sólo sigue las siguientes convenciones:
-
-* Usa nombres de variables en mayúsculas.
-
-* Para configuraciones que sean secuencias, usa tuplas en lugar de listas.
-  Las variables de configuración deben ser consideradas inmutables y no
-  deben ser modificadas una vez que se las ha definido. El usar tuplas
-  refleja esa semántica.
-
-* No reinventes una variable de configuración que ya existe.
-
-Indicando la configuración: DJANGO_SETTINGS_MODULE
-==================================================
-
-Cuando usas Django tienes que indicarle qué configuración estás usando. Haz esto
-mediante el uso de de la variable de entorno ``DJANGO_SETTINGS_MODULE``.
-
-El valor de ``DJANGO_SETTINGS_MODULE`` debe respetar la sintaxis de rutas de
-Python (por ej. ``mysite.settings``. Notar que el módulo de configuración debe
-ser encontrarse en la ruta de búsqueda para las importaciones de Python
-(``PYTHONPATH``).
-
-.. admonition:: Consejo:
-
-    Puedes encontrar una buena guía acerca de `PYTHONPATH`` en
-    http://diveintopython.org/getting_to_know_python/everything_is_an_object.html.
-
-La utilidad django-admin.py
----------------------------
-
-Cuando usas ``django-admin.py`` (ver Apéndice G), puedes ya sea fijar el valor
-de la variable de entorno una vez o especificar explícitamente el módulo de
-configuración cada vez que ejecutes la utilidad.
-
-Este es un ejemplo usando el shell Bash de Unix::
-
-    export DJANGO_SETTINGS_MODULE=mysite.settings
-    django-admin.py runserver
-
-Este es otro ejemplo, esta vez usando el shell de Windows::
-
-    set DJANGO_SETTINGS_MODULE=mysite.settings
-    django-admin.py runserver
-
-Usa el argumento de línea de comandos ``--settings`` para especificar el módulo
-de configuración en forma manual::
-
-    django-admin.py runserver --settings=mysite.settings
-
-La utilidad ``manage.py`` creada por ``startproject`` como parte del esqueleto
-del proyecto asigna un valor a ``DJANGO_SETTINGS_MODULE`` en forma automática;
-revisa el Apéndice G si deseas conocer más sobre ``manage.py``.
-
-En el servidor (mod_python)
----------------------------
-
-En tu entorno del servidor activo, necesitarás indicarle a Apache/mod_python
-qué archivo de configuración debe usar. Haz eso con ``SetEnv``::
-
-    <Location "/mysite/">
-        SetHandler python-program
-        PythonHandler django.core.handlers.modpython
-        SetEnv DJANGO_SETTINGS_MODULE mysite.settings
-    </Location>
-
-Para más información, revisa la documentación en línea de mod_python en
-http://www.djangoproject.com/documentation/0.96/modpython/.
-
-Usando variables de configuración sin fijar DJANGO_SETTINGS_MODULE
-==================================================================
-
-Es algunos casos, querrás saltearte la variable de entorno
-``DJANGO_SETTINGS_MODULE``. Por ejemplo, si estás usando el sistema de
-plantillas en forma aislada, muy probablemente no desearás tener que preparar
-una variable de entorno que apunte a un módulo de configuración.
-
-En esos casos, puedes fijar los valores de las variables de configuración de
-Django manualmente. Haz esto llamando a ``django.conf.settings.configure()``.
-Este es un ejemplo::
-
-    from django.conf import settings
-
-    settings.configure(
-        DEBUG = True,
-        TEMPLATE_DEBUG = True,
-        TEMPLATE_DIRS = [
-            '/home/web-apps/myapp',
-            '/home/web-apps/base',
-        ]
-    )
-
-Pásale a ``configure()`` tantos argumentos de palabra clave como desees, con
-cada argumento representando una variable de configuración y su valor. Cada
-nombre de argumento debe estar escrito totalmente en mayúsculas, con el mismo
-nombre que que la variable de configuración que ya se describieron. Si una
-variable de configuración no es pasada a ``configure()`` y es necesario luego,
-Django usará el valor por omisión respectivo.
-
-El configurar Django de esta manera es en general necesario -- y, en efecto,
-recomendado -- cuando usas una parte del framework dentro de una aplicación más
-grande.
-
-En consecuencia, cuando es configurado vía ``settings.configured()``, Django no
-hará modificación alguna a las variables de entorno del proceso (revisa la
-explicación acerca de ``TIME_ZONE`` mas adelante en este apéndice para conocer
-porqué habría de ocurrir esto). Asumimos que en esos casos ya tienes completo
-control de tu entorno.
-
-Variables de configuración por omisión personalizados
------------------------------------------------------
-
-Si te gustaría que los valores por omisión provinieran desde otra ubicación
-diferente a ``django.conf.global_settings``, puedes pasarle un módulo o clase
-que provea las variables de configuración por omisión como el argumento
-``default_settings`` (o como el primer argumento posicional) en la llamada a
-``configure()``.
-
-En este ejemplo, las variables de configuración por omisión se toman desde
-``myapp-defaults``, y se fija el valor de ``DEBUG`` en ``True``,
-independientemente de su valor en ``myapp_defaults``::
-
-    from django.conf import settings
-    from myapp import myapp_defaults
-
-    settings.configure(default_settings=myapp_defaults, DEBUG=True)
-
-El siguiente ejemplo, que usa ``myapp_defaults`` como un argumento posicional,
-es equivalente::
-
-    settings.configure(myapp_defaults, DEBUG = True)
-
-Normalmente, no necesitarás sobreescribir los valores por omisión de esta
-manera. Los valores por omisión provistos por Django son suficientemente
-sensatos como para que puedas usarlos. Ten en cuenta que si pasas un nuevo valor
-por omisión, este *reemplaza* completamente los valores de Django, así que debes
-especificar un valor para cada variable de configuración posible que pudiera ser
-usado en el código que estás importando. Examina
-``django.conf.settings.global_settings`` para ver la lista completa.
-
-Es necesario que uses configure() o DJANGO_SETTINGS_MODULE
-----------------------------------------------------------
-
-Si no estás fijando la variable de entorno ``DJANGO_SETTINGS_MODULE``, debes
-llamar a ``configure()`` en algún punto antes de usar cualquier código que lea
-las variables de configuración.
-
-Si no fijas ``DJANGO_SETTINGS_MODULE`` y no llamas a ``configure()``, Django
-lanzará una excepción ``EnvironmentError`` la primera vez que se accede a una
-variable de configuración.
-
-Si fijas el valor de ``DJANGO_SETTINGS_MODULE``, luego accedes a los valores de
-las variables de configuración de alguna manera, y *entonces* llamas a
-``configure()``, Django lanzará un ``EnvironmentError`` indicando que la
-configuración ya ha sido preparada.
-
-También es un error el llamar a ``configure()`` mas de una vez, o llamar a
-``configure`` luego de que ya se ha accedido a alguna variable de configuración.
-
-En resumen: Usa exactamente una vez ya sea ``configure()`` o
-``DJANGO_SETTINGS_MODULE``. No ambos, y no ninguno.
-
-Variables de configuración disponibles
-======================================
-
-Las siguientes secciones consisten de una lista completa de todas las variables
-de configuración en orden alfabético, y sus valores por omisión.
-
-ABSOLUTE_URL_OVERRIDES
-----------------------
-
-*Valor por omisión*: ``{}`` (diccionario vacío)
-
-Un diccionario interrelacionando cadenas ``app_label.model_name`` a funciones que
-toman un objeto modelo y retornan su URL. Esta es una forma de sobreescribir
-métodos ``get_absolute_url()`` en cada instalación. Un ejemplo::
-
-    ABSOLUTE_URL_OVERRIDES = {
-        'blogs.weblog': lambda o: "/blogs/%s/" % o.slug,
-        'news.story': lambda o: "/stories/%s/%s/" % (o.pub_year, o.slug),
-    }
-
-Notar que el nombre del modelo usado en esta variable de configuración debe
-estar escrito totalmente en mayúsculas, con independencia de la combinación de
-mayúsculas y minúsculas del nombre real de la clase del modelo.
-
-ADMIN_FOR
----------
-
-*Valor por omisión*: ``()`` (lista vacía)
-
-Esta variable de configuración es usada en módulos de configuración de  sitios
-de administración. Debe ser una tupla de módulos de configuración (en el formato
-``'foo.bar.baz'``) para los cuales este sitio es una aplicación de
-administración.
-
-El sitio de administración usa esto en la documentación automáticamente
-introspeccionada de modelos, vistas y etiquetas de plantillas.
-
-ADMIN_MEDIA_PREFIX
-------------------
-
-*Valor por omisión*: ``'/media/'``
-
-Esta variable de configuración es el prefijo de la URL para los medios del sitio
-de administración: CSS, JavaScript e imágenes. Asegúrate de usar una barra al final.
-
-ADMINS
-------
-
-*Valor por omisión*: ``()`` (tupla vacía)
-
-Una tupla que enumera las personas que recibirán notificaciones de errores en
-el código. Cuando ``DEBUG=False`` y una vista laza una excepción, Django enviará
-a esta gente un e-mail con la información completa de la información. Cada
-miembro de la tupla debe ser una tupla de (Nombre completo, dirección de e-mail),
-por ejemplo::
-
-    (('John', 'john@example.com'), ('Mary', 'mary@example.com'))
-
-Notar que Django el enviará e-mail a *todas* estas personas cada vez que ocurra
-un error.
-
-ALLOWED_INCLUDE_ROOTS
----------------------
-
-*Valor por omisión*: ``()`` (tupla vacía)
-
-Una tupla de cadenas que representan prefijos permitidos para la etiqueta de
-plantillas ``{% ssi %}``. Se trata de una medida de seguridad, que impide que
-los autores de plantillas puedan acceder a archivos a los que no deberían
-acceder.
-
-Por ejemplo, si ``ALLOWED_INCLUDE_ROOTS`` es ``('/home/html', '/var/www')``
-entonces ``{% ssi /home/html/foo.txt %}`` funcionaría pero ``{% ssi /etc/passwd %}``
-no.
-
-APPEND_SLASH
-------------
-
-*Valor por omisión*: ``True``
-
-Esta variable de configuración indica si debe anexarse barras al final de las
-URLs. Se usa solamente si está instalado ``CommonMiddleware`` (ver `Capítulo 15`_).
-Ver también ``PREPEND_WWW``.
-
-CACHE_BACKEND
--------------
-
-*Valor por omisión*: ``'simple://'``
-
-El ***back-end*** de cache a usarse (ver :doc:`Capítulo 13<chapter13>`).
-
-CACHE_MIDDLEWARE_KEY_PREFIX
----------------------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-El prefijo de las claves de cache que debe usar el middleware de cache (ver
-:doc:`Capítulo 13<chapter13>`).
-
-DATABASE_ENGINE
----------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-Esta variable de configuración indica qué ***back-end*** de base de datos debe
-usarse: ``'postgresql_psycopg2'``, ``'postgresql'``, ``'mysql'``,
-``'mysql_old'`` o ``'sqlite3'``.
-
-DATABASE_HOST
--------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-Esta variable de configuración indica qué equipo debe usarse cuando se
-establezca una conexión a la base de datos. Una cadena vacía significa
-``localhost``. No se usa con SQLite.
-
-Si este valor comienza con una barra (``/``) y estás usando MySQL, MySQL se
-conectará al socket vía un socket Unix::
-
-    DATABASE_HOST = '/var/run/mysql'
-
-Si estás usando MySQL  este valor *no* comienza con una barra, entonces se asume
-que el mismo es el nombre del equipo.
-
-DATABASE_NAME
--------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-El nombre de la base de datos a usarse. Para SQLite, es la ruta completa al
-archivo de la base de datos.
-
-DATABASE_OPTIONS
-----------------
-
-*Valor por omisión*: ``{}`` (diccionario vacío)
-
-Parámetros extra a usarse cuando se establece la conexión a la base de datos.
-Consulta el módulo back-end para conocer las palabras claves disponibles.
-
-DATABASE_PASSWORD
------------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-Esta variable de configuración es la contraseña a usarse cuando se establece una
-conexión a la base de datos. No se usa con SQLite.
-
-DATABASE_PORT
--------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-El puerto a usarse cuando se establece una conexión a la base de datos. Una
-cadena vacía significa el puerto por omisión. No se usa con SQLite.
-
-DATABASE_USER
--------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-Esta variable de configuración es el nombre de usuario a usarse cuando se
-establece una conexión a la base da datos. No se usa con SQLite.
-
-DATE_FORMAT
------------
-
-*Valor por omisión*: ``'N j, Y'`` (por ej. ``Feb. 4, 2003``)
-
-El formato a usar por omisión para los campos de fecha en las páginas lista de
-cambios en el sitio de administración de Django -- y, posiblemente, por otras
-partes del sistema. Acepta el mismo formato que la etiqueta ``now`` ver Apéndice
-F, Tabla F-2).
-
-Ver también ``DATETIME_FORMAT``, ``TIME_FORMAT``, ``YEAR_MONTH_FORMAT`` y
-``MONTH_DAY_FORMAT``.
-
-DATETIME_FORMAT
----------------
-
-*Valor por omisión*: ``'N j, Y, P'`` (por ej. ``Feb. 4, 2003, 4 p.m.``)
-
-El formato a usar por omisión para los campos de fecha-hora en las páginas lista
-de cambios en el sitio de administración de Django -- y, posiblemente, por otras
-partes del sistema. Acepta el mismo formato que la etiqueta ``now`` ver Apéndice
-F, Tabla F-2).
-
-Ver también ``DATE_FORMAT``, ``DATETIME_FORMAT``, ``TIME_FORMAT``,
-``YEAR_MONTH_FORMAT`` y ``MONTH_DAY_FORMAT``.
-
-DEBUG
+block
 -----
 
-*Valor por omisión*: ``False``
+Define un bloque que puede ser sobrescrito por las plantillas derivadas. Véase
+la sección acerca de herencia de plantillas en él :doc:`capítulo 4<chapter04>`
+para más información.
 
-Esta variable de configuración es un Booleano que activa y desactiva el modo de
-depuración.
+.. templatetag:: comment
 
-Si defines variables de configuración personalizadas, ``django/views/debug.py``
-tiene una expresión regular ``HIDDEN_SETTINGS`` que ocultará de la vista
-``DEBUG`` todo aquello que contenga ``SECRET``, ``PASSWORD`` o ``PROFANITIES``.
-Esto permite que usuarios en los que no se confía puedan proveer ***backtraces***
-sin ver variables de configuración con contenido importante (u ofensivo).
-
-Si embargo, nota que siempre existirán secciones de la salida de depuración que
-son inapropiadas para el consumo del público. Rutas de archivos, opciones de
-configuración y similares le proveen a potenciales atacantes información extra
-acerca de tu servidor. Nunca instales un sitio con ``DEBUG`` activo.
-
-DEFAULT_CHARSET
----------------
-
-*Valor por omisión*: ``'utf-8'``
-
-El conjunto de caracteres a usar por omisión para todos los objetos
-``HttpResponse`` si no se especifica en forma manual un tipo MIME. Se usa en
-conjunto con ``DEFAULT_CONTENT_TYPE`` para construir la cabecera
-``Content-Type``. Ver el Apéndice H para más información acerca de los objetos
-``HttpResponse``.
-
-DEFAULT_CONTENT_TYPE
---------------------
-
-*Valor por omisión*: ``'text/html'``
-
-Tipo de contenido a usar por omisión para todos los objetos ``HttpResponse``,
-si no se especifica manualmente un tipo MIME. Se usa en conjunto con
-``DEFAULT_CHARSET`` para construir la cabecera ``Content-Type``. Ver el
-Apéndice H para conocer más acerca de los objetos ``HttpResponse``.
-
-DEFAULT_FROM_EMAIL
-------------------
-
-*Valor por omisión*: ``'webmaster@localhost'``
-
-La dirección de correo a usar por omisión para correspondencia automatizada
-enviada por el administrador del sitio.
-
-DISALLOWED_USER_AGENTS
-----------------------
-
-*Valor por omisión*: ``()`` (tupla vacía)
-
-Una lista de objetos expresiones regulares compiladas que representan cadenas
-User-Agent que no tiene permitido visitar ninguna página del sitio, a nivel
-global para el sitio. Usa la misma para bloquear robots y *crawlers* con mal
-comportamiento. Se usa únicamente si se ha instalado ``CommonMiddleware`` (ver
-`Capítulo 15`_).
-
-EMAIL_HOST
-----------
-
-*Valor por omisión*: ``'localhost'``
-
-El host a usarse para enviar e-mail. Ver también ``EMAIL_PORT``.
-
-EMAIL_HOST_PASSWORD
--------------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-La contraseña a usarse para el servidor SMTP definido en ``EMAIL_HOST``. Esta
-variable de configuración se usa en combinación con ``EMAIL_HOST_USER`` cuando
-se está autenticando ante el servidor SMTP. Si alguna de estas variables de
-configuración está vacía, Django no intentará usar autenticación.
-
-Ver también ``EMAIL_HOST_USER``.
-
-EMAIL_HOST_USER
----------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-El nombre de usuario a usarse para el servidor SMTP definido en ``EMAIL_HOST``.
-Si está vacío, Django no intentará usar autenticación. Ver también
-``EMAIL_HOST_PASSWORD``.
-
-EMAIL_PORT
-----------
-
-*Valor por omisión*: ``25``
-
-El puerto a usarse pata el servidor SMTP definido en ``EMAIL_HOST``.
-
-EMAIL_SUBJECT_PREFIX
---------------------
-
-*Valor por omisión*: ``'[Django] '``
-
-El prefijo del asunto para mensajes de e-mail enviados con
-``django.core.mail.mail_admins`` o ``django.core.mail.mail_managers``.
-Probablemente querrás incluir un espacio al final.
-
-FIXTURE_DIRS
--------------
-
-*Valor por omisión*: ``()`` (tupla vacía)
-
-Una lista de ubicaciones para los archivos con datos de ***fixtures***, en el
-orden en el que se se buscará en las mismas. Notar que esas rutas deben usar
-barras de estilo Unix aún en Windows. Es usado por el framework de pruebas de
-Django, el cual se trata en
-http://www.djangoproject.com/documentation/0.96/testing/.
-
-IGNORABLE_404_ENDS
-------------------
-
-*Valor por omisión*: ``('mail.pl', 'mailform.pl', 'mail.cgi', 'mailform.cgi', 'favicon.ico',
-'.php')``
-
-Ver también ``IGNORABLE_404_STARTS`` y ``Error reporting via e-mail``.
-
-IGNORABLE_404_STARTS
---------------------
-
-*Valor por omisión*: ``('/cgi-bin/', '/_vti_bin', '/_vti_inf')``
-
-Una tupla de cadenas que especifican las partes iniciales de URLs que deben ser
-ignoradas para el envío de mensajes de e-mail para errores 404. Ver también
-``SEND_BROKEN_LINK_EMAILS`` y ``IGNORABLE_404_ENDS``.
-
-INSTALLED_APPS
---------------
-
-*Valor por omisión*: ``()`` (tupla vacía)
-
-Una tupla de cadenas que indican todas las aplicaciones que están activas en esta
-instalación de Django. Cada cadena debe ser una ruta completa de Python hacia un
-paquete Python que contiene una aplicación Django. Ver el `Capítulo 5`_ para más
-información acerca de aplicaciones.
-
-INTERNAL_IPS
-------------
-
-*Valor por omisión*: ``()`` (tupla vacía)
- Una tupla de direcciones IP, como cadenas, que:
-
-* Pueden ver comentarios de depuración cuando ``DEBUG`` es ``True``
-
-* Reciben cabeceras X si está instalado ``XViewMiddleware`` (ver Capítulo
-  15)
-
-JING_PATH
----------
-
-*Valor por omisión*: ``'/usr/bin/jing'``
-
-La ruta al ejecutable Jing. Jing es un validador RELAX NG, y Django usa el mismo
-para validar los campos ``XMLField`` en tus modelos. Ver
-http://www.thaiopensource.com/relaxng/jing.html.
-
-LANGUAGE_CODE
--------------
-
-*Valor por omisión*: ``'en-us'``
-
-Una cadena representando el código de idioma para esta instalación. Debe
-estar expresado usando el formato estándar -- por ejemplo, Inglés de EUA es
-"en-us". Ver el `Capítulo 18`_.
-
-LANGUAGES
----------
-
-*Valor por omisión*: Una tupla de todos los idiomas disponibles. Esta lista
-está en continuo crecimiento y cualquier copia que incluyéramos aquí
-inevitablemente quedaría rápidamente desactualizada. Puedes ver la lista actual
-de idiomas traducidos examinando ``django/conf/global_settings.py``.
-
-La lista es una tupla de tuplas de dos elementos en el formato (código de
-idioma, nombre de idioma) -- por ejemplo, ``('ja', 'Japanese')``. Especifica
-qué idiomas están disponibles para la selección de idioma. Ver el `Capítulo 18`_
-para más información acerca de selección de idiomas.
-
-Generalmente, el valor por omisión debería ser suficiente. Solo asigna valor a
-esta variable de configuración si deseas restringir la selección de idiomas a un
-subconjunto de los idiomas provistos con Django.
-
-Si asignas un valor personalizado a ``LANGUAGES``, está permitido marcar los
-idiomas como cadenas de traducción, pero *nunca* debes importar
-``django.utils.translation`` desde el archivo de configuración, porque ese
-módulo a su vez depende de la configuración y esto crearía una importación
-circular.
-
-La solución es usar una función ``gettext()`` "boba". A continuación un archivo
-de configuración ejemplo::
-
-    gettext = lambda s: s
-
-    LANGUAGES = (
-        ('de', gettext('German')),
-        ('en', gettext('English')),
-    )
-
-Con este esquema, ``make-messages.py`` todavía podrá encontrar y marcar esas
-cadenas para traducción, pero la traducción no ocurrirá en tiempo de ejecución
--- así que tendrás que recordar envolver los idiomas con la ``gettext()`` *real*
-en todo código que use ``LANGUAGES`` en tiempo de ejecución.
-
-MANAGERS
---------
-
-*Valor por omisión*: ``()`` (tupla vacía)
-
-Esta tupla está en el mismo formato que ``ADMINS`` que especifica quiénes deben
-recibir notificaciones de enlaces rotos cuando ``SEND_BROKEN_LINK_EMAILS`` tiene
-el valor ``True``.
-
-MEDIA_ROOT
-----------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-Una ruta absoluta al directorio que contiene medios para esta instalación (por
-ej. ``"/home/media/media.lawrence.com/"``). Ver también ``MEDIA_URL``.
-
-MEDIA_URL
----------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-Esta URL maneja los medios servidos desde ``MEDIA_ROOT`` (por ej.
-``"http://media.lawrence.com"``).
-
-Notar que esta debe tener una barra final si posee un componente de ruta:
-
-* *Correcto*: ``"http://www.example.com/static/"``
-* *Incorrecto*: ``"http://www.example.com/static"``
-
-MIDDLEWARE_CLASSES
-------------------
-
-*Valor por omisión*::
-
-    ("django.contrib.sessions.middleware.SessionMiddleware",
-     "django.contrib.auth.middleware.AuthenticationMiddleware",
-     "django.middleware.common.CommonMiddleware",
-     "django.middleware.doc.XViewMiddleware")
-
-Una tupla de clases middleware a usarse. Ver el :doc:`Capítulo 15<chapter15>`.
-
-MONTH_DAY_FORMAT
-----------------
-
-*Valor por omisión*: ``'F j'``
-
-El formato a usar por omisión para campos de fecha en las páginas de lista de
-cambios en la aplicación de administración de Django -- y, probablemente, en
-otras partes del sistema -- en casos en los que sólo se muestran el mes y el
-día. Acepta el mismo formato que la etiqueta ``now`` (ver Apéndice F, tabla
-F-2)
-
-Por ejemplo, cuando en una página de lista de cambios la aplicación de
-administración de Django se filtra por una fecha, la cabecera para un día
-determinado muestra el día y mes.  Diferentes locales tienen diferentes
-formatos. Por ejemplo, el Inglés de EUA tendría "January 1" mientras que Español
-podría tener "1 Enero".
-
-Ver también ``DATE_FORMAT``, ``DATETIME_FORMAT``, ``TIME_FORMAT`` y
-``YEAR_MONTH_FORMAT``.
-
-PREPEND_WWW
------------
-
-*Valor por omisión*: ``False``
-
-Esta variable de configuración indica si se debe agregar el prefijo de
-subdominio "www." a URLs que no lo poseen. Se usa únicamente si
-``CommonMiddleware`` está instalado (ver ::doc`Capítulo 15<chapter15>`). Ver también
-``APPEND_SLASH``.
-
-PROFANITIES_LIST
-----------------
-
-Una tupla de profanidades, como cadenas, que dispararán un error de validación
-cuando se llama al validador ``hasNoProfanities``.
-
-No enumeramos aquí los valores por omisión, debido a que esto podría hacer que
-nos cayera encima la comisión de clasificación de la MPAA. Para ver los valores
-por omisión examina el archivo ``django/conf/global_settings.py``.
-
-ROOT_URLCONF
-------------
-
-*Valor por omisión*: No definido
-
-Una cadena que representa la ruta completa de importación Python hacia tu URLconf
-raíz (por ej. ``"mydjangoapps.urls"``). Ver :doc:`Capítulo 3<chapter03>`.
-
-SECRET_KEY
-----------
-
-*Valor por omisión*: (Generado automáticamente cuando creas un proyecto)
-
-Una clave secreta para esta instalación particular de Django. Es usada para
-proveer una semilla para los algoritmos de hashing. Asigna un valor de una
-cadena con caracteres al azar -- mientras mas larga mejor.
-``django-admin startproject`` crea una en forma automática y en la mayoría de
-los casos no será necesario que la modifiques.
-
-SEND_BROKEN_LINK_EMAILS
------------------------
-
-*Valor por omisión*: ``False``
-
-Esta variable de configuración indica si se debe enviar un e-mail a los
-``MANAGERS`` cada vez que alguien visita una página impulsada por Django que
-generará un error 404 y que posea una cabecera referer no vacía (en otras
-palabras un enlace roto). Es solamente usado si está instalado
-``CommonMiddleware`` (ver :doc:`Capítulo 15<chapter15>`). Ver también ``IGNORABLE_404_STARTS`` y
-``IGNORABLE_404_ENDS``.
-
-SERIALIZATION_MODULES
----------------------
-
-*Valor por omisión*: No definida.
-
-La serialización es una característica que todavía está bajo fuerte desarrollo.
-Revisa la documentación en línea en
-http://www.djangoproject.com/documentation/0.96/serialization/
-si deseas más información.
-
-SERVER_EMAIL
-------------
-
-*Valor por omisión*: ``'root@localhost'``
-
-La dirección de e-mail a usarse como remitente para los mensajes de error, tales
-como los enviados a ``ADMINS`` y ``MANAGERS``.
-
-SESSION_COOKIE_AGE
-------------------
-
-*Valor por omisión*: ``1209600`` (dos semanas, en segundos)
-
-Esta es la edad de las cookies de sesión, en segundos. Ver :doc:`Capítulo 12<chapter12>`.
-
-SESSION_COOKIE_DOMAIN
----------------------
-
-*Valor por omisión*: ``None``
-
-El dominio a usarse para las cookies de sesión. Asigna como valor una cadena
-tal como ``".lawrence.com"`` para cookies inter-dominio, o usa ``None`` para una
-cookie de dominio estándar. Ver `Capítulo 12`_.
-
-SESSION_COOKIE_NAME
--------------------
-
-*Valor por omisión*: ``'sessionid'``
-
-El nombre de la cookie a usarse para las sesiones; puede tener el valor que tu
-desees. Ver :doc:`Capítulo 12<chapter12>`.
-
-SESSION_COOKIE_SECURE
----------------------
-
-*Valor por omisión*: ``False``
-
-Esta variable de configuración indica si debe usarse una cookie segura para la
-cookie de sesión. Si tiene un valor ``True``, la cookie será marcada como
-"segura", lo que significa que los navegadores podrían asegurarse que la cookie
-sólo se envíe vía una conexión HTTPS. Ver :doc:`Capítulo 12<chapter12>`.
-
-SESSION_EXPIRE_AT_BROWSER_CLOSE
--------------------------------
-
-*Valor por omisión*: ``False``
-
-Esta variable de configuración indica si las sesiones deben caducar cuando el
-usuario cierre su navegador. Ver :doc:`Capítulo 12<chapter12>`.
-
-SESSION_SAVE_EVERY_REQUEST
---------------------------
-
-*Valor por omisión*: ``False``
-
-Esta variable de configuración indica si la sesión debe ser grabada en cada
-petición. Ver :doc:`Capítulo 12<chapter12>`.
-
-SITE_ID
+comment
 -------
 
-*Valor por omisión*: No definida.
+Ignora todo lo que aparece entre ``{% comment %}`` y ``{% endcomment %}``.
+Como nota opcional,  se puede insertar en la primera etiqueta. Por ejemplo,
+es útil para comentar fuera del código para documentar, porqué el código fue
+deshabilitado.
 
-El identificador, como un entero, del sitio actual en la tabla
-``django_site`` de la base de datos. Es usada de manera que datos de aplicación
-puede conectarse en sitio(s) específico(s) y una única base de datos pueda
-manejar contenido de múltiples sitios. Ver :doc:`Capítulo 14<chapter14>`.
+Ejemplo de su uso:
 
-TEMPLATE_CONTEXT_PROCESSORS
----------------------------
+.. code-block:: html+django
 
-*Valor por omisión*::
+    <p>Renderizar texto con {{ fecha_publicacion|date:"c" }}</p>
 
-    ("django.core.context_processors.auth",
-    "django.core.context_processors.debug",
-    "django.core.context_processors.i18n")
+    {% comment "Nota opcional" %}
+        <p>Comentado fuera del texto {{ creado|date:"c" }}</p>
+    {% endcomment %}
 
-Una tupla de ***callables*** que son usados para poblar el contexto en
-``RequestContext``. Esos ***callables*** reciben como argumento un objeto
-petición y retornan un diccionario de items a ser fusionados con el contexto.
-Ver `Capítulo 10`_.
+.. templatetag:: csrf_token
 
-TEMPLATE_DEBUG
---------------
-
-*Valor por omisión*: ``False``
-
-Este Booleano controla el estado encendido/apagado del modo de depuración de
-plantillas. Si es ``True`` la página de error vistosa mostrará un reporte
-detallado para cada ``TemplateSyntaxError``. Este reporte contiene los
-fragmentos relevantes de la plantilla, en los cuales se han resaltado las líneas
-relevantes.
-
-Notar que Django solo muestra páginas de error vistosas si ``DEBUG`` es
-``True``, así que es posible que desees activar dicha variable para sacar
-provecho de esta variable.
-
-Ver también ``DEBUG``.
-
-TEMPLATE_DIRS
--------------
-
-*Valor por omisión*: ``()`` (tupla vacía)
-
-Un lista de ubicaciones de los archivos de código fuente de plantillas, en el
-orden en el que serán examinadas. Notar que esas rutas deben usar barras al
-estilo Unix, aun en Windows. Ver Capítulos 4 y 10.
-
-TEMPLATE_LOADERS
-----------------
-
-*Valor por omisión*: ``('django.template.loaders.filesystem.load_template_source',)``
-
-Una tupla de ***callables*** (como cadenas) que saben como importar plantillas
-desde diferentes orígenes. Ver :doc:`Capítulo 10<chapter10>`.
-
-TEMPLATE_STRING_IF_INVALID
---------------------------
-
-*Valor por omisión*: ``''`` (cadena vacía)
-
-La salida, como una cadena, que debe usar el sistema de plantillas para
-variables inválidas (por ej. con errores de sintaxis en el nombre). Ver Capítulo
-10.
-
-TEST_RUNNER
+csrf_token
 -----------
 
-*Valor por omisión*: ``'django.test.simple.run_tests'``
+Esta etiqueta es usada para protección  CSRF.
 
-El nombre del método a usarse para arrancar la batería de pruebas (por *test
-suite*). Es usado por el framework de pruebas de Django, el cual se describe en
-línea en http://www.djangoproject.com/documentation/0.96/testing/.
+.. templatetag:: cycle
 
-TEST_DATABASE_NAME
-------------------
+cycle
+-----
 
-*Valor por omisión*: ``None``
+Rota una cadena de texto entre diferentes valores, cada vez que
+aparece la etiqueta.
 
-El nombre de la base de datos a usarse cuando se ejecute la batería de pruebas
-(por *test suite*). Si se especifica un valor ``None``, el nombre de la base de datos de
-pruebas será ``'test_' + settings.DATABASE_NAME``. Ver la documentación del
-framework de pruebas de Django el cual se describe en línea en
-http://www.djangoproject.com/documentation/.
+Dentro de un bucle, el valor rota entre los distintos valores
+disponibles en cada iteración del bucle:
 
-TIME_FORMAT
------------
+.. code-block:: html+django
 
-*Valor por omisión*: ``'P'`` (e.g., ``4 p.m.``)
+    {% for o in some_list %}
+        <tr class="{% cycle row1,row2 %}">
+            ...
+        </tr>
+    {% endfor %}
 
-El formato a usar por omisión para los campos de hora en las páginas
-lista de cambios en el sitio de administración de Django -- y, posiblemente, por
-otras partes del sistema. Acepta el mismo formato que la etiqueta ``now`` ver
-Apéndice F, Tabla F-2).
+Fuera de un bucle, hay que asignar un nombre único la primera vez que se usa
+la etiqueta, y luego hay que incluirlo ese nombre en las sucesivas llamadas:
 
-Ver también ``DATE_FORMAT``, ``DATETIME_FORMAT``, ``TIME_FORMAT``,
-``YEAR_MONTH_FORMAT`` y ``MONTH_DAY_FORMAT``.
+.. code-block:: html+django
 
-TIME_ZONE
+        <tr class="{% cycle row1,row2,row3 as rowcolors %}">...</tr>
+        <tr class="{% cycle rowcolors %}">...</tr>
+        <tr class="{% cycle rowcolors %}">...</tr>
+
+Se pueden usar cualquier número de valores, separándolos por comas. Asegúrate
+de no poner espacios entre los valores, sólo comas.
+
+.. templatetag:: debug
+
+debug
+-----
+
+Muestra un montón de información para depuración de errores, incluyendo el
+contexto actual y los módulos importados.
+
+.. templatetag:: extends
+
+extends
+-------
+
+Sirve para indicar que esta plantilla extiende una plantilla padre.
+
+Esta etiqueta se puede usar de dos maneras:
+
+* ``{% extends "base.html" %}`` (Con las comillas) interpreta literalmente
+  ``"base.html"`` como el nombre de la plantilla  a extender.
+
+* ``{% extends variable %}`` usa el valor de ``variable``. Si
+  la variable apunta a una cadena de texto, Django usará
+  dicha cadena como el nombre de la plantilla padre. Si la variable
+  es un objeto de tipo ``Template``, se usará ese mismo objeto como
+  plantilla base.
+
+En él :doc:`capítulo 4<chapter04>` podrás encontrar muchos ejemplo de uso de esta
+etiqueta.
+
+.. templatetag:: filter
+
+filter
+------
+
+Filtra el contenido de una variable.
+
+Los filtros pueden ser encadenados sucesivamente (La salida
+de uno es la entrada del siguiente), y pueden tener argumentos, como
+en la sintaxis para variables
+
+He aquí un ejemplo:
+
+.. code-block:: html+django
+
+    {% filter escape|lower %}
+        Este texto será escapado y aparecerá en minúsculas
+    {% endfilter %}
+
+.. templatetag:: firstof
+
+firstof
+-------
+
+Presenta como salida la primera de las variables que se le pasen
+que evalúe como no falsa. La salida será nula si todas las
+variables pasadas valen ``False``.
+
+He aquí un ejemplo:
+
+.. code-block:: html+django
+
+    {% firstof var1 var2 var3 %}
+
+Equivale a:
+
+.. code-block:: html+django
+
+    {% if var1 %}
+        {{ var1 }}
+    {% else %}{% if var2 %}
+        {{ var2 }}
+    {% else %}{% if var3 %}
+        {{ var3 }}
+    {% endif %}{% endif %}{% endif %}
+
+.. templatetag:: for
+
+for
+---
+
+Itera sobre cada uno de los elementos de un lista o *array*. Por ejemplo, para
+mostrar una lista de libros, cuyos  títulos estén en la ``lista_libros``,
+podríamos hacer esto:
+
+.. code-block:: html+django
+
+    <ul>
+    {% for libro in lista_libros %}
+        <li>{{ libro.titulo }}</li>
+    {% endfor %}
+    </ul>
+
+También se puede iterar la lista en orden inverso usando
+``{% for obj in list reversed %}``.
+
+Dentro de un bucle, la propia sentencia ``for`` crea una serie de
+variables. A estas variables se puede acceder únicamente dentro del
+bucle. Las distintas variables se explican en la Tabla F-1.
+
+.. table:: Variables accesibles dentro de bucles {% for %}
+
+    ==========================  ====================================================
+        Variable                    Descripción
+    ==========================  ====================================================
+    ``forloop.counter``         El número de vuelta o iteración actual (usando
+                                un índice basado en 1).
+    ``forloop.counter0``        El número de vuelta o iteración actual (usando
+                                un índice basado en 0).
+    ``forloop.revcounter``      El número de vuelta o iteración contando desde
+                                el fin del bucle  (usando un índice basado en 1).
+    ``forloop.revcounter0``     El número de vuelta o iteración contando desde
+                                el fin del bucle  (usando un índice basado en 0).
+    ``forloop.first``
+                                ``True`` si es la primera iteración.
+    ``forloop.last``
+                                ``True`` si es la última iteración.
+    ``forloop.parentloop``      Para bucles anidados, es una referencia al bucle
+                                externo.
+    ==========================  ====================================================
+
+
+for ... empty
+^^^^^^^^^^^^^
+
+La etiqueta  ``for`` toma una cláusula  opcional ``{% empty %}`` cuando el
+texto es mostrado,  si el *array* esta vacio o no puede ser encontrado.
+
+.. code-block:: html+django
+
+    <ul>
+    {% for atleta in lista_atletas %}
+        <li>{{ atleta.nombre }}</li>
+    {% empty %}
+        <li>Lo sentimos, no hay atletas en esta lista.</li>
+    {% endfor %}
+    </ul>
+
+El ejemplo anterior es equivalente a (pero más corto, limpio y posiblemente
+mas rápido) a lo siguiente:
+
+.. code-block:: html+django
+
+    <ul>
+      {% if lista_atletas %}
+        {% for atleta in lista_atletas %}
+          <li>{{ atleta.nombre }}</li>
+        {% endfor %}
+      {% else %}
+        <li>Lo sentimos, no hay atletas en esta lista.</li>
+      {% endif %}
+    </ul>
+
+.. templatetag:: if
+
+if
+--
+
+La etiqueta ``{% if %}`` evalúa una variable. Si dicha variable se evalúa como
+una expresión "verdadera" (Es decir, que el valor exista, no esté vacía y no
+es el valor booleano ``False``), se muestra el contenido del bloque:
+
+.. code-block:: html+django
+
+    {% if lista_atletas %}
+        Número de atletas: {{ lista_atletas|length }}
+    {% else %}
+        No hay atletas.
+    {% endif %}
+
+Si la lista ``lista_atletas`` no está vacía, podemos mostrar el
+número de atletas con la expresión ``{{ lista_atletas|length }}``
+
+Además, como se puede ver en el ejemplo, la etiqueta ``if`` puede
+tener un bloque opcional ``{% else %}`` que se mostrará en el
+caso de que la evaluación de falso.
+
+Operadores booleanos
+--------------------
+
+Las etiquetas ``if`` pueden usar operadores lógicos como
+``and``, ``or`` y ``not`` para evaluar expresiones más
+complejas:
+
+.. code-block:: html+django
+
+    {% if lista_atletas and lista_entrenadores %}
+       Los atletas y los entrenadores están disponibles
+    {% endif %}
+
+    {% if not lista_atletas %}
+        No hay atletas.
+    {% endif %}
+
+    {% if lista_atletas or lista_entrenadores %}
+        Hay algunos atletas o algunos entrenadores.
+    {% endif %}
+
+    {% if not lista_atletas or lista_entrenadores %}
+        No hay atletas o hay algunos entrenadores
+    {% endif %}
+
+    {% if lista_atletas and not lista_entrenadores %}
+        Hay algunos atletas y absolutamente ningún entrenador.
+    {% endif %}
+
+La etiqueta ``if`` no admite, sin embargo, mezclar los operadores
+``and`` y ``or`` dentro de la misma comprobación, porque la orden
+de aplicación de los operadores lógicos sería ambigua. Por ejemplo,
+el siguiente código es inválido::
+
+    {% if lista_atletas and lista_entrenadores or lista_animadoras %}
+
+Para combinar operadores ``and`` y ``or``, puedes usar sentencias
+``if`` anidadas, como en el siguiente ejemplo:
+
+.. code-block:: html+django
+
+    {% if lista_atletas %}
+        {% if lista_entrenadores or lista_animadoras %}
+            ¡Tenemos atletas, y ya sea entrenadores o porristas!
+        {% endif %}
+    {% endif %}
+
+Es perfectamente posible usar varias veces un operador lógico, siempre
+que sea el mismo siempre. Por ejemplo, el siguiente código es válido::
+
+    {% if lista_atletas or lista_entrenadores or lista_animadoras or lista_profesores %}
+
+Las etiquetas ``if`` pueden usarse con operadores ``==``, ``!=``, ``<``, ``>``,
+``<=``, ``>=`` e ``in``, los cuales funcionan de la siguiente forma:
+
+
+operador: ``==``
+^^^^^^^^^^^^^^^^
+
+Igualdad. Por ejemplo:
+
+.. code-block:: html+django
+
+    {% if mivariable == "x" %}
+        Esta variable aparece si ``mivariable`` es igual a la cadena "x"
+    {% endif %}
+
+operador: ``!=``
+^^^^^^^^^^^^^^^^
+
+Desigualdad. Por ejemplo:
+
+.. code-block:: html+django
+
+    {% if mi_variable != "x" %}
+      Esta cadena aparece si mi ``mi_variable`` no es igual a la cadena "x",
+      o si ``mi_variable`` no se encuentra en el contexto.
+    {% endif %}
+
+operador:  ``<``
+^^^^^^^^^^^^^^^^
+
+Menor que. Por ejemplo:
+
+.. code-block:: html+django
+
+    {% if mi_variable < 100 %}
+      Esta cadena aparece si ``mi_variable`` es menor que 100.
+    {% endif %}
+
+operador: ``>``
+^^^^^^^^^^^^^^^
+
+Mayor que. Por ejemplo:
+
+.. code-block:: html+django
+
+    {% if mi_variable > 0 %}
+      Esta cadena aparece si ``mi_variable```es mayor que 0.
+    {% endif %}
+
+operador: ``<=``
+^^^^^^^^^^^^^^^^
+
+Menor o igual a. Por ejemplo:
+
+.. code-block:: html+django
+
+    {% if ``mi_variable`` <= 100 %}
+    Esta cadena aparece si ``mi_variable`` es menor o igual a 100.
+    {% endif %}
+
+operador: ``>=``
+^^^^^^^^^^^^^^^^
+
+Mayor o igual a. Por ejemplo:
+
+.. code-block:: html+django
+
+    {% if ``mi_variable`` >= 1 %}
+      Esta cadena aparece si ``mi_variable`` es mayor o igual que 1.
+    {% endif %}
+
+operador: ``in``
+^^^^^^^^^^^^^^^^
+
+Contenido dentro. Este operador es soportado por muchos contenedores Python
+para probar si el valor dado está en el contenedor. Los siguientes son algunos
+ejemplos sobre como ``x in y`` son interpretados.
+
+.. code-block:: html+django
+
+    {% if "bc" in "abcdef" %}
+        Esto aparece si "bc" es una subcadena de "abcdef"
+    {% endif %}
+
+    {% if "hola" in saludos %}
+        Si saludos es una lista o un conjunto de elementos, donde uno de los
+        elementos de la cadena es "hola", entonces aparecerá.
+    {% endif %}
+
+    {% if usuario in usuarios %}
+        Si usuarios es un  QuerySet, éste aparecerá si el usuario es un instancia
+        que pertenece a el QuerySet.
+    {% endif %}
+
+operador: ``not in``
+^^^^^^^^^^^^^^^^^^^^
+
+No contenido dentro. Ésta es la negación de el operador ``in``.
+
+El operador de comparación no puede 'encadenar' como en Python  en notación
+Matemática. Por ejemplo en lugar de usar esto::
+
+    {% if a > b > c %}  (MAL)
+
+debes hacer esto::
+
+    {% if a > b and b > c %}
+
+Filtros
+^^^^^^^
+
+Puedes usar filtros en las expresiones :ttag:`if`.
+
+Por ejemplo:
+
+.. code-block:: html+django
+
+    {% if messages|length >= 100 %}
+       ¡Hoy tienes montones de mensajes!
+    {% endif %}
+
+Expresiones complejas
+^^^^^^^^^^^^^^^^^^^^^^
+
+Todo lo anterior se puede combinar para formar expresiones complejas. Para tales
+expresiones, puede ser importante saber cómo  agrupar los operadores cuando se
+evalúan las expresiones - es decir, conocer las reglas de prioridad. La
+precedencia de los operadores, desde lo más bajo a lo más alto posible,
+es como sigue:
+
+* ``or``
+* ``and``
+* ``not``
+* ``in``
+* ``==``, ``!=``, ``<``, ``>``, ``<=``, ``>=``
+
+(Esto funciona exactamente como en Python). Por ejemplo, la siguiente etiqueta
+:ttag:`if` en Django:
+
+.. code-block:: html+django
+
+    {% if a == b or c == d and e %}
+
+En Python se escribiría así:
+
+.. code-block:: python
+
+    (a == b) or ((c == d) and e)
+
+Si necesitas usar diferentes prioridades, necesitas jerarquizar las etiquetas
+:ttag:`if`.  Algunas veces eso es mejor para obtener mayor claridad, de
+cualquier manera, es necesario conocer las reglas de precedencia o prioridad.
+
+.. templatetag:: ifchanged
+
+ifchanged
+^^^^^^^^^
+
+Comprueba si el valor ha cambiado desde la ultima iteración al bucle.
+
+El bloque de etiqueta ``{% ifchanged %}`` es usado con bucles. Tiene dos
+posibles usos:
+
+Comprueba el contenido dado contra el estado previo y sólo exhibe el
+contenido si ha cambiado. Por ejemplo, esto muestra una lista de días,
+únicamente si cambia el mes.
+
+.. code-block:: html+django
+
+    <h1>Archivos del {{ year }}</h1>
+
+    {% for date in days %}
+        {% ifchanged %}<h3>{{ date|date:"F" }}</h3>{% endifchanged %}
+        <a href="{{ date|date:"M/d"|lower }}/">{{ date|date:"j" }}</a>
+    {% endfor %}
+
+Si se le pasan una o más variables, verifica cualquier variable que haya
+cambiado. El siguiente ejemplo muestra la fecha cada vez que cambia, mientras
+que muestra la hora si la fecha y la hora cambian:
+
+.. code-block:: html+django
+
+    {% for date in days %}
+        {% ifchanged date.date %} {{ date.date }} {% endifchanged %}
+        {% ifchanged date.hour date.date %}
+            {{ date.hour }}
+        {% endifchanged %}
+   {% endfor %}
+
+También puede aceptar opcionalmente  una cláusula ``{% else %}`` que muestra
+si el valor no ha cambiado.
+
+.. code-block:: html+django
+
+    {% for match in matches %}
+        <div style="background-color:
+            {% ifchanged match.ballot_id %}
+                {% cycle "red" "blue" %}
+            {% else %}
+                gray
+            {% endifchanged %}
+        ">{{ match }}</div>
+    {% endfor %}
+
+.. templatetag:: ifequal
+
+ifequal
+-------
+
+Muestra el contenido del bloque si los dos argumentos suministrados
+son iguales.
+
+He aquí un ejemplo:
+
+.. code-block:: html+django
+
+    {% ifequal user.id comment.user_id %}
+        ...
+    {% endifequal %}
+
+Al igual que con la etiqueta ``{% if %}``, existe una cláusula ``{% else %}`` opcional.
+
+Los argumentos pueden ser cadenas de texto, así que el siguiente código es
+válido:
+
+.. code-block:: html+django
+
+    {% ifequal user.username "adrian" %}
+        ...
+    {% endifequal %}
+
+Un uso alternativo para la etiqueta ``ifequal`` es usarlo con la etiqueta
+:ttag:`if` y el operador ``==``.
+
+.. templatetag:: ifnotequal
+
+ifnotequal
+----------
+
+Es igual que ``ifequal``, excepto que comprueba que los dos parámetros
+suministrados *no* sean iguales.
+
+
+Una alternativa para usar la etiqueta  ``ifnotequal`` es usándola con la
+etiqueta :ttag:`if`  y el operador ``!=``.
+
+.. templatetag:: include
+
+include
+-------
+
+Carga una plantilla y la representa usando el contexto actual. Es
+una forma de "incluir" una plantilla dentro de otra.
+
+El nombre de la plantilla puede o bien ser el valor de una variable
+o estar escrita en forma de cadena de texto, rodeada ya sea con comillas
+simples o comillas dobles, a gusto del lector.
+
+El siguiente ejemplo incluye el contenido de la
+plantilla ``"foo/bar.html"``::
+
+    {% include "foo/bar.html" %}
+
+Este otro ejemplo incluye el contenido de la plantilla cuyo nombre sea
+el valor de la variable ``template_name``::
+
+    {% include template_name %}
+
+.. templatetag:: load
+
+load
+----
+
+Carga una biblioteca de plantillas. En el capítulo 9 puedes encontrar
+más información acerca de las bibliotecas de plantillas.
+
+Por ejemplo, la siguiente plantilla carga todas las etiquetas y filtros
+registrados en un ``unalibreria`` y ``otralibreira`` localizada en el
+paquete ``package``.::
+
+    {% load unalibreria package.otralibreira %}
+
+También se pueden cargar selectivamente filtros de forma individual o etiquetas
+de alguna libreria usando el argumento ``from``. En este ejemplo las plantillas
+de etiquetas/filtros llamada ``foo`` y ``bar``  serán cargados de
+``algunalibreria``::
+
+    {% load foo bar from algunalibreria %}
+
+.. templatetag:: lorem
+
+lorem
+-----
+
+Muestra en orden aleatorio el texto en Latin "lorem ipsum". Esto puede ser útil
+para proveer datos en las plantillas.
+
+Uso::
+
+    {% lorem [count] [method] [random] %}
+
+La etiqueta ``{% lorem %}`` puede usarse con cero, uno, dos o tres argumentos.
+Los argumentos son:
+
+.. table:: Argumentos de la etiqueta lorem.
+
+    ===========  ==============================================================
+    Argumento     Descripción
+    ===========  ==============================================================
+    ``count``    Un numero (o variable) que contiene el numero de párrafos
+                 o palabras para generar (el valor predeterminado es 1).
+    ``method``   Usa ``w`` para palabras, ``p`` para párrafos en HTML o ``b``
+                 para bloques de texto (el valor predeterminado es ``b``).
+    ``random``   La palabra ``random``, la cual si es dada, no usa  el común
+                 párrafo ("Lorem ipsum dolor sit amet...") cuando genera texto.
+    ===========  ==============================================================
+
+Ejemplos:
+
+* ``{% lorem %}`` la salida con el común párrafo: "lorem ipsum".
+* ``{% lorem 3 p %}``la salida con el común párrafo: "lorem ipsum"
+  y dos párrafos al azar en HTML y con etiquetas ``<p>``.
+* ``{% lorem 2 w random %}`` la salida serán dos palabras en latín al azar.
+
+.. templatetag:: now
+
+now
+---
+
+Muestra la fecha, escrita de acuerdo a un formato indicado.
+
+Esta etiqueta fue inspirada por la función ``date()`` de PHP(), y
+utiliza el mismo formato que esta (http://php.net/date). La versión
+Django tiene, sin embargo, algunos extras.
+
+He aquí un ejemplo::
+
+    It is {% now "jS F Y H:i" %}
+
+Se pueden escapar los caracteres de formato con una barra invertida, si se
+quieren incluir de forma literal. En el siguiente ejemplo, se escapa el
+significado de la letra "f" con la barra invertida, ya que de otra manera
+se interpretaría como una indicación de incluir la hora. La "o", por otro
+lado, no necesita ser escapada, ya que no es un carácter de formato::
+
+    It is the {% now "jS o\f F" %}
+
+El ejemplo mostraría: "It is the 4th of September".
+
+.. templatetag:: regroup
+
+regroup
+-------
+
+Reagrupa una lista de objetos similares usando un atributo común.
+
+Para comprender esta etiqueta, es mejor recurrir a un ejemplo. Digamos
+que ``gente`` es una lista de objetos de tipo ``Persona``, y que dichos
+objetos tienen los atributos ``nombre``, ``apellido`` y ``genero``. Queremos
+mostrar un listado como el siguiente:
+
+* Hombre:
+    * George Bush
+    * Bill Clinton
+* Mujeres:
+    * Margaret Thatcher
+    * Condoleezza Rice
+* Desconocido:
+    * Pat Smith
+
+El siguiente fragmento de plantilla mostraría como realizar esta
+tarea:
+
+.. code-block:: html+django
+
+    {% regroup gente by genero as grouped %}
+    <ul>
+    {% for group in grouped %}
+        <li>{{ group.grouper }}
+        <ul>
+            {% for item in group.list %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+        </li>
+    {% endfor %}
+    </ul>
+
+Como puedes ver, ``{% regroup %}`` crea una nueva variable, que es una
+lista de objetos que tienen dos tributos, ``grouper`` y ``list``. En
+``grouper`` se almacena el valor de agrupación, ``list`` contiene una lista
+de los objetos que tenían en común al valor de agrupación. En este
+caso, ``grouper`` podría valer ``Male``, ``Female`` y ``Unknown``, y
+``list`` sería una lista con las personas correspondientes a cada uno
+de estos sexos.
+
+Hay que destacar que ``{% regroup %}`` **no** funciona correctamente
+cuando la lista no está ordenada por el mismo atributo que se quiere
+agrupar. Esto significa que si la lista del ejemplo no está ordenada
+por el sexo, debes asegurarte de que se ordene antes correctamente, por
+ejemplo con el siguiente código::
+
+    {% regroup gente|dictsort:"genero" by genero as grouped %}
+
+.. templatetag:: spaceless
+
+spaceless
 ---------
 
-*Valor por omisión*: ``'America/Chicago'``
+Elimina los espacios en blanco entre etiquetas HTML Esto incluye
+tabuladores y saltos de línea.
 
-Una cadena que representa la zona horaria para esta instalación. Las zonas
-horarias se expresan en el formato ``zic`` estándar de Unix. Puede encontrarse
-una lista relativamente completa de cadenas de zonas horarias en
-http://www.postgresql.org/docs/8.1/static/datetime-keywords.html#DATETIME-TIMEZONE-SET-TABLE.
+El siguiente ejemplo:
 
-Esta es la zona a la cual Django convertirá todas las fechas/horas -- no
-necesariamente la zona horaria del servidor. Por ejemplo, un servidor podría
-servir múltiples sitios impulsados por Django, cada uno con una configuración de
-zona horaria separada.
+.. code-block:: html+django
 
-Normalmente, Django fija la variable ``os.environ['TZ']`` a la zona horaria que
-especificas en la variable de configuración ``TIME_ZONE``. Por lo tanto, todas
-tus vistas y modelos operarán automáticamente en la zona horaria correcta. Sin
-embargo, si estás usando el método de configuración manual (descrito arriba en
-la sección "`Usando variables de configuración sin fijar DJANGO_SETTINGS_MODULE`_"
-) Django *no* tocará la variable de entorno ``TZ`` y quedará en tus manos
-asegurarte de que tus procesos se ejecuten en el entorno correcto.
+    {% spaceless %}
+        <p>
+            <a href="foo/">Foo</a>
+        </p>
+    {% endspaceless %}
+
+Retornaría el siguiente código HTML::
+
+    <p><a href="foo/">Foo</a></p>
+
+Sólo se eliminan los espacios *entre* las etiquetas, no los espacios
+entre la etiqueta y el texto. En el siguiente ejemplo, no se quitan
+los espacios que rodean la palabra ``Hello``:
+
+.. code-block:: html+django
+
+    {% spaceless %}
+        <strong>
+            Hola
+        </strong>
+    {% endspaceless %}
+
+.. templatetag:: ssi
+
+ssi
+---
+
+Muestra el contenido de un fichero determinado dentro de la página.
+
+Al igual que la etiqueta "include", ``{% ssi %}`` incluye el contenido
+de otro fichero (que debe ser especificado usando una ruta absoluta)
+en la página actual::
+
+    {% ssi /home/html/ljworld.com/includes/right_generic.html %}
+
+Si se le pasa el parámetro opcional "parsed", el contenido del fichero
+incluido se evalúa como si fuera código de plantilla, usando el contexto
+actual::
+
+    {% ssi /home/html/ljworld.com/includes/right_generic.html parsed %}
+
+Para poder usar la etiqueta ``{% ssi %}``, hay que definir el
+valor `ALLOWED_INCLUDE_ROOTS` en los ajustes de Django, como
+medida de seguridad.
+
+La mayor parte de las veces, ``{% include %}`` funcionará mejor que
+``{% ssi %}``; esta se ha incluido sólo para garantizar compatibilidad
+hacia atrás.
+
+.. templatetag:: templatetag
+
+templatetag
+-----------
+
+Permite representar los caracteres que están definidos como
+parte del sistema de plantillas.
+
+Como el sistema de plantillas no tiene el concepto de "escapar" el significado
+de las combinaciones de símbolos que usa internamente, tenemos que recurrir
+a la etiqueta ``{% templatetag %}`` si nos vemos obligados a representarlos.
+
+Se le pasa un argumento que indica que combinación de símbolos debe
+producir. Los valores posibles del argumento se muestran en la
+tabla F-3.
+
+.. table:: Argumentos válidos de templatetag
+
+    ==================  =======
+    Argumento           Salida
+    ==================  =======
+    ``openblock``       ``{%``
+    ``closeblock``      ``%}``
+    ``openvariable``    ``{{``
+    ``closevariable``   ``}}``
+    ``openbrace``       ``{``
+    ``closebrace``      ``}``
+    ``opencomment``     ``{#``
+    ``closecomment``    ``#}``
+    ==================  =======
+
+Ejemplo de su uso::
+
+    {% templatetag openblock %} url 'lista_entradas' {% templatetag closeblock %}
+
+.. templatetag:: url
+
+url
+---
+
+Devuelve una URL absoluta (Es decir, una URL sin la parte del dominio) que
+coincide con una determinada vista, incluyendo sus parámetros opcionales. De
+esta forma se posibilita realizar enlaces sin violar el principio DRY,
+codificando las direcciones en las plantillas::
+
+    {% url 'algun-nombre-de-url' v1 v2 %}
+
+El primer argumento es el nombre del patrón URL o ``name``. El resto de
+parámetros son opcionales y deben ir separados con comas, convirtiéndose en
+parámetros  posicionales o por nombre que se incluirán en la URL. Deben estar
+presentes  todos los argumentos que se hayan definido como obligatorios en el
+URLconf. No es posible mezclar argumentos posicionales y argumentos.
+
+Por ejemplo, supongamos que tenemos una vista, ``VistaDetallesCliente``, y que
+en el URLconf se la indica que acepta un parámetro, el identificador
+del cliente. La línea del URL podría ser algo así:
+
+.. code-block:: python
+
+    url(r'^cliente/(?P<pk>[0-9]+)/$', VistaDetallesCliente.as_view(),
+        name='detalles-cliente'),
+
+Si este URLconf fuera incluido en el URLconf del proyecto bajo un
+directorio, como en este ejemplo:
+
+.. code-block:: python
+
+    ('^clientes/', include('project_name.app_name.urls'))
+
+Podríamos crear un enlace a esta vista, en nuestra plantilla, con la
+siguiente etiqueta::
+
+    {% url 'detalles-cliente' cliente.id %}
+
+La salida de esta etiqueta será ``/clientes/cliente/123/``.
+
+.. warning::
+
+    No olvides poner comillas alrededor del ``name`` del patrón, o el valor
+    será interpretado como el contexto de una variable.
+
+Si solo quieres extraer la URL sin mostrarla, puedes usar una llamada un poco
+diferente:
+
+.. code-block:: html+django
+
+    {% url 'algun-nombre_patron' arg arg2 as the_url %}
+
+    <a href="{{ the_url }}">Estoy enlazando a {{ the_url }}</a>
+
+El alcance de la variable creada por la sintaxis ``as var`` es el ``{% block %}``
+en el cual la etiqueta ``{% url %}`` aparece.
+
+Si quieres extraer el ``namespaced`` de una URL, especifica la ruta completa
+a ``name`` así::
+
+    {% url 'miaplic:nombre-url' %}
+
+.. templatetag:: verbatim
+
+verbatim
+--------
+
+Detiene el motor de plantillas que renderiza el contenido de esta etiqueta de
+bloque.
+
+Un uso muy común es para permitir que  Javascript y la capa de plantillas
+no colisiones con la sintaxis de Django. Por ejemplo:
+
+.. code-block:: html+django
+
+    {% verbatim %}
+        {{if dying}}Still alive.{{/if}}
+    {% endverbatim %}
+
+También se puede llamar específicamente a una etiqueta de cierre ``{% endverbatim %}``
+como parte del contenido no renderizado.
+
+.. code-block:: html+django
+
+    {% verbatim myblock %}
+        Evita la renderizacion a través de {% verbatim %}{% endverbatim %} block.
+    {% endverbatim myblock %}
+
+.. templatetag:: widthratio
+
+widthratio
+----------
+
+Esta etiqueta es útil para presentar gráficos de barras y similares. Calcula
+la proporción entre un valor dado y un máximo predefinido, y luego multiplica ese
+cociente por una constante.
+
+Veamos un ejemplo:
+
+.. code-block:: html+django
+
+    <img src="bar.png" alt="Bar"
+         height="10" width="{% widthratio this_valor max_valor max_width %}" />
+
+Si ``this_valor`` vale 175 y ``max_valor`` es 200, la imagen resultante
+tendrá un ancho de 88 pixels (porque 175/200 = 0.875 y 0.875 * 100 = 87.5,
+que se redondea a 88).
+
+En algunos casos es necesario capturar el valor de el resultado de ``widthratio``
+en una variable. Puede ser útil en instancias,  en  :ttag:`blocktrans` tal como:
+
+.. code-block:: html+django
+
+    {% widthratio this_valor max_valor max_width as width %}
+    {% blocktrans %}The width is: {{ width }}{% endblocktrans %}
+
+
+.. templatetag:: with
+
+with
+^^^^
+
+Cachea  una variable complicada bajo un nombre más simple. Esto es útil al
+acceder a un método "costoso" (e.g., uno que 'golpea' la base de datos) varias
+veces.
+
+Por ejemplo:
+
+.. code-block:: html+django
+
+    {% with total=business.employees.count %}
+        {{ total }} employee{{ total|pluralize }}
+    {% endwith %}
+
+La variable poblada (en el ejemplo anterior, ``total``) está únicamente
+disponible entre las etiquetas ``{% with %}`` y ``{% endwith %}``.
+
+Puedes asignar más de una variable al contexto:
+
+.. code-block:: html+django
+
+    {% with alpha=1 beta=2 %}
+        ...
+    {% endwith %}
+
+Filtros predefinidos
+====================
+
+.. templatefilter:: add
+
+add
+---
+
+Agrega el argumento al valor.
+
+Ejemplo::
+
+    {{ valor|add:"2" }}
+
+Si el ``valor`` es ``4``, la salida será ``6``.
+
+.. templatefilter:: addslashes
+
+addslashes
+----------
+
+Añade barras invertidas antes de las comillas, ya sean simples o dobles. Es
+útil para pasar cadenas de texto como javascript, o para escapar cadenas en CVS
+por ejemplo::
+
+    {{ valor|addslashes }}
+
+Si el ``valor`` es ``"I'm using Django"``, la salida será: ``"I\'m using Django"``
+
+.. templatefilter:: capfirst
+
+capfirst
+--------
+
+Pasa a mayúsculas la primera letra de la primera palabra. Si el primer carácter
+no es una letra el filtro no tiene efectos.
+
+Por ejemplo::
+
+    {{ valor|capfirst }}
+
+Si el ``valor`` es ``"django"``, la salida sea ``"Django"``.
+
+.. templatefilter:: center
+
+center
+------
+
+Centra el texto en un campo de la anchura indicada.
+
+Por ejemplo::
+
+    "{{ valor|center:"15" }}"
+
+Si ``valor`` es ``"Django"``, la salida será ``"     Django    "``.
+
+cut
+---
+
+Elimina todos los valores de los argumentos de la cadena dada.
+
+Por ejemplo::
+
+    {{ valor|cut:" " }}
+
+Si el ``valor``es ``"Cadena con espacios"``, la salida será ``"Cadenaconespacioss"``.
+
+.. templatefilter:: date
+
+date
+----
+
+Formatea una fecha de acuerdo al formato indicado en la cadena de texto (Se usa
+el mismo formato que con la etiqueta ``now``).
+
+Ejemplo::
+
+    {{ valor|date:"F j, Y" }}
+
+La tabla F-2 muestra las cadenas de formato que se pueden utilizar.
+
+.. table:: Cadenas de formato para fechas y horas
+
+    ==============  ========================================  ======================================
+    Carác. formato  Descripción                               Ejemplo de salida
+    ==============  ========================================  ======================================
+    a               ``'a.m.'`` o ``'p.m.'``.
+
+    A               ``'AM'`` o ``'PM'``.                      ``'AM'``
+
+    b               El nombre del mes, en forma de            ``'jan'``
+                    abreviatura de tres letras minúsculas.
+
+    d               Día del mes, dos dígitos que incluyen     ``'01'`` a ``'31'``
+                    rellenando con cero por la izquierda si
+                    fuera necesario.
+
+    D               Día de la semana, en forma de             ``'Fri'``
+                    abreviatura de tres letras.
+
+    f               La hora, en formato de 12 horas y         ``'1'``, ``'1:30'``
+                    minutos, omitiendo los minutos
+                    si estos son cero.
+
+    F               El mes, en forma de texto                 ``'January'``
+
+    g               La hora, en formato de 12 horas, sin      ``'1'`` a ``'12'``
+                    rellenar por la izquierda con ceros.
+
+    G               La hora, en formato de 24 horas, sin      ``'0'`` a ``'23'``
+                    rellenar por la izquierda con ceros.
+
+    h               La hora, en formato de 12 horas.          ``'01'`` a ``'12'``
+
+    H               La hora, en formato de 24 horas.          ``'00'`` a ``'23'``
+
+    i               Minutos.                                  ``'00'`` a ``'59'``
+
+    j               El día del mes, sin rellenar por          ``'1'`` a ``'31'``
+                    la izquierda con ceros.
+
+    l               El nombre del día de la semana.           ``'Friday'``
+
+    L               Booleano que indica si el año es          ``True`` o ``False``
+                    bisiesto.
+
+    m               El día del mes, rellenando por            ``'01'`` a ``'12'``
+                    la izquierda con ceros si fuera
+                    necesario.
+
+    M               Nombre del mes, abreviado en forma de     ``'Jan'``
+                    abreviatura de tres letras.
+
+    n               El mes, sin rellenar con ceros            ``'1'`` a ``'12'``
+
+    N               La abreviatura del mes siguiendo          ``'Jan.'``, ``'Feb.'``
+                    el estilo de la Associated Press.         , ``'March'``, ``'May'``
+
+    O               Diferencia con respecto al                ``'+0200'``
+                    tiempo medio de Grennwich (*Greenwich
+                    Mean Time* - GMT)
+
+    P               La hora, en formato de 12 horas, más      ``'1 a.m.'``, ``'1:30 p.m.'``
+                    los minutos, recto si estos son cero      , ``'midnight'``, ``'noon'``
+                    y con la indicación a.m./p.m. Además,     , ``'12:30 p.m.'``
+                    se usarán las cadenas de texto
+                    especiales ``'midnight'`` y ``'noon'``
+                    para la medianoche y el mediodía
+                    respectivamente.
+
+    r               La fecha en formato RFC 822.              ``'Thu, 21 Dec 2000 16:01:07 +0200'``
+
+    s               Los segundos, rellenos con ceros por la   ``'00'`` a ``'59'``
+                    izquierda de ser necesario.
+
+    S               El sufijo inglés para el día del          ``'st'``, ``'nd'``, ``'rd'``
+                    mes (dos caracteres).                     o ``'th'``
+
+    t               Número de días del mes.                   ``28`` a ``31``
+
+    T               Zona horaria                              ``'EST'``, ``'MDT'``
+
+    w               Día de la semana, en forma de dígito.     ``'0'`` (Domingo) a ``'6'`` (Sábado)
+
+    W               Semana del año, siguiente la norma        ``1``, ``23``
+                    ISO-8601, con la semana empezando el
+                    lunes.
+
+    y               Año, con dos dígitos.                     ``'99'``
+
+    Y               Año, con cuatro dígitos.                  ``'1999'``
+
+    z               Día del año                               ``0`` a ``365``
+
+    Z               Desfase de la zona horaria, en            ``-43200`` a ``43200``
+                    segundos. El desplazamiento siempre
+                    es negativo para las zonas al oeste
+                    del meridiano de Greenwich, y positivo
+                    para las zonas que están al este.
+    ==============  ========================================  ======================================
+
+Por ejemplo::
+
+    {{ valor|date:"D d M Y" }}
+
+Si el  ``valor`` es un objeto :py:class:`~datetime.datetime` (e.g., el resultado de
+``datetime.datetime.now()``), la salida será la cadena ``'Wed 09 Jan 2008'``.
+
+Asumiendo que :setting:`USE_L10N` como  ``True`` y :setting:`LANGUAGE_CODE` sea,
+por ejemplo, ``"es"``, luego::
+
+    {{ valor|date:"SHORT_DATE_FORMAT" }}
+
+La salida será la cadena ``"09/01/2008"`` (en el  formato especifico para el
+local ``es`` usando ``"SHORT_DATE_FORMAT"``).
+
+.. templatefilter:: default
+
+default
+-------
+
+Si el valor evaluado es ``False``, usa el valor definido como predeterminado
+o ``default``.
+
+Por ejemplo::
+
+     {{ valor|default:"nada" }}
+
+Si el ``valor`` es ``""``  (una cadena vacía), la salida será ``nada``.
+
+.. templatefilter:: default_if_none
+
+default_if_none
+---------------
+
+Si (y únicamente si) el valor es ``None``, se usa el valor del argumento en su
+lugar.
+
+Observa que si le pasas una cadena vacía, el valor predeterminado *no* será
+usado. Usa el fitro :tfilter:`default` si quieres tratar con cadena vacías.
+
+Por ejemplo::
+
+    {{ valor|default_if_none:"nada" }}
+
+Si ``valor`` es ``None``, la salida será una cadena ``"nada"``.
+
+.. templatefilter:: dictsort
+
+dictsort
+--------
+
+Acepta una lista de diccionarios y devuelve una lista ordenada según la
+propiedad indicada en el argumento.
+
+Por ejemplo::
+
+    {{ valor |dictsort:"nombre" }}
+
+Si el ``valor`` es:
+
+.. code-block:: python
+
+    [
+        {'nombre': 'zed', 'edad': 19},
+        {'nombre': 'amy', 'edad': 22},
+        {'nombre': 'joe', 'edad': 31},
+    ]
+
+La salida será:
+
+.. code-block:: python
+
+    [
+        {'nombre': 'amy', 'edad': 22},
+        {'nombre': 'joe', 'edad': 31},
+        {'nombre': 'zed', 'edad': 19},
+    ]
+
+Puedes hacer cosas más complicadas como:
+
+.. code-block:: html+django
+
+    {% for libro in libros|dictsort:"autor.edad" %}
+        {{ libro.titulo }} ({{ libro.autor.nombre }})
+    {% endfor %}
+
+Si ``libros`` es:
+
+.. code-block:: python
+
+    [
+        {'titulo': '1984', 'autor': {'nombre': 'George', 'edad': 45}},
+        {'titulo': 'Timequake', 'autor': {'nombre': 'Kurt', 'edad': 75}},
+        {'titulo': 'Alice', 'autor': {'nombre': 'Lewis', 'edad': 33}},
+    ]
+
+La salida será::
+
+    * Alice (Lewis)
+    * 1984 (George)
+    * Timequake (Kurt)
+
+.. templatefilter:: dictsortreversed
+
+dictsortreversed
+------------------
+
+Acepta una lista de diccionarios y devuelve una lista ordenada de forma
+descendente según la propiedad indicada en el argumento. Trabaja de forma
+parecida al anterior filtro, pero retorna el valor en orden inverso.
+
+Por ejemplo::
+
+    {{ lista|dictsortreversed:"foo" }}
+
+.. templatefilter:: divisibleby
+
+divisibleby
+------------
+
+Devuelve ``True`` si el valor pasado es divisible por el argumento.
+
+Por ejemplo::
+
+    {{ valor|divisibleby:"3" }}
+
+Si el ``valor`` es ``21``, la salida será ``True``.
+
+
+.. templatefilter:: escape
+
+escape
+------
+
+Escapea una cadena en HTML,  concretamente, realiza los siguientes remplazos:
+
+
+* ``<`` es convertido a ``&lt;``
+* ``>`` es convertido a  ``&gt;``
+* ``'`` (comillas simples) es convertido a  ``&#39;``
+* ``"`` (comillas dobles) es convertido a  ``&quot;``
+* ``&`` es convertido a  ``&amp;``
+
+El escape es únicamente aplicado en la salida de la cadena, así que no importa
+donde se encadenen la serie de filtros usando ``escape``: este siempre será
+aplicado como al último filtro. Si quieres  que el escape se aplique
+inmediatamente, utiliza el filtro :tfilter:`force_escape`.
+
+Aplicar ``escape`` a una variable que normalmente esta ``auto-escapeada``,  da
+como resultado que el escapeo se aplique una sola vez. Por lo que es seguro usar
+esta función incluso en ambientes de ``auto-escape``. Si quieres pasar múltiples
+escapes usa el filtro :tfilter:`force_escape`
+
+Por ejemplo, puedes aplicar ``escape`` a campos cuando  la etiqueta
+:ttag:`autoescape`  esta desactivada o en ``of``:
+
+.. code-block:: html+django
+
+    {% autoescape off %}
+        {{ titulo|escape }}
+    {% endautoescape %}
+
+.. templatefilter:: escapejs
+
+escapejs
+---------
+
+Escapa caracteres para usar en cadenas Javascript. Esta *no* marca las cadenas
+como seguras para usar en HTML, pero las protege de errores de sintaxis cuando
+se usan plantillas generadas por ``JavaScript/JSON.``
+
+Por ejemplo::
+
+    {{ valor|escapejs }}
+
+Si ``valor`` es ``"testing\r\njavascript \'string" <b>escaping</b>"``,
+la salida será ``"testing\\u000D\\u000Ajavascript \\u0027string\\u0022 \\u003Cb
+\\u003Eescaping\\u003C/b\\u003E"``.
+
+.. templatefilter:: filesizeformat
+
+filesizeformat
+--------------
+
+Representa un valor, interpretándolo como si fuera el tamaño de un fichero y
+"humanizando" el resultado, de forma que sea fácil de leer. Por ejemplo, las
+salidas podrían ser ``'13 KB'``, ``'4.1 MB'``, ``'102 bytes'``, etc.
+
+Por ejemplo::
+
+    {{ valor|filesizeformat }}
+
+Si ``valor`` es 123456789, la salida será ``117.7 MB``.
+
+.. admonition:: Tamaño de archivos y unidades SI
+
+    Estrictamente hablando ``filesizeformat`` no  se ajusta al Sistema
+    Internacional de Unidades (International System of Units) que recomiende
+    usar KiB, MiB, GiB, cuando el tamaño de los bytes se calcula en torno
+    a 1024(como en este caso). En lugar de eso, Django usa tradicionalmente
+    nombres de unidades (KB, MB, GB, etc.) correspondiendo a los nombres que
+    se utilizan más comúnmente.
+
+.. templatefilter:: first
+
+first
+-----
+
+Devuelve el primer elemento de una lista.
+
+Por ejemplo::
+
+    {{ valor|first }}
+
+
+Si el ``valor`` está en la lista ``['a', 'b', 'c']``, la salida será ``'a'``.
+
+.. templatefilter:: floatformat
+
+floatformat
+-----------
+
+Si se usa sin argumento, redondea un número en coma flotante a un único
+dígito decimal (pero sólo si hay una parte decimal que mostrar), por
+ejemplo:
+
+.. table::  Ejemplos de ``floatformat``
+
+    ============  ===========================  ========
+    ``valor``     Plantilla                     Salida
+    ============  ===========================  ========
+    ``34.23234``  ``{{ valor|floatformat }}``  ``34.2``
+    ``34.00000``  ``{{ valor|floatformat }}``  ``34``
+    ``34.26000``  ``{{ valor|floatformat }}``  ``34.3``
+    ============  ===========================  ========
+
+Si te utiliza un argumento numérico, ``floatformat`` redondea a ese número
+de lugares decimales, por ejemplo:
+
+.. table::  Ejemplos de ``floatformat``
+
+    ============  =============================  ==========
+    ``valor``     Plantilla                      Salida
+    ============  =============================  ==========
+    ``34.23234``  ``{{ valor|floatformat:3 }}``  ``34.232``
+    ``34.00000``  ``{{ valor|floatformat:3 }}``  ``34.000``
+    ``34.26000``  ``{{ valor|floatformat:3 }}``  ``34.260``
+    ============  =============================  ==========
+
+Particularmente útil al pasárselo al 0 (cero) como el argumento que redondea
+el numero flotante, al valor entero más cercano.
+
+.. table:: Ejemplos de ``floatformat``
+
+    ============  ================================  ==========
+    ``valor``     Plantilla                         Salida
+    ============  ================================  ==========
+    ``34.23234``  ``{{ valor|floatformat:"0" }}``   ``34``
+    ``34.00000``  ``{{ valor|floatformat:"0" }}``   ``34``
+    ``39.56000``  ``{{ valor|floatformat:"0" }}``   ``40``
+    ============  ================================  ==========
+
+Si el argumento pasado a ``floatformat`` es negativo, redondeará a ese
+número de decimales, pero sólo si el número tiene parte decimal.
+Por ejemplo:
+
+.. table::  Ejemplos de ``floatformat``
+
+    ============  ================================  ==========
+    ``valor``     Plantilla                         Salida
+    ============  ================================  ==========
+    ``34.23234``  ``{{ valor|floatformat:"-3" }}``  ``34.232``
+    ``34.00000``  ``{{ valor|floatformat:"-3" }}``  ``34``
+    ``34.26000``  ``{{ valor|floatformat:"-3" }}``  ``34.260``
+    ============  ================================  ==========
+
+Usar ``floatformat`` sin argumentos es equivalente a usar ``floatformat`` con el
+argumento de ``-1``.
+
+.. templatefilter:: force_escape
+
+force_escape
+------------
+
+Aplica escapeo HTML a la cadena(consulta el filtro :tfilter:`escape` para
+mas detalles). Este filtro es aplicado *inmediatamente* y devuelve una nueva
+cadena escapada. Es útil en raros casos, por ejemplo  cuando es necesario el uso
+de múltiples escapeos o cuando es necesario aplicar otros filtro a el resultado
+escapado. Normalmente se usa el filtro  :tfilter:`escape`.
+
+Por ejemplo, si quieres  atrapara los elemento HTML ``<p>`` creados por el filtro
+tfilter:`linebreaks`:
+
+.. code-block:: html+django
+
+    {% autoescape off %}
+        {{ cuerpo|linebreaks|force_escape }}
+    {% endautoescape %}
+
+.. templatefilter:: get_digit
+
+get_digit
+---------
+
+Dado un número, devuelve el dígito que esté en la posición indicada, siendo
+1 el dígito más a la derecha. En caso de que la entrada sea inválida, devolverá
+el valor original (Si la entrada o el argumento no fueran enteros, o si
+el argumento fuera inferior a 1). Si la entrada es correcta, la salida siempre
+será un entero.
+
+Por ejemplo::
+
+    {{ valor|get_digit:"2" }}
+
+
+Si ``valor`` es ``123456789``, la salida será ``8``.
+
+.. templatefilter:: iriencode
+
+iriencode
+---------
+
+Convierte un IRI (Identificador Internacional de Recursos o Internationalized
+Resource Identifier) a una cadena que es conveniente para incluir en una URL.
+Esto es necesario su están tratando de usar cadenas que contienen caracteres que
+no son ASCII en una URL.
+
+Es seguro usar este filtro en una cadena que ha pasado por un filtro
+:tfilter:`urlencode`.
+
+Por ejemplo::
+
+    {{ valor|iriencode }}
+
+Si ``valor`` es ``"?test=1&me=2"``, la salida será ``"?test=1&amp;me=2"``.
+
+.. templatefilter:: join
+
+join
+----
+
+Concatena todos los elementos de una lista para formar una cadena
+de texto, usando como separador el texto que se le pasa como
+argumento. Es equivalente a la llamada en Python ``str.join(list)``
+
+Por ejemplo::
+
+    {{ valor|join:" // " }}
+
+Si ``valor`` es la lista ``['a', 'b', 'c']``, la salida será la cadena:
+``"a // b // c"``.
+
+.. templatefilter:: last
+
+last
+^^^^
+
+Devuelve el ultimo ítem de una lista.
+
+Por ejemplo::
+
+    {{ valor|last }}
+
+Si ``valor`` es la lista ``['a', 'b', 'c', 'd']``, la salida será la cadena
+``"d"``.
+
+
+.. templatefilter:: length
+
+length
+------
+
+Devuelve la longitud del valor. Funciona tanto en listas como en cadenas.
+
+Por ejemplo::
+
+    {{ valor|length }}
+
+Si el ``valor`` es ``['a', 'b', 'c', 'd']`` o ``"abcd"``, la salida será ``4``.
+
+El filtro devuelve ``0`` cuando las variables no están definidas.
+
+.. templatefilter:: length_is
+
+length_is
+---------
+
+Devuelve el valor ``True`` si la longitud de la entrada coincide con el argumento
+suministrado, o de lo contrario ``False``.
+
+Por ejemplo::
+
+    {{ valor|length_is:"4" }}
+
+Si el ``valor`` es ``['a', 'b', 'c', 'd']`` o ``"abcd"``, la salida será ``True``.
+
+.. templatefilter:: linebreaks
+
+linebreaks
+----------
+
+Remplaza saltos de línea en texto plano con los apropiados formatos en HTML;
+una simple nueva línea  se convierte en un salto de línea en HTML (``<br />``)
+y una nueva línea seguida de una línea en blanco se convierte en un
+párrafo (``</p>``).
+
+Por ejemplo::
+
+    {{ valor|linebreaks }}
+
+Si el  ``valor`` es ``Joel\nes un slug``, la salida será ``<p>Joel<br />es un
+slug</p>``.
+
+.. templatefilter:: linebreaksbr
+
+linebreaksbr
+------------
+
+Convierte todos los saltos de línea en etiquetas ``<br />``.
+
+Por ejemplo::
+
+    {{ valor|linebreaksbr }}
+
+Si el ``valor`` es ``Joel\nes un slug``, la salida será ``Joel<br />es un
+slug``.
+
+.. templatefilter:: linenumbers
+
+linenumbers
+-----------
+
+Muestra el texto de la entrada con números de línea.
+
+Por ejemplo::
+
+    {{ valor|linenumbers }}
+
+Si el ``valor`` es::
+
+    uno
+    dos
+    tres
+
+La salida será::
+
+    1. uno
+    2. dos
+    3. tres
+
+.. templatefilter:: ljust
+
+ljust
+-----
+
+Justifica el texto de la entrada a la izquierda utilizando la anchura indicada.
+
+**Argumento:** tamaño de campo
+
+Por ejemplo::
+
+    "{{ valor|ljust:"10" }}"
+
+Si el ``valor`` is ``Django``, la salida será ``"Django    "``.
+
+.. templatefilter:: lower
+
+lower
+-----
+
+Convierte el texto de la entrada dada, a letras en minúsculas
+
+Por ejemplo::
+
+    {{ valor|lower }}
+
+Si el ``valor`` es ``Sigo ENOJADO con Yoko``, la salida será ``sigo enojado con
+yoko``.
+
+.. templatefilter:: make_list
+
+make_list
+---------
+
+Devuelve la entrada en forma de lista. Si la entrada es un número
+entero, se devuelve una lista de dígitos. Si es una cadena de
+texto, se devuelve una lista de caracteres.
+
+Por ejemplo::
+
+    {{ valor|make_list }}
+
+Si el ``valor`` es la cadena ``"Joel"``, la salida será la lista:
+``['J', 'o', 'e', 'l']``. Si el ``valor`` es ``123``, la salida será la lista:
+``['1', '2', '3']``
+
+.. templatefilter:: phone2numeric
+
+phone2numeric
+-------------
+
+Convierte un número de teléfono (que incluso puede contener letras) a
+su forma numérica equivalente.
+
+La entrada no tiene porque ser un número de teléfono válido. El filtro
+convertirá alegremente cualquier texto que se le pase.
+
+Por ejemplo::
+
+    {{ valor|phone2numeric }}
+
+Si el ``valor`` es ``800-COLLECT``, la salida será: ``800-2655328``.
+
+.. templatefilter:: pluralize
+
+pluralize
+---------
+
+Retorno el sufijo para formar el plural si el valor es mayor que uno. Por
+defecto el sufijo es ``'s'``.
+
+Ejemplo::
+
+    Tú tienes {{ num_mensajes }} mensaje {{ num_mensajes|pluralize }}.
+
+Si ``num_mensajes`` es ``1``, la salida será ``Tu tienes 1 mensaje.``
+Si ``num_mensajes`` es ``2``, la salida será ``Tu tienes 2 mensajes.``
+
+Para aquellas palabras que requieran otro sufijo para formar el plural, podemos
+usar una sintaxis alternativa en la que indicamos el sufijo que queramos
+con un argumento.
+
+Ejemplo::
+
+    Hay registrados {{ num_autores }} autor{{ num_autores|pluralize:"es" }}.
+
+Para aquellas palabras que forman el plural de forma más compleja que
+con un simple sufijo, hay disponible una opción, que permite indicar las formas
+en singular y en plural,  separándolas con una coma.
+
+Ejemplo::
+
+    Tú tienes{{ num_cherries }} cherr{{ num_cherries|pluralize:"y,ies" }}.
+
+Usa la etiqueta :ttag:`blocktrans` para pluralizar cadenas traducidas.
+
+.. templatefilter:: pprint
+
+pprint
+------
+
+Un ``wrapper`` que permite llamar a la función de Python ``pprint.pprint``. Se
+usa sobre todo para tareas de depurado de errores.
+
+Ejemplo::
+
+    {{ objeto|pprint }}
+
+.. templatefilter:: random
+
+random
+------
+
+Devuelve un elemento elegido al azar de la lista.
+
+Por ejemplo::
+
+    {{ valor|random }}
+
+Si el ``valor`` es la lista ``['a', 'b', 'c', 'd']``, la salida podría ser: ``"b"``.
+
+.. templatefilter:: rjust
+
+rjust
+-----
+
+Justifica el texto de la entrada a la derecha utilizando la anchura indicada.
+
+**Argumento:** El tamaño del campo
+
+Por ejemplo::
+
+    "{{ valor|rjust:"10" }}"
+
+Si el  ``valor`` es ``Django``, la salida será ``"    Django"``.
+
+.. templatefilter:: safe
+
+safe
+----
+
+Marca una cadena como no requerida para escapeo antes de la salida en HTML.
+Cuando el ``autoescape`` está en ``of``, este filtro no tiene efecto.
 
 .. admonition:: Nota:
 
-    Django no puede usar en forma confiable zonas horarias alternativas en un
-    entorno Windows. Si estás ejecutando Django en Windows debes asignar a esta
-    variable un valor que coincida con la zona horaria del sistema.
+    Si estas encadenando filtros, un filtro aplicado después de ``safe`` puede
+    hacer el contenido inseguro otra vez. Por ejemplo, el siguiente código
+    imprime las variables como si no estuvieran ``escapadas``:
 
-URL_VALIDATOR_USER_AGENT
-------------------------
+    .. code-block:: html+django
 
-*Valor por omisión*: ``Django/<version> (http://www.djangoproject.com/)``
+        {{ varible|safe|escape }}
 
-La cadena usarse como la cabecera ``User-Agent`` cuando se realizan
-verificaciones acerca e si las URLs existen (ver la opción ``verify_exists`` de
-``URLField``; ver Apéndice B).
+.. templatefilter:: safeseq
 
-USE_ETAGS
+safeseq
+^^^^^^^
+
+Aplica el filtro :tfilter:`safe` a cada elemento de una secuencia. Útil en
+conjunto con otros filtros que operan en secuencia, tal como el filtro
+:tfilter:`join`.  Por ejemplo::
+
+    {{ alguna_lista|safeseq|join:", " }}
+
+No se puede usar el filtro :tfilter:`safe` directamente en este caso, es
+necesario convertir la variable en una cadena,  en vez de trabajar con lo
+los elementos individuales de la secuencia.
+
+.. templatefilter:: slice
+
+slice
+-----
+
+Devuelve una sección de la lista.
+
+Usa la misma sintaxis que se usa en Python para seccionar una lista.
+Véase:  http://www.diveintopython3.net/native-datatypes.html#slicinglists
+para una rápida introducción.
+
+Ejemplo::
+
+    {{ una_lista|slice:":2" }}
+
+Si ``una_lista`` es ``['a', 'b', 'c']``, la salida será: ``['a', 'b']``.
+
+.. templatefilter:: slugify
+
+slugify
+-------
+
+Convierte a ASCCI. Convierte el texto a minúsculas, elimina los caracteres que no
+formen palabras (caracteres alfanuméricos y carácter subrayado), y convierte los
+espacios en guiones. También elimina los espacios que hubiera al principio y al
+final del texto.
+
+Por ejemplo::
+
+    {{ valor|slugify }}
+
+Si el ``valor`` es ``"Joel es un slug"``, la salida será  ``"joel-es-un-slug"``.
+
+.. templatefilter:: stringformat
+
+stringformat
+------------
+
+Formatea el valor de entrada de acuerdo a lo especificado en el formato
+que se le pasa como parámetro. La sintaxis a utilizar es idéntica a la
+de Python, con la excepción de que el carácter "%" se omite.
+
+Puedes consultar las opciones de formateo de cadenas de Python: en
+http://docs.python.org/library/stdtypes.html#string-formatting-operations
+para más detalles.
+
+Por ejemplo::
+
+    {{ valor|stringformat:"E" }}
+
+Si el ``valor`` es ``10``, la salida será ``1.000000E+01``.
+
+.. templatefilter:: striptags
+
+striptags
 ---------
 
-*Valor por omisión*: ``False``
+Hace todo los posible por eliminar todas las etiquetas [X]HTML.
 
-Este Booleano especifica si debe generarse la cabecera ``ETag``. La misma
-permite ahorrar ancho de banda pero disminuye el rendimiento. Se usa solamente
-si se ha instalado ``CommonMiddleware`` (ver :doc:`Capítulo 15<chapter15>`).
+Por ejemplo::
 
-USE_I18N
+    {{ valor|striptags }}
+
+Si el ``valor`` es ``"<b>Joel</b> <button>es</button> un <span>slug</span>"``,
+la salida será:  ``"Joel es un slug"``.
+
+.. admonition:: No se garantiza que sea seguro.
+
+    Nota que ``striptags`` no ofrece ninguna garantía acerca de la salida segura
+    en HTML, en particular con entradas no validas de HTML. Por lo que **NUNCA**
+    apliques el filtro ``safe`` a la salida de  ``striptags``. Si estas buscando
+    algo más robusto usa la librería Python ``bleach``, en especial el método
+    `clean`_ .
+
+.. _clean: http://bleach.readthedocs.org/en/latest/clean.html
+
+.. templatefilter:: time
+
+time
+----
+
+Formateas una fecha de acuerdo al formato dado.
+
+El formato puede ser predefinido con :setting:`TIME_FORMAT`, o con un formato
+personalizado, al igual que el filtro :tfilter:`date`. Nota que el formato
+predefinido es dependiente del valor local.
+
+Por ejemplo::
+
+    {{ valor|time:"H:i" }}
+
+Si el ``valor`` es equivalente a ``datetime.datetime.now()``, la salida será la
+cadena ``"01:23"``.
+
+Otro ejemplo:
+
+Asumiendo  que  :setting:`USE_L10N` sea ``True``  y :setting:`LANGUAGE_CODE` sea,
+por ejemplo ``"de"``, entonces para::
+
+    {{ valor|time:"TIME_FORMAT" }}
+
+La salida será la cadena  ``"01:23:00"`` (El formato especifico ``"TIME_FORMAT"``
+para el valor local  ``de`` en Django es  ``"H:i:s"``)
+
+El filtro ``time`` únicamente acepta parámetros en el formato de cadenas o
+strings que se relacionen con la hora, no con la fecha (por obvias razones). Si
+necesitas un formato para valores ``date`` usa el filtro :tfilter:`date`  en su
+lugar.
+
+Hay una excepción a la regla anterior: Cuando se pasa un valor ``datetime`` con
+información adjunta ``timezone``,  el filtro ``time`` acepta el formato
+``timezone`` específicamente los formatos ``'e'``, ``'O'`` , ``'T'`` y ``'Z'``.
+
+Cuando se usa sin un formato de cadenas::
+
+    {{ valor|time }}
+
+El formato definido con  :setting:`TIME_FORMAT` será usado si se aplica
+la ``localización``.
+
+.. templatefilter:: timesince
+
+timesince
+---------
+
+Formatea una fecha como un intervalo de tiempo (por ejemplo, "4 días, 6 horas").
+
+Acepta un argumento opcional, que es una variable con la fecha a usar como
+punto de referencia para calcular el intervalo (Si no se especifica, la
+referencia es el momento *actual*). Por ejemplo, si ``blog_date`` es una fecha
+con valor igual a la medianoche del 1 de junio de 2006, y ``comment_date`` es
+una fecha con valor las 08:00 horas del día 1 de junio de 2006, entonces
+lo siguiente devolverá "8 horas".::
+
+     {{ blog_date|timesince:comment_date }}
+
+Los minutos son la unidad más pequeña usada y "0 minutos" será devuelto por
+cualquier fecha que este en el futuro con relación al punto de comparación.
+
+.. templatefilter:: timeuntil
+
+timeuntil
+---------
+
+Es similar a ``timesince``, excepto en que mide el tiempo desde la fecha de
+referencia hasta la fecha dada. Por ejemplo, si hoy es 1 de junio de 2006 y
+``conference_date`` es una fecha cuyo valor es igual al 29 de junio de 2006,
+entonces ``{{ conference_date|timeuntil:from_date }}`` devolverá "4 semanas".
+
+Acepta un argumento opcional, que es una variable con la fecha a usar como
+punto de referencia para calcular el intervalo, si se quiere usar otra
+distinta del momento *actual*. Si ``from_date`` apunta al 22 de junio de
+2006, entonces ``{{ conference_date|timeuntil:from_date }}``
+devolvera "1 semana".::
+
+    {{ conference_date|timeuntil:from_date }}
+
+Los minutos son la unidad más pequeña usada y "0 minutos" será devuelto por
+cualquier fecha que este en el futuro con relación al punto de comparación.
+
+.. templatefilter:: title
+
+title
+-----
+
+Convierte una cadena de texto en forma de título, siguiendo las convenciones
+del idioma inglés (todas las palabras con la inicial en mayúscula).
+
+Por ejemplo::
+
+    {{ valor|titulo }}
+
+Si el ``valor`` es ``"mi PRIMER post"``, la salida será ``"Mi primer Post"``.
+
+.. templatefilter:: truncatechars
+
+truncatechars
+-------------
+
+Recorta la salida de una cadena de forma que tenga como máximo el número de
+caracteres que se indican en el argumento. Las cadenas truncadas terminarán con
+una secuencia de puntos de suspensión ("...").
+
+**Argumento:** El numero de caracteres a recortar
+
+Por ejemplo::
+
+    {{ valor|truncatechars:9 }}
+
+SI el ``valor`` es ``"Joel es un slug"``, la salida será ``"Joel e..."``.
+
+.. templatefilter:: truncatechars_html
+
+truncatechars_html
+------------------
+
+Parecida al filtro  :tfilter:`truncatechars`, excepto que es capaz de reconocer
+las etiquetas HTML y, por tanto, no deja etiquetas "huérfanas". Cualquier
+etiqueta que se hubiera abierto antes del punto de recorte es cerrada
+por el propio filtro.
+
+Por ejemplo::
+
+    {{ valor|truncatechars_html:9 }}
+
+Si el ``valor`` es ``"<p>Joel es un slug</p>"``, la salida será:
+``"<p>Joel i...</p>"``.
+
+Las nuevas líneas en el contenido del HTML serán conservadas.
+
+
+.. templatefilter:: truncatewords
+
+truncatewords
+-------------
+
+Recorta la salida de forma que tenga como máximo el número de palabras
+que se indican en el argumento.
+
+**Argumento**: El numero de palabras a recortar o truncar
+
+Por ejemplo::
+
+    {{ valor|truncatewords:2 }}
+
+Si el ``valor`` es ``"Joel es un slug"``, la salida será: ``"Joel es ..."``.
+
+Las nuevas líneas en la cadena serán removidas.
+
+.. templatefilter:: truncatewords_html
+
+truncatewords_html
+------------------
+
+Es similar a :tfilter:`truncatewords`, excepto que es capaz de reconocer las
+etiquetas HTML y, por tanto, no deja etiquetas "huérfanas". Cualquier
+etiqueta que se hubiera abierto antes del punto de recorte es cerrada
+por el propio filtro.
+
+Es menos eficiente que :tfilter:`truncatewords`, así que debe ser usado solamente
+si sabemos que en la entrada va texto HTML.
+
+Por ejemplo::
+
+    {{ valor|truncatewords_html:2 }}
+
+Si el ``valor`` es ``"<p>Joel es un slug</p>"``, la salida será:
+``"<p>Joel es ...</p>"``.
+
+Las nuevas líneas en el contenido HTML serán conservadas.
+
+.. templatefilter:: upper
+
+upper
+-----
+
+Convierte una cadena o string a mayúsculas.
+
+Por ejemplo::
+
+    {{ valor|upper }}
+
+If ``valor`` is ``"Joel es un slug"``, la salida será: ``"JOEL ES UN SLUG"``.
+
+.. templatefilter:: urlencode
+
+urlencode
+---------
+
+Escapa la entrada de forma que pueda ser utilizado dentro de una URL.
+
+Por ejemplo::
+
+    {{ valor|urlencode }}
+
+Si el ``valor`` es "http://www.example.org/foo?a=b&c=d", la salida será:
+"http%3A//www.example.org/foo%3Fa%3Db%26c%3Dd".
+
+Opcionalmente podemos pasarle un argumento que contiene los carácteres que no
+deben ser ``escapados``. Si no se le provee, el carácter '/' es asumido como
+seguro. Una cadena vacía puede proveerse cuando *todos* los caracteres deben
+ser escapados. Por ejemplo::
+
+    {{ valor|urlencode:"" }}
+
+Si el ``valor`` es "http://www.example.org/", la salida será:
+"http%3A%2F%2Fwww.example.org%2F".
+
+.. templatefilter:: urlize
+
+urlize
+------
+
+Convierte URLs y direcciones de email en texto a enlaces HTML.
+
+Esta plantilla de etiqueta funciona en enlaces que contienen prefijos como
+``http://``, ``https://``, o ``www.``. Por ejemplo, ``http://goo.gl/aia1t``
+será convertido, pero ``goo.gl/aia1t`` no.
+
+También soporta links, únicamente en el nivel superior de dominios (``.com``,
+``.edu``, ``.gov``, ``.int``, ``.mil``, ``.net``, y ``.org``). Por ejemplo
+funciona con ``djangoproject.com``.
+
+Por ejemplo::
+
+    {{ valor|urlize }}
+
+Si ``valor`` es "Check out www.djangoproject.com", la salida será
+"Check out <a href="http://www.djangoproject.com rel="nofollow">www.djangoproject.com</a>".
+
+.. templatefilter:: urlizetrunc
+
+urlizetrunc
+------------
+
+Convierte las direcciones URL de un texto en enlaces al igual que
+:tfilter:`urlize`, recortando la representación de la URL para que el número
+de caracteres sea como máximo el del argumento suministrado.
+
+**Argumento:** Numero de caracteres que el enlace de texto debe contener
+incluyendo los puntos suspensivos que agrega el filtro.
+
+Por ejemplo::
+
+    {{ valor|urlizetrunc:15 }}
+
+Si el ``valor`` es "Check out www.djangoproject.com", la salida será:
+"Check out <a href="http://www.djangoproject.com" rel="nofollow">www.djangopr...</a>".
+
+Al igual que :tfilter:`urlize`, solo se puede aplicar al texto plano.
+
+.. templatefilter:: wordcount
+
+wordcount
+---------
+
+Devuelve el número de palabras en la entrada.
+
+Por ejemplo::
+
+    {{ valor|wordcount }}
+
+Si el ``valor`` es ``"Joel es un slug"``, la salida será ``4``.
+
+.. templatefilter:: wordwrap
+
+wordwrap
 --------
 
-*Valor por omisión*: ``True``
+Ajusta la longitud del texto para las líneas se adecúen a la longitud
+especificada como argumento.
 
-Este Booleano especifica si debe activarse el sistema de internacionalización de
-Django (ver :doc:`Capítulo 18<chapter18>`). Provee una forma sencilla de desactivar la
-internacionalización, para mejorar el rendimiento. Si se asigna a esta variable
-el valor ``False`` Django realizará algunas optimizaciones de manera que no se
-cargue la maquinaria de internacionalización.
+**Argumento:** El numero de caracteres  a los cuales ajustar el texto.
 
-YEAR_MONTH_FORMAT
------------------
+Por ejemplo::
 
-*Valor por omisión*: ``'F Y'``
+    {{ valor|wordwrap:5 }}
 
-El formato a usar por omisión para los campos de fecha en las páginas lista de
-cambios en el sitio de administración de Django -- y, posiblemente, por otras
-partes del sistema-  en los casos en los que sólo se muestran el mes y el año.
-Acepta el mismo formato que la etiqueta ``now`` ver Apéndice F).
+Si el ``valor`` es ``Joel es un slug``, la salida será::
 
-Por ejemplo, cuando se está filtrando una página lista de cambios de la aplicación de administración
-de Django mediante un detalle de fecha, la cabecera de un mes determinado
-muestra el mes y el año. Los distintos locales tienen diferentes formatos. Por
-ejemplo, el Inglés de EUA usaría "January 2006" mientras que otro locale podría
-usar "2006/January".
+    Joel
+    is a
+    slug
 
-Ver también ``DATE_FORMAT``, ``DATETIME_FORMAT``, ``TIME_FORMAT`` y
-``MONTH_DAY_FORMAT``.
+.. templatefilter:: yesno
+
+yesno
+-----
+
+Dada una serie de textos que se asocian a los valores de ``True``, ``False`` y
+(opcionalmente) ``None``, devuelve uno de esos textos según el valor de la
+entrada. Véase la siguiente tabla:
+
+Por ejemplo::
+
+    {{ valor|yesno:"yeah,no,maybe" }}
+
+.. table::  Ejemplos del filtro yesno
+
+    ==========  ======================  ========================================
+      Valor       Argumento               Salida
+    ==========  ======================  ========================================
+     ``True``    ``"yeah,no,maybe"``     ``yeah``
+
+     ``False``   ``"yeah,no,maybe"``     ``no``
+
+     ``None``    ``"yeah,no,maybe"``     ``maybe``
+
+      ``None``    ``"yeah,no"``           ``"no"`` (considera ``None`` como
+                                          ``False`` si no se asigna ningún
+                                          texto a ``None``.
+    ==========  ======================  ========================================
+
+Filtros y etiquetas de internacionalización
+===========================================
+
+Django proporciona una serie de etiquetas y filtros que controlan cada aspecto
+de la :doc:`Internacionalizacion </chapter19>` en las plantillas. Permiten
+mantener de forma granular las traducciones, el formato, y las conversiones de
+las zonas horarias.
+
+i18n
+----
+
+Esta libreria permite especificar el texto traducible en las plantillas. Para
+usarla asegúrate que :setting:`USE_I18N` este establecido en ``True``, luego
+cárgala con ``{% load i18n %}``.
+
+l10n
+----
+
+Esta libreria proporciona control sobre los valores de ``localización`` en las
+plantillas. Únicamente necesitas cargar esta libreria usando
+``{% load l10n %}``, pero necesitas que  :setting:`USE_L10N` a ``True`` de modo
+que  la localización este activa de forma predeterminada.
+
+tz
+--
+
+Esta libreria proporciona control sobre las conversiones de zonas horario en las
+plantillas, tal como ``l10n``, únicamente necesitas cargar la libreria usando
+``{% load tz %}`` pero necesitas que  :setting:`USE_TZ` sea ``True`` de modo
+que  la conversión  este activa de forma predeterminada.
+
+Otras etiquetas y filtro
+========================
+
+Django viene además con unas par de bibliotecas, que permiten usar otras
+etiquetas,  que es necesario habilitar explícitamente en :setting:`INSTALLED_APPS`
+para usarlas en las plantillas con la etiqueta  :ttag:`{% load %}<load>`.
+
+django.contrib.humanize
+-----------------------
+
+Un conjunto de filtros de plantillas, útiles para darle un toque humano a los
+datos.
+
+django.contrib.webdesign
+------------------------
+
+Una colección de etiquetas de plantilla, que pueden ser útiles en el diseño
+de sitios web, tal como la generación de texto del tipo: ``Lorem Ipsum``.
+
+.. templatetag:: static
+
+.. highlight:: html+django
+
+static
+------
+
+Para enlazar los archivos estáticos que se guardan en :setting:`STATIC_ROOT`
+Django usa la etiqueta :ttag:`static`. Puedes usar esta etiqueta de plantilla
+independientemente de que uses :class:`~django.template.RequestContext` o no.::
+
+    {% load static %}
+    <img src="{% static "imagenes/hola.jpg" %}" alt="Hola!" />
+
+Puedes usarla para enlazar y consumir diferentes variables de contexto, además
+de los estándar, por ejemplo asumiendo que la variable ``hoja_de_estilo.css`` sea
+pasada a la plantilla::
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static hoja_de_estilo.css %}"
+        type="text/css" media="screen" />
+
+Si lo que quieres es recuperar la URL estática para mostrarla, puedes usar una
+llamada un poco diferente:
+
+.. code-block:: html+django
+
+    {% load static %}
+    {% static "imagenes/hola.jpg" as mifoto %}
+    <img src="{{ mifoto }}"></img>
+
+.. highlight:: html+django
+
+get_static_prefix
+^^^^^^^^^^^^^^^^^
+
+Es preferible que uses la etiqueta de plantilla :ttag:`static`, pero si
+necesitas tener un control más exacto sobre cómo y dónde :setting:`STATIC_URL`
+es inyectado en la  plantilla, puedes usar la etiqueta de plantilla:
+:ttag:`get_static_prefix`::
+
+    {% load static %}
+    <img src="{% get_static_prefix %}imagenes/hi.jpg" alt="Hi!" />
+
+Existe una segunda forma de poder utilizarla y así evitar el procesamiento extra
+si necesitas usar varias veces, múltiples valores::
+
+    {% load static %}
+    {% get_static_prefix as STATIC_PREFIX %}
+
+    <img src="{{ STATIC_PREFIX }}imagenes/hi.jpg" alt="Hi!" />
+    <img src="{{ STATIC_PREFIX }}imagenes/hi2.jpg" alt="Hello!" />
+
+.. templatetag:: get_media_prefix
+
+get_media_prefix
+^^^^^^^^^^^^^^^^
+
+.. highlight:: html+django
+
+Parecida a la etiqueta :ttag:`get_static_prefix`, ``get_media_prefix`` puebla
+la variable de la plantilla  con el prefijo de ``media`` :setting:`MEDIA_URL`.
+
+Por ejemplo::
+
+    <script type="text/javascript" charset="utf-8">
+        var media_path = '{% get_media_prefix %}';
+    </script>
+

@@ -1,744 +1,1149 @@
-==================
-Capítulo 13: Cache
-==================
-
-Los sitios Web estáticos, en las que las páginas son servidas directamente a la
-Web, generan un gran escalamiento. Una gran desventaja en los sitios Web
-dinámicos, es precisamente eso, que son dinámicos. Cada vez que un usuario pide
-una página, el servidor realiza una serie de cálculos--consultas a una base de
-datos, renderizado de plantillas, lógica de negocio--para crear la página que el
-visitante finalmente ve. Esto es costoso desde el punto de vista del
-sobreprocesamiento.
-
-Para la mayoría de las aplicaciones Web, esta sobrecarga no es gran cosa. La
-mayoría de las aplicaciones Web no son el washingtonpost.com o Slashdot; son de
-un tamaño pequeño a uno mediano, y con poco tráfico. Pero para los sitios con
-tráfico de medio a alto es esencial bajar lo más que se pueda el costo de
-procesamiento. He aquí cuando realizar un cache es de mucha ayuda.
-
-*Colocar en cache* algo significa guardar el resultado de un cálculo costoso
-para que no se tenga que realizar el mismo la próxima vez. Aquí mostramos un
-pseudocódigo explicando como podría funcionar esto para una página Web
-dinámica::
-
-    dada una URL, buscar esa página en la cache
-    si la página está en la cache:
-        devolver la página en cache
-    si no:
-        generar la página
-        guardar la página generada en la cache (para la próxima vez)
-        devolver la página generada
-
-Django incluye un sistema de cache robusto que permite guardar páginas
-dinámicas para que no tengan que ser recalculadas cada vez que se piden. Por
-conveniencia, Django ofrece diferentes niveles de granularidad de cache. Puedes
-dejar en cache el resultado de diferentes vistas, sólo las piezas que son
-difíciles de producir, o se puede dejar en cache el sitio entero.
-
-Django también trabaja muy bien con caches de "upstream", tales como Squid
-(http://www.squid-cache.org/) y las caches de los navegadores. Estos son los
-tipos de cache que no controlas directamente pero a las cuales puedes proveerles
-algunas pistas (vía cabeceras HTTP) acerca de qué partes de tu sitio deben ser
-colocadas en cache y cómo.
-
-Sigue leyendo para descubrir como usar el sistema de cache de Django. Cuando tu
-sitio se parezca cada vez más a Slashdot, estarás contento de entender este
-material.
-
-Activar el Cache
-================
-
-El sistema de cache requiere sólo una pequeña configuración. A saber, tendrás
-que decirle donde vivirán los datos de tu cache, si es en una base de datos, en
-el sistema de archivos, o directamente en memoria. Esta es una decisión
-importante que afecta el rendimiento de tu cache (si, algunos tipos de cache son
-más rápidos que otros). La cache en memoria generalmente será mucho más rápida
-que la cache en el sistema de archivos o la cache en una base de datos, porque
-carece del trabajo de tocar los mismos.
-
-Tus preferencias acerca de la cache van en ``CACHE_BACKEND`` en tu archivo de
-configuración. Si usas cache y no especificas ``CACHE_BACKEND``, Django usará
-``simple:///`` por omisión. Las siguientes secciones explican todos los valores
-disponibles para ``CACHE_BACKEND``.
-
-Memcached
----------
-
-Por lejos la más rápida, el tipo de cache más eficiente para Django, Memcached
-es un framework de cache enteramente en memoria, originalmente desarrollado para
-manejar grandes cargas en LiveJournal (http://www.livejournal.com/) y
-subsecuentemente por Danga Interactive (http://danga.com/). Es usado por sitios
-como Slashdot y Wikipedia para reducir el acceso a bases de datos e incrementar
-el rendimiento dramáticamente.
-
-Memcached está libremente disponible en http://danga.com/memcached/. Corre como
-un demonio y se le asigna una cantidad específica de memoria RAM. Su
-característica principal es proveer una interfaz--una *super-liviana-y-rápida*
-interfaz--para añadir, obtener y eliminar arbitrariamente datos en la cache.
-Todos los datos son guardados directamente en memoria, por lo tanto no existe
-sobrecarga de uso en una base de datos o en el sistema de archivos.
-
-Después de haber instalado Memcached, es necesario que instales los *bindings*
-Python para Memcached, los cuales no vienen con Django. Dichos *bindings* vienen
-en un módulo de Python, ``memcache.py``, el cual está disponible en
-http://www.tummy.com/Community/software/python-memcached/.
-
-Para usar Memcached con Django, coloca ``CACHE_BACKEND`` como
-``memcached://ip:puerto/``, donde ``ip`` es la dirección IP del demonio de
-Memcached y ``puerto`` es el puerto donde Memcached está corriendo.
-
-En el siguiente ejemplo, Memcached está corriendo en localhost (127.0.0.1) en el
-puerto 11211::
-
-    CACHE_BACKEND = 'memcached://127.0.0.1:11211/'
-
-Una muy buena característica de Memcached es su habilidad de compartir la cache
-en varios servidores. Esto significa que puedes correr demonios de Memcached en
-diferentes máquinas, y el programa seguirá tratando el grupo de diferentes
-máquinas como una *sola* cache, sin la necesidad de duplicar los valores de la
-cache en cada máquina. Para sacar provecho de esta característica con Django,
-incluye todas las direcciones de los servidores en ``CACHE_BACKEND``, separados
-por punto y coma.
+﻿============================================
+Capítulo 13: Generación de contenido no HTML
+============================================
 
-En el siguiente ejemplo, la cache es compartida en varias instancias de
-Memcached en las direcciones IP 172.19.26.240 y 172.19.26.242, ambas en el
-puerto 11211::
+Usualmente cuando hablamos sobre desarrollo de sitios Web, hablamos de producir
+HTML. Por supuesto, hay mucho más que contenido HTML en la Web; la usamos para
+distribuir datos en todo tipo de formatos: RSS, PDFs, imágenes, y así
+sucesivamente.
 
-    CACHE_BACKEND = 'memcached://172.19.26.240:11211;172.19.26.242:11211/'
+Hasta ahora nos hemos concentrado en el caso común de la producción de HTML,
+pero en ese capítulo tomaremos un desvío y veremos **cómo usar Django para
+producir otro tipo de contenido**.
 
-En el siguiente ejemplo, la cache es compartida en diferentes instancias de
-Memcached corriendo en las direcciones IP 172.19.26.240 (puerto 11211),
-172.19.126.242 (puerto 11212) y 172.19.26.244 (puerto 11213)::
+Django posee varias herramientas útiles que puedes usar para producir algunos
+tipos comunes de contenido no HTML:
 
-    CACHE_BACKEND = 'memcached://172.19.26.240:11211;172.19.26.242:11212;172.19.26.244:11213/'
+* *Feeds* de sindicación RSS/Atom
 
-Una última observación acerca de Memcached es que la cache basada en memoria
-tiene una importante desventaja. Como los datos de la cache son guardados en
-memoria, serán perdidos si los servidores se caen. Más claramente, la memoria no
-es para almacenamiento permanente, por lo tanto no te quedes solamente con una
-cache basada en memoria. Sin duda, *ninguno* de los sistemas de cache de Django
-debe ser utilizado para almacenamiento permanente--son todos una solución para
-la cache, no para almacenamiento--pero hacemos hincapié aquí porque la cache
-basada en memoria es particularmente temporaria.
+* Mapas de sitios haciendo uso de *Sitemaps* (un formato XML originalmente
+  desarrollado por Google que provee de ayuda a motores de búsqueda)
 
-Cache en Base de datos
-----------------------
+Examinaremos cada una de esas herramientas un poco más adelante, pero antes
+cubriremos los principios básicos.
 
-Para usar una tabla de una base de datos como cache, tienes que crear una tabla
-en tu base de datos y apuntar el sistema de cache de Django a ella.
+Lo básico: Vistas y tipos MIME
+==============================
 
-Primero, crea la tabla de cache corriendo el siguiente comando::
+¿Recuerdas esto del :doc:`capítulo 3<chapter03>`?
 
-    python manage.py createcachetable [nombre_tabla_cache]
+Una función vista, o una *vista* por abreviar, es simplemente una función en
+Python que recibe una petición Web y retorna una respuesta Web. Esta
+respuesta puede ser el contenido HTML de una página Web, una redirección, un
+error 404, un documento XML, una imagen... en realidad, cualquier cosa.
 
-Donde ``[nombre_tabla_cache]`` es el nombre de la tabla a crear. Este nombre
-puede ser cualquiera que desees, siempre y cuando sea un nombre válido para una
-tabla y que no esté ya en uso en tu base de datos. Este comando crea una única
-tabla en tu base de datos con un formato apropiado para el sistema de cache de
-Django.
+Más formalmente, una función *vista* Django *debe*
 
-Una vez que se hayas creado la tabla, coloca la propiedad ``CACHE_BACKEND`` como
-``"db://nombre_tabla"``, donde ``nombre_tabla`` es el nombre de la tabla en la
-base de datos. En el siguiente ejemplo, el nombre de la tabla para el cache es
-``mi_tabla_cache``::
+* Aceptar una instancia ``HttpRequest`` como primer argumento.
 
-    CACHE_BACKEND = 'db://mi_tabla_cache'
+* Retornar una instancia ``HttpRequestsponse`` como respuesta.
 
-El sistema de cache usará la misma base de datos especificada en el archivo de
-configuración. No podrás usar una base de datos diferente para tal.
+La clave para retornar contenido no HTML desde una vista reside en la
+clase ``HttpResponse``, específicamente en el argumento ``mimetype`` del
+constructor. Cambiando el tipo MIME, podemos indicarle al navegador que hemos
+retornado una respuesta en un formato diferente.
 
-Cache en Sistema de Archivos
-----------------------------
+Por ejemplo, veamos una vista que devuelve una imagen PNG. Para mantener las
+cosas sencillas, simplemente leeremos un fichero desde el disco::
 
-Para almacenar la cache en el sistema de archivos, coloca el tipo ``"file://"``
-en la propiedad ``CACHE_BACKEND``, especificando el directorio en tu sistema de
-archivos que debería almacenar los datos de la cache.
+    from django.http import HttpResponse
 
-Por ejemplo, para almacenar los datos de la cache en ``/var/tmp/django_cache``,
-coloca lo siguiente::
+    def mi_imagen(request):
+        datos_imagen = open("/ruta/a/mi/imagen.png", "rb").read()
+        return HttpResponse(datos_imagen, mimetype="imagen/png")
 
-    CACHE_BACKEND = 'file:///var/tmp/django_cache'
+¡Eso es todo! Si sustituimos la ruta de la imagen en la llamada a ``open()`` con
+la ruta a una imagen real, podemos usar esta vista bastante sencilla para servir
+una imagen, y el navegador la mostrará correctamente.
 
-Observa que hay tres barras invertidas en el comienzo del ejemplo anterior. Las
-primeras dos son para ``file://``, y la tercera es el primer caracter de la ruta
-del directorio, ``/var/tmp/django_cache``. Si estás en Windows, coloca la letra
-correspondiente al disco después de ``file://``, como aquí:: ``file://c:/foo/bar``.
+La otra cosa importante a tener presente es que los objetos ``HttpResponse``
+implementan el API estándar de Python para ficheros.  Esto significa que podemos
+usar una instancia de ``HttpResponse`` en cualquier lugar donde Python (o
+biblioteca de terceros) espera un fichero.
 
-La ruta del directorio debe ser *absoluta*--debe comenzar con la raíz de tu
-sistema de archivos. No importa si colocas una barra al final de la misma.
+Como un ejemplo de cómo funciona esto, veamos la producción de CSV con Django.
 
-Asegúrate que el directorio apuntado por esta propiedad exista y que pueda ser
-leído y escrito por el usuario del sistema usado por tu servidor Web para
-ejecutarse.
+Producción de CSV
+=================
 
-Continuando con el ejemplo anterior, si tu servidor corre como usuario
-``apache``, asegúrate que el directorio ``/var/tmp/django_cache`` exista y
-pueda ser leído y escrito por el usuario ``apache``.
+CSV es un formato de datos sencillo que suele ser usada por programas de hojas de
+cálculo. Básicamente es una serie de filas en una tabla, cada celda en la fila
+está separada por comas (CSV significa *comma-separated values*). Por ejemplo,
+aquí tienes una lista de pasajeros "problemáticos" en líneas aéreas en formato
+CSV::
 
-Cada valor de la cache será almacenado como un archivo separado conteniendo los
-datos de la cache serializados ("pickled"), usando el módulo Python ``pickle``.
-Cada nombre de archivo es una clave de la cache, modificado convenientemente
-para que pueda ser usado por el sistema de archivos.
-
-Cache en Memoria local
-----------------------
-
-Si quieres la ventaja que otorga la velocidad de la cache en memoria pero no
-tienes la capacidad de correr Memcached, puedes optar por el cache de
-memoria-local. Esta cache es por proceso y thread-safe, pero no es tan eficiente
-como Memcache dada su estrategia de bloqueo simple y reserva de memoria.
-
-Para usarla, coloca ``CACHE_BACKEND`` como ``'locmem:///'``, por ejemplo::
-
-    CACHE_BACKEND = 'locmem:///'
-
-Cache Simple (para desarrollo)
-------------------------------
-
-Una cache simple, y de un solo proceso en memoria, está disponible como
-``'simple:///'``, por ejemplo::
-
-    CACHE_BACKEND = 'simple:///'
-
-Esta cache apenas guarda los datos en proceso, lo que significa que sólo debe
-ser usada para desarrollo o testing.
-
-Cache Dummy (o estúpida)
-------------------------
-
-Finalmente, Django incluye una cache "dummy" que no realiza cache; sólo
-implementa la interfaz de cache sin realizar ninguna acción.
-
-Esto es útil cuando tienes un sitio en producción que usa mucho cache en varias
-partes y en un entorno de desarrollo/prueba en cual no quieres hacer cache. En
-ese caso, usa ``CACHE_BACKEND`` como ``'dummy:///'`` en el archivo de
-configuración para tu entorno de desarrollo, por ejemplo::
-
-    CACHE_BACKEND = 'dummy:///'
-
-Como resultado de esto, tu entorno de desarrollo no usará cache, pero tu entorno
-de producción si lo hará.
-
-Argumentos de CACHE_BACKEND
----------------------------
-
-Cada tipo de cache puede recibir argumentos. Estos son dados como una
-query-string en la propiedad ``CACHE_BACKEND``. Los argumentos válidos son:
-
-* ``timeout``: El tiempo de vida por omisión, en segundos, que usará la
-  cache. Este argumento tomará el valor de 300 segundos (5 minutos) si no se
-  lo especifica.
-
-* ``max_entries``: Para la cache simple, la cache de memoria local, y la
-  cache de base de datos, es el número máximo de entradas permitidas en la
-  cache a partir del cual los valores más viejos serán eliminados. Tomará un
-  valor de 300 si no se lo especifica.
-
-* ``cull_frequency``: La proporción de entradas que serán sacrificadas
-  cuando la cantidad de ``max_entries`` es alcanzada. La proporción real
-  es ``1/cull_frequency``, si quieres sacrificar la mitad de las entradas
-  cuando se llegue a una cantidad de ``max_entries`` coloca
-  ``cull_frequency=2``.
-
-  Un valor de ``0`` para ``cull_frequency`` significa que toda la cache será
-  limpiada cuando se llegue a una cantidad de entradas igual a
-  ``max_entries``. Esto hace que el proceso de limpieza de la cache sea *mucho*
-  más rápido pero al costo de perder más datos de la cache. Este argumento
-  tomará un valor de 3 si no se especifica.
-
-En este ejemplo, ``timeout`` se fija en ``60``::
-
-    CACHE_BACKEND = "locmem:///?timeout=60"
-
-En este ejemplo, ``timeout`` se fija en ``30`` y ``max_entries`` en ``400``::
-
-    CACHE_BACKEND = "locmem:///?timeout=30&max_entries=400"
-
-Tanto los argumentos desconocidos asi como los valores inválidos de argumentos
-conocidos son ignorados silenciosamente.
-
-La cache por sitio
-==================
-
-Una vez que hayas especificado ``CACHE_BACKEND``, la manera más simple de usar
-la cache es colocar en cache el sitio entero. Esto significa que cada página que
-no tenga parámetros GET o POST será puesta en cache por un cierto período de
-tiempo la primera vez que sean pedidas.
-
-Para activar la cache por sitio solamente agrega
-``'django.middleware.cache.CacheMiddleware'`` a la propiedad
-``MIDDLEWARE_CLASSES``, como en el siguiente ejemplo::
-
-    MIDDLEWARE_CLASSES = (
-        'django.middleware.cache.CacheMiddleware',
-        'django.middleware.common.CommonMiddleware',
-    )
+    Año, Pasajeros problemáticos
+    1995,146
+    1996,184
+    1997,235
+    1998,200
+    1999,226
+    2000,251
+    2001,299
+    2002,273
+    2003,281
+    2004,304
+    2005,203
 
 .. admonition:: Nota:
 
-    El orden de ``MIDDLEWARE_CLASSES`` importa. Mira la sección "`Orden de
-    MIDDLEWARE_CLASSES`_" más adelante en este capítulo.
+    El listado anterior,  contiene números reales; cortesía de la
+    Administración Federal de Aviación (FAA) de E.E.U.U. Tomados de:
+    http://www.faa.gov/data_statistics/passengers_cargo/unruly_passengers/.
 
-Luego, agrega las siguientes propiedades en el archivo de configuración de
-Django:
+Aunque CSV parezca simple, no es un formato que ha sido definido formalmente.
+Diferentes programas producen y consumen diferentes variantes de CSV,
+haciendo un poco complicado usarlo.  Afortunadamente, Python incluye una
+biblioteca estándar para CSV,  llamada ``csv``, que es bastante robusta.
 
-    * ``CACHE_MIDDLEWARE_SECONDS``: El tiempo en segundos que cada página será
-      mantenida en la cache.
+Debido a que el módulo ``csv`` opera sobre objetos de forma similar a como lo
+hace con ficheros, es muy fácil usar un ``HttpResponse`` en lugar de un fichero::
 
-    * ``CACHE_MIDDLEWARE_KEY_PREFIX``: Si la cache es compartida a través de
-      múltiples sitios usando la misma instalación Django, coloca esta propiedad
-      como el nombre del sitio, u otra cadena que sea única para la instancia de
-      Django, para prevenir colisiones. Usa una cadena vacía si no te interesa.
+    import csv
+    from django.http import HttpResponse
 
-La cache middleware coloca en cache cada página que no tenga parámetros GET o
-POST. Esto significa que si un usuario pide una página y pasa parámetros GET en
-la cadena de consulta, o pasa parámetros POST, la cache middleware *no*
-intentará obtener la versión en cache de la página. Si intentas usar la cache
-por sitio ten esto en mente cuando diseñes tu aplicación; no uses URLs con
-cadena de consulta, por ejemplo, a menos que sea aceptable que tu aplicación no
-coloque en cache esas páginas.
+    # Numero de pasajeros problemáticos en el periodo 1995-2005. En una
+    # aplicacion real estos datos probablemente vendrían de una base de datos
+    # o de algún otro tipo de almacenamiento externo.
+    PASAJEROS_PROBLEMATICOS = [146,184,235,200,226,251,299,273,281,304,203]
 
-Esta cache middleware admite otras característica,
-``CACHE_MIDDLEWARE_ANONYMOUS_ONLY``. Si defines esta característica, y la
-defines como ``True``, la cache middleware sólo colocará en cache pedidos
-anónimos (p.e.: pedidos hechos por un usuario no logueado). Esta es una manera
-simple y efectiva de deshabilitar la cache para cualquier página de algún
-usuario específico, como la interfaz de administración de Django. Ten en cuenta
-que si usas ``CACHE_MIDDLEWARE_ANONYMOUS_ONLY``, deberás asegurarte que has
-activado ``AuthenticationMiddleware`` y que ``AuthenticationMiddleware``
-aparezca antes de ``CacheMiddleware`` en tus ``MIDDLEWARE_CLASSES``
+    def pasajeros_problematicos_csv(request):
+        # Crea un objeto HttpResponse con las cabeceras del CVS correctas.
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename=problematicos.csv'
 
-Finalmente, nota que ``CacheMiddleware`` automáticamente coloca unos pocos
-encabezados en cada ``HttpResponse``:
+        # Crea el escritor CSV usando un HttpResponse como "archivo."
+        writer = csv.writer(response)
+        writer.writerow(['Año', 'Pasajeros problemáticos en aerolínea'])
+        for (year, num) in zip(range(1995, 2006), PASAJEROS_PROBLEMATICOS):
+            writer.writerow([year, num])
 
-* Coloca el encabezado ``Last-Modified`` con el valor actual de la fecha y
-  hora cuando una página (aún no en cache) es requerida.
+        return response
 
-* Coloca el encabezado ``Expires`` con el valor de la fecha y hora más el
-  tiempo definido en ``CACHE_MIDDLEWARE_SECONDS``.
+El código y los comentarios deberían ser bastante claros, pero hay unas pocas
+cosas que merecen mención especial:
 
-* Coloca el encabezado ``Cache-Control`` para otorgarle una vida máxima a la
-  página, como se especifica en ``CACHE_MIDDLEWARE_SECONDS``.
+* Se le da a la respuesta el tipo MIME ``text/csv`` (en lugar del tipo
+  predeterminado ``text/html``). Esto le dice a los navegadores que el
+  documento es un fichero CSV.
 
-Cache por vista
-===============
+* La respuesta obtiene una cabecera ``Content-Disposition`` adicional, la
+  cual contiene el nombre del fichero CSV. Esta cabecera (bueno, la parte
+  "adjunta") le indicará al navegador que solicite la ubicación donde
+  guardará el fichero (en lugar de simplemente mostrarlo). El nombre de
+  fichero es arbitrario; llámalo como quieras. Será usado por los navegadores
+  en el cuadro de diálogo "Guardar como..."
 
-Una forma más granular de usar el framework de cache es colocar en cache la
-salida de las diferentes vistas. Esto tiene el mismo efecto que la cache por
-sitio (incluyendo la omisión de colocar en cache los pedidos con parámetros GET
-y POST). Se aplica a cualquier vista que tu especifiques, en vez de aplicarse al
-sitio entero.
+* Usar el API de generación de CSV es sencillo: basta pasar ``response``
+  como primer argumento a ``csv.writer``. La función ``csv.writer`` espera
+  un "objeto de tipo fichero", y los objetos de tipo ``HttpResponse`` se ajustan
+  a ello.
 
-Haz esto usando un *decorador*, que es un wrapper de la función de la vista que
-altera su comportamiento para usar la cache. El decorador de cache por vista es
-llamado ``cache_page`` y se encuentra en el módulo
-``django.views.decorators.cache``, por ejemplo:
+* Por cada fila en el fichero CSV, invocamos a ``writer.writerow``,
+  pasándole un objeto iterable como una lista o una tupla.
+
+* El módulo CSV se encarga de poner comillas por ti, así que no tendrás que
+  preocuparte por *escapar* caracteres en las cadenas que tengan comillas o
+  comas en su interior. Limítate a pasar la información a ``writerow()``,
+  que hará lo correcto.
+
+Este es el patrón general que usarás siempre que necesites retornar contenido no
+HTML: crear un objeto ``HttpResponse`` de respuesta (con un tipo MIME especial),
+pasárselo a algo que espera un fichero, y luego devolver la respuesta.
+
+Veamos unos cuantos ejemplos más.
+
+Generar PDFs
+============
+
+El Formato Portable de Documentos (PDF, por Portable Document Format) es un
+formato desarrollado por Adobe que es usado para representar documentos
+imprimibles, completos con formato perfecto hasta un nivel de detalle medido en
+pixels, tipografías empotradas y gráficos de vectores en 2D. Puedes pensar en un
+documento PDF como el equivalente digital de un documento impreso;
+efectivamente, los PDFs se usan normalmente cuando se necesita entregar un
+documento a alguien para que lo imprima.
+
+Puedes generar PDFs fácilmente con Python y Django gracias a la excelente
+biblioteca open source ReportLab (http://www.reportlab.org/rl_toolkit.html).
+La ventaja de generar ficheros PDFs dinámicamente es que puedes crear PDFs a
+medida para diferentes propósitos -- supongamos, para diferentes usuarios u
+diferentes contenidos.
+
+Por ejemplo, hemos usado Django y ReportLab en KUSports.com para generar
+programas de torneos de la NCAA personalizados, listos para ser impresos.
+
+Instalar ReportLab
+------------------
+
+Antes de que puedas generar ningún PDF, deberás instalar ReportLab.
+Esto es usualmente muy simple: sólo descarga e instala la biblioteca desde
+http://www.reportlab.org/downloads.html.
+
+La guía del usuario (naturalmente sólo disponible en formato PDF) en
+http://www.reportlab.org/rsrc/userguide.pdf contiene instrucciones de
+instalación adicionales.
+
+.. admonition:: Nota:
+
+    Si estás usando una distribución moderna de Linux, podrías desear comprobar
+    con la utilidad de manejo de paquetes de software antes de instalar
+    ReportLab. La mayoría de los repositorios de paquetes ya incluyen ReportLab.
+
+    Por ejemplo, si estás usando la (excelente) distribución Ubuntu, un simple
+    ``apt-get install python-reportlab`` hará la magia necesaria.
+
+Prueba tu instalación importando la misma en el intérprete interactivo Python::
+
+    >>> import reportlab
+
+Si ese comando no lanza ningún error, la instalación funcionó.
+
+Escribir tu Vista
+-----------------
+
+Del mismo modo que CSV, la generación de PDFs en forma dinámica con Django es
+sencilla porque la API ReportLab actúa sobre objetos similares a ficheros
+(*file-like* según la jerga Python).
+
+A continuación un ejemplo "Hola Mundo":
 
 .. code-block:: python
 
-    from django.views.decorators.cache import cache_page
+  from reportlab.pdfgen import canvas
+  from django.http import HttpResponse
 
-    def my_view(request, param):
+  def hola_pdf(request):
+      # Crea un objeto HttpResponse  con las cabeceras PDF correctas.
+      response = HttpResponse(content_type='application/pdf')
+      response['Content-Disposition'] = 'attachment; filename=hello.pdf'
+
+      # Crea un objeto PDF, usando el objeto como un "archivo".
+      p = canvas.Canvas(response)
+
+      # Dibuja cosas en el PDF. Aqui se genera el PDF.
+      # Consulta la documentación de ReportLab para una lista completa de funcionalidades.
+      p.drawString(50, 800, "Hola mundo.")
+
+      # Cierra el objeto PDF limpiamente y termina.
+      p.showPage()
+      p.save()
+      return response
+
+El codigo y los comentarios deberían explicarse por sí mismos, pero son necesarias alguna
+notas adicionales:
+
+* Usamos el tipo MIME ``application/pdf``. Esto le indica al navegador que
+  el documento es un fichero PDF y no un fichero HTML. Si no incluyes esta
+  información, los navegadores web probablemente interpretarán la respuesta
+  como HTML, lo que resultará en jeroglíficos en la ventana del navegador.
+
+* La respuesta obtiene una cabecera ``Content-Disposition`` adicional, la
+  cual contiene el nombre de el archivo PDF. Este nombre es arbitrario: llámalo
+  como quieras. Solo será usado para abrir el cuadro de dialogo en el navegador
+  "Guardar como..."
+
+* En el ejemplo le agregamos ``attachment``  a la  respuesta de la cabecera
+  ``Content Disposition`` al nombre del archivo. Esto fuerza a los navegadores Web
+  a presentar una ventana de diálogo/confirmación para manipular el documento por
+  defecto usando un programa externo, sin embargo  si dejamos en blanco ``attachment``
+  el navegador manipulará el PDF usando cualquier plugin que haya sido configurada
+  para manejar este tipo de archivos dentro del navegador, el codigo es el siguiente::
+
+    response['Content-Disposition'] = 'filename="archivo.pdf"'
+
+* Interactuar con la API ReportLab es sencillo: sólo pasa ``response`` como
+  el primer argumento a ``canvas.Canvas``. La clase ``Canvas`` espera un objeto
+  tipo archivo, por lo que los objetos ``HttpResponse`` se ajustarán a la norma.
+
+* Todos los métodos de generación de PDF subsecuentes son llamados
+  pasándoles el objeto PDF (en este caso ``p``), no ``response``.
+
+* Finalmente, es importante llamar a los métodos ``showPage()`` y ``save()``
+  del objeto PDF (de otra manera obtendrás un fichero PDF corrupto).
+
+PDFs complejos
+--------------
+
+Si estás creando un documento PDF complejo considera usar la biblioteca
+``io`` como un lugar de almacenamiento temporal para tu fichero PDF.
+Esta biblioteca provee una interfaz para tratar con archivos tipo objetos
+muy eficiente.
+
+En este ejemplo, obtenemos datos directamente de la base de datos y los
+usamos para crear un PDF usando el modulo ``io`` ::
+
+  from io import BytesIO
+  from reportlab.pdfgen import canvas
+  from django.http import HttpResponse
+
+  from biblioteca.models import Libro
+
+  def crear_pdf(request, pk):
+      # Obtenemos un queryset, para un determinado libro usando pk.
+      try:
+          libro = Libro.objects.get(id=pk)
+      except ValueError:
+          raise Http404()
+      # Creamos un objeto HttpResponse con las cabeceras del PDF correctas.
+      response = HttpResponse(content_type='application/pdf')
+      # Nos aseguramos que el navegador lo abra directamente.
+      response['Content-Disposition'] = 'filename="archivo.pdf"'
+      buffer = BytesIO()
+
+      # Creamos el objeto PDF, usando el objeto BytesIO como si fuera un "archivo".
+      p = canvas.Canvas(buffer)
+
+      # Dibujamos cosas en el PDF. Aqui se genera el PDF.
+      # Consulta la documentación de ReportLab para una lista completa de funcionalidades.
+      p.drawString(100, 800, "Titulo: " + str(libro.titulo))
+      p.drawString(100, 780, "Editor: " + str(libro.editor))
+      p.drawString(100, 760, "Portada " )
+      p.drawImage(str(libro.portada.url), 100, 150, width=400, height=600)
+
+      # Cerramos limpiamente el objeto PDF.
+      p.showPage()
+      p.save()
+
+      # Traemos  el valor de el bufer BytesIO y escribimos la respuesta.
+      pdf = buffer.getvalue()
+      buffer.close()
+      response.write(pdf)
+      return response
+
+Ahora solo enlazamos la vista a la ULRconf asi::
+
+    from django.conf.urls import url
+    from biblioteca import views
+
+    urlpatterns =[
+    #...
+    url(r'^exportar/(?P<pk>[0-9]+)/$', views.crear_pdf, name='exportar-pdf'),
+    ]
+
+Otras posibilidades
+===================
+
+Hay infinidad de otros tipos de contenido que puedes generar en Python.
+Aquí tenemos algunas otras ideas y las bibliotecas que podrías usar para
+implementarlas:
+
+* *Archivos ZIP*: La biblioteca estándar de Python contiene el módulo
+  ``zipfile``, que puede escribir y leer ficheros comprimidos en formato ZIP.
+  Puedes usarla para guardar ficheros bajo demanda, o quizás comprimir
+  grandes documentos cuando lo requieran. De la misma manera puedes generar
+  ficheros en formato TAR usando el módulo de la biblioteca estándar ``tarfile``.
+
+* *Imágenes Dinámicas*: Biblioteca Python de procesamiento de Imágenes
+  (Python Imaging Library, PIL; http://www.pythonware.com/products/pil/) es
+  una herramienta fantástica para producir imágenes (PNG, JPEG, GIF, y
+  muchas más). Puedes usarla para escalar automáticamente imágenes para
+  generar miniaturas, agrupar varias imágenes en un solo marco e incluso
+  realizar procesamiento de imágenes directamente en la web.
+
+* *Ploteos y Gráficos*: Existe un número importante de increíblemente
+  potentes bibliotecas de Python para Ploteo y Gráficos, que se pueden
+  utilizar para generar mapas, dibujos, ploteos y gráficos. Es imposible
+  listar todas las bibliotecas, así que resaltamos algunas de ellas:
+
+* ``matplotlib`` (http://matplotlib.sourceforge.net/) puede usarse para
+  generar ploteos de alta calidad al estilo de los generados con MatLab
+  o Mathematica.
+
+* ``pygraphviz`` (https://networkx.lanl.gov/wiki/pygraphviz), una
+  interfaz con la herramienta Graphviz (http://graphviz.org/), puede
+  usarse para generar diagramas estructurados de grafos y redes.
+
+En general, cualquier biblioteca Python capaz de escribir en un fichero puede ser
+utilizada dentro de Django. Las posibilidades son realmente interminables.
+
+Ahora que hemos visto lo básico de generar contenido no-HTML, avancemos al
+siguiente nivel de abstracción. Django incluye algunas herramientas agradables e
+ingeniosas para generar cierto tipo de contenido no-HTML.
+
+El Framework de Feeds de Sindicación
+====================================
+
+Django incluye un framework para la generación y sindicación de *feeds* de alto
+nivel que permite crear feeds RSS_ y Atom_ de manera sencilla.
+
+.. _RSS: http://www.whatisrss.com/
+.. _Atom: http://tools.ietf.org/html/rfc4287
+
+
+.. admonition:: ¿Qué es RSS? ¿Qué es Atom?
+
+    RSS y Atom son formatos basados en XML que se puede utilizar para actualizar
+    automáticamente los "feeds" con el contenido de tu sitio. Lee más sobre RSS
+    en http://www.whatisrss.com/, y obtén información sobre Atom en
+    http://www.atomenabled.org/.
+
+Para crear cualquier feed de sindicación, todo lo que necesitas hacer es escribir una
+pequeña clase Python. Puedes crear tantos feeds como desees.
+
+El framework de generación de feeds de alto nivel es una vista enganchada a
+``/feeds/`` por convención. Django usa el final de la URL (todo lo que este
+después de ``/feeds/``) para determinar qué feed retornar.
+
+Para crear un feed, necesitas escribir una clase ``Feed`` y hacer referencia a
+la misma en tu URLconf (Consulta los capítulos 3 y 8 para más información sobre
+URLconfs).
+
+Inicialización
+--------------
+
+Para activar los feeds de sindicación en tu sitio Django, agrega lo siguiente en
+tu URLconf::
+
+    from biblioteca.feeds import UltimosLibros
+
+    urlpatterns =[
+        url(r'^feeds/$', UltimosLibros()),
+    ]
+
+Esa línea le indica a Django que use el framework RSS para captar las URLs que
+comienzan con ``"feeds/"``. (Puedes cambiar ``"feeds/"`` por algo que se adapte
+mejor a tus necesidades).
+
+Deves tener en cuenta que:
+
+* El feed es representado por la clase ``UltimosLibros`` el cual por convención  y claridad residirá en un nuevo archivo llamado ``feeds.py``, en el mismo nivel
+  que ``models.py``, aunque puede residir en cualquier parte del árbol de código.
+
+* La clase ``Feed`` debe ser una subclase de ``django.contrib.syndication.feeds.Feed``.
+
+* Una vez que este configurada la URL, necesitas definir la propia clase ``Feed``.
+  Puedes pensar en una clase Feed como un tipo de clase genérica.
+
+Una clase ``Feed`` es una simple clase Python que representa un feed de sindicación.
+Un feed puede ser simple (p. ej. "noticias del sitio", o una lista de las
+últimas entradas del blog) o más complejo (p. ej. mostrar todas las entradas de
+un blog en una categoría en particular, donde la categoría es variable).
+
+Un Feed simple
+--------------
+
+Siguiendo con el modelo creado en los capítulos anteriores, veamos ahora como
+crear un simple feed, que muestre los últimos cinco libros  agregados a nuestra
+aplicacion biblioteca.
+
+Empecemos por escribir la clase::
+
+    class UltimosLibrosFeed(Feed):
+        # FEED TYPE -- Opcional. Este debe ser una subclase de la clase
+        # django.utils.feedgenerator.SyndicationFeed. Este designa
+        # el tipo de feed a usar: RSS 2.0, Atom 1.0, etc. Si no se
+        # especifica el tipo de feed (feed_type), se asumirá que el tipo
+        # es RSS 2.0. Este debe aparecer en una clase, no en una instancia de
+        # una clase.
+
+        feed_type = feedgenerator.Rss201rev2Feed
+
+        title = "Feed libros publicados"
+        link = "/ultimos-libros/"
+        description = "Ultimos libros publicados en la biblioteca digital."
+
+        def items(self):
+            """
+            Retorna una lista de items para publicar en este feed.
+            """
+            return Libro.objects.order_by('-fecha_publicacion')[:5]
+
+        def item_title(self, item):
+            """
+            Toma un item, retornado por el método items(), y devuelve los item's
+            del titulo como cadena normales Python.
+            """
+            return item.titulo
+
+        def item_description(self, item):
+            """
+            Toma un item, retornado por el método items(), y devuelve los item's
+            con una descripción en forma de cadena normal de Python.
+            """
+            return item.descripcion
+
+        def item_link(self, item):
+            """
+            Toma un item, retornado por el método items(), y devuelve la URL de
+            los item's. Es usado solo si el modelo no tiene un método
+            get_absolute_url() definido.
+            """
+            return reverse('detalles-libro', args=[item.pk])
+
+        def item_enclosure_url(self, item):
+            """
+            Toma un item, retornado por el método items(), y devuelve los item's
+            adjuntos en la URL.
+            """
+            return item.portada.url
+
+        def item_enclosure_length(self, item):
+            """
+            Toma un item, retornado por el método items(), y devuelve el largo
+            de los item's  adjuntos.
+            """
+            return item.portada.size
+
+        item_enclosure_mime_type = "image/jpeg" # Definimos manualmente el tipo MIME.
+
+Para conectar la URL con el feed, usamos una instancia de un objeto Feed en la
+URLconf. Por ejemplo::
+
+  from django.conf.urls import url
+  from biblioteca.feeds import UltimosLibrosFeed
+
+  urlpatterns = [
+      # ...
+      url(r'^feeds/$', UltimosLibrosFeed()),
+      # ...
+  ]
+
+Las cosas importantes a tener en cuenta son:
+
+* La clase ``Feed`` es una subclase de ``django.contrib.syndication.views.Feed``.
+
+* ``title``, ``link``, y ``description`` corresponden a los elementos RSS
+  estándar ``<title>``, ``<link>``, y ``<description>`` respectivamente.
+
+* ``items()`` es simplemente un método que retorna una lista de objetos que
+  deben incluirse en el feed como elementos ``<item>``.  Aunque este ejemplo
+  retorna objetos ``NewsItem`` usando la API de base de datos de Django, no
+  es un requerimiento que ``items()`` deba retornar instancias de modelos.
+
+  Obtienes unos pocos bits de funcionalidad "gratis" usando los modelos de
+  Django, pero ``items()`` puede retornar cualquier tipo de objeto que
+  desees.
+
+Hay solamente un paso más. En un feed RSS, cada ``<item>`` posee ``<title>``,
+``<link>``, y ``<description>``. Por lo que es necesario decirle al framework
+qué datos debe poner en cada uno de los elementos.
+
+* Para especificar el contenido de ``<title>`` y ``<description>``,  Django
+  trata de llamar a los metodos ``item_title()`` e ``item_description()`` en la
+  clase Feed. Estos son pasados como simples parámetros item, el cual es el
+  objeto en sí mismo. También estos metodos son opcionales; por defecto la
+  representación Unicode del objeto es usado en ambos.
+
+* Para especificar contenido con algún formato en especifico para ``<title>`` y
+  ``<description>``, crea  plantillas Django (ver :doc:`capítulo 4<chapter04>`)
+  Puedes especificar la ruta  con los atributos ``title_template``  y
+  ``description_template`` en la clase Feed. El sistema RSS rende riza dicha
+  plantilla por cada ítem, pasándole dos  variables de contexto para plantillas:
+
+  * ``{{ obj }}``: El objeto actual (uno de los tantos que retorna en ``items()``).
+
+  * ``{{ site }}``: Un objeto ``django.models.core.sites.Site`` representa el
+    sitio actual. Esto es útil para ``{{ site.domain }}`` o ``{{
+    site.name }}``.
+
+  Si no creas una plantilla para el título o la descripción, el framework
+  utilizará la plantilla por omisión ``"{{ obj }}"`` -- exacto, la cadena
+  normal de representación del objeto.
+
+  También puedes cambiar los nombres de estas plantillas especificando
+  ``title_template`` y ``description_template`` como atributos de tu clase
+  ``Feed``.
+
+* Para especificar el contenido de ``<link>``, hay dos opciones. Por cada
+  ítem en ``items()``, Django primero tratará de ejecutar el método
+  ``get_absolute_url()`` en dicho objeto. Si dicho método no existe, entonces
+  trata de llamar al método ``item_link()`` en la clase ``Feed``, pasándole
+  un único parámetro, ``item``, que es el objeto en sí mismo.
+
+  Ambos metodos: ``get_absolute_url()`` y ``item_link()`` deben retornar la
+  URL del ítem como una cadena normal de Python.
+
+También es posible pasarle información adicional a ``title`` y a ``description``
+en las plantillas, si es que necesitas suministrar más información a las dos
+variables anteriores. Para hacerlo solo necesitas implementar el  método
+``get_context_data`` en la subclase Feed. Por ejemplo:
+
+.. code-block:: python
+
+  from django.contrib.syndication.views import Feed
+  from biblioteca.models import Libro
+
+  class UltimosLibrosFeed(Feed):
+
+      # NOMBRES PLANTILLAS -- Opcionales. Estas deben de ser cadenas de texto
+      # que representan el nombre de las plantillas que Django usara para
+      # renderizar el titulo y la descripción del los items del Feed.
+      # Ambos son opcionales. Si no se especifica una plantilla, se usara
+      # el método item_title() o item_description() en su lugar.
+
+      title = "Mis Libros" # Hard-coded titulo.
+      description_template = "feeds/libros.html" # La plantilla
+
+      def items(self):
+          """
+          Retorna una lista de items para publicar en este feed.
+          """
+          return Libro.objects.order_by('-fecha_publicacion')[:5]
+
+      def get_context_data(self, **kwargs):
+          """
+          Toma la petición actual y los argumentos de la URL, y
+          devuelve un objeto que representa este feed. Levanta una
+          excepción del tipo django.core.exceptions.ObjectDoesNotExist
+          si existe algún error.
+          """
+          context = super(UltimosLibros, self).get_context_data(**kwargs)
+          context['foo'] = 'bar'
+          return context
+
+Y en la plantilla:
+
+.. code-block:: python
+
+    Algo como {{ foo }}: {{ obj.description }}
+
+Este método será llamado una vez por cada item en la lista de libros devuelta
+por items() con los siguientes argumentos clave:
+
+``item`` El actual item. Por razones de compatibilidad, el nombre de esta
+variable de contexto es ``{{ obj }}.``
+
+``obj`` El objeto devuelto por el método ``get_object()``. Por defecto este no
+es expuesto en las plantillas para evitar confusión con ``get_object()``. (ver
+arriba), pero se puede usar en la implementacion de el método
+
+``get_context_data()``.
+
+``site``  El sitio actual, descrito anteriormente.
+
+``request`` La petición actual o ``request``.
+
+Como puedes ver el comportamiento de  ``get_context_data()`` es muy similar al
+de las vistas genéricas - solo llamas a la super clase() para extraer datos del
+contexto de la clase padre, agregas datos y devuelves el diccionario modificado.
+
+Un Feed más complejo
+--------------------
+
+El framework también permite la creación de feeds más complejos mediante el uso
+de parámetros.
+
+Por ejemplo, http://chicagocrime.org ofrece un feed RSS de los crímenes recientes de
+cada departamento de policía en Chicago. Sería tonto crear una clase ``Feed``
+separada por cada departamento; esto puede violar el principio "No te repitas a
+ti mismo" (DRY, por "Do not repeat yourself") y crearía acoplamiento entre los
+datos y la lógica de programación.
+
+En su lugar, el framework de feeds de sindicación te permite crear feeds genéricos
+que retornan items basados en la información de la URL del feed.
+
+En chicagocrime.org, los feed por departamento de policía son accesibles mediante
+URLs como estas:
+
+* ``/beats/613/rss/`` : Retorna los crímenes más recientes para el departamento 0613
+* ``/beats/1424/rss/``: Retorna los crímenes más  recientes para el departamento 1424
+
+Estas funcionan con una URLconf parecida a esta::
+
+    url(r'^beats/(?P<beat_id>[0-9]+)/rss/$', BeatFeed()),
+
+El slug aquí es ``"beats"``. El framework de sindicación ve las partes extra en
+la URL tras el slug -- ``0613`` y ``1424`` -- y te provee un gancho (*hook*)
+para que le indiques qué significa cada uno de esas partes y cómo influyen en
+los items que serán publicados en el feed.
+
+Tal como en una vista, los argumentos en la URL son pasados mediante el método
+``get_object()``  junto con el objeto de la petición.
+
+Un ejemplo aclarará esto. Este es el código para los feeds por departamento::
+
+  from django.contrib.syndication.views import FeedDoesNotExist
+  from django.shortcuts import get_object_or_404
+
+  class BeatFeed(Feed):
+      description_template = 'feeds/beat_description.html'
+
+      def get_object(self, request, beat_id):
+          return get_object_or_404(Beat, pk=beat_id)
+
+      def title(self, obj):
+          return "Police beat central: Crimes for beat %s" % obj.beat
+
+      def link(self, obj):
+          return obj.get_absolute_url()
+
+      def description(self, obj):
+          return "Crimes recently reported in police beat %s" % obj.beat
+
+      def items(self, obj):
+          return Crime.objects.filter(beat=obj).order_by('-crime_date')[:30]
+
+Para generar los feed’s <title>, <link> y <description>, Django usa los metodos
+title(), link() y description(). En el ejemplo anterior, estos eran atributos
+simples de una clase, pero este ejemplo ilustra que estos pueden ser tanto
+métodos o cadenas.  Por cada ``title``, ``link`` y ``description``, Django sigue
+el siguiente algoritmo.
+
+#. Primero trata de llamar al método, pasando el argumento ``obj``, donde
+   ``obj`` es el objeto retornado por ``get_object()``.
+
+#. Si eso falla, trata de llamar al método sin argumentos.
+
+#. Si eso falla, usa los atributos de clase.
+
+Nota que ``items()`` en el ejemplo también toma como argumento a ``obj``. El
+algoritmo para ``items`` es el mismo que se describe en el paso anterior
+-- primero prueba ``items(obj)``, después ``items()``, y finalmente un atributo
+de clase ``items`` (que debe ser una lista).
+
+Estamos usando una plantilla muy simple para las descripciones de los ``ìtems``,
+como esta::
+
+    {{ obj.description }}
+
+Especificar el tipo de Feed
+---------------------------
+
+Por omisión, el framework de feeds de sindicación produce RSS 2.0. Para cambiar
+eso, agrega un atributo ``feed_type`` a la clase ``Feed``::
+
+    from django.utils.feedgenerator import Atom1Feed
+
+    class MiFeed(Feed):
+        feed_type = Atom1Feed
+
+Observa que asignas como valor de ``feed_type`` una clase, no una instancia.
+Los tipos de feeds disponibles actualmente se muestran en la siguiente tabla.
+
+.. table:: Tabla 13-1. Tipos de Feeds disponibles en Django.
+
+    ===================================================  ======================
+        Clase Feed                                           Formato
+    ===================================================  ======================
+    ``django.utils.feedgenerator.Rss201rev2Feed``        RSS 2.01 (por defecto)
+
+    ``django.utils.feedgenerator.RssUserland091Feed``    RSS 0.91
+
+    ``django.utils.feedgenerator.Atom1Feed``             Atom 1.0
+    ===================================================  ======================
+
+Adjuntos
+--------
+
+Para especificar archivos adjuntos o *enclosures* (p. ej. recursos multimedia
+asociados al ítem del feed tales como feeds de podcasts MP3, imagenes), usa los
+metodos ``item_enclosure_url``, ``item_enclosure_length``, e
+``item_enclosure_mime_type``,  por ejemplo:
+
+.. code-block:: python
+
+    from django.contrib.syndication.views import Feed
+    from biblioteca.models import Libro
+
+    class UltimosLibrosConAdjuntos(Feed):
+        title = "Ultimas portadas de Libros"
+        link = "/feeds/ejemplo-con-adjuntos/"
+
+        def items(self):
+            return Libro.objects.all()[:30]
+
+        def item_enclosure_url(self, item):
+            return item.portada.url
+
+        def item_enclosure_length(self, item):
+            return item.portada.size
+
+        item_enclosure_mime_type = "image/jpeg" # Definimos un mime-type
+
+Esto asume, por supuesto que estamos usando el modelo ``Libro`` el cual contiene
+un campo llamado portada (que es una imagen), al cual se accede a su URL
+mediante ``portada.url`` y mediante ``portada.size`` obtenemos el tamaño en
+bytes.
+
+Idioma
+------
+
+Los Feeds creados por el framework de sindicación incluyen automáticamente la
+etiqueta ``<language>`` (RSS 2.0) o el atributo ``xml:lang`` apropiados (Atom).
+Esto viene directamente de tu variable de configuración ``LANGUAGE_CODE``.
+
+URLs
+----
+
+El método/atributo ``link`` puede retornar tanto una URL absoluta (p. ej.
+``"/blog/"``) como una URL con el nombre completo de dominio y protocolo (p. ej.
+``"http://www.example.com/blog/"``). Si ``link`` no retorna el dominio,
+el framework de sindicación insertará el dominio del sitio actual, acorde a
+la variable de configuración ``SITE_ID``.
+
+Los feeds Atom requieren un ``<link rel="self">`` que define la ubicación actual
+del feed. El framework de sindicación completa esto automáticamente, usando el
+dominio del sitio actual acorde a la variable de configuración ``SITE_ID``.
+
+Publicar feeds Atom y RSS conjuntamente
+---------------------------------------
+
+Algunos desarrolladores prefieren ofrecer ambas versiones Atom *y*
+RSS de sus feeds. Esto es simple de hacer con Django: solamente crea una subclase de tu clase
+``feed`` y asigna a ``feed_type`` un valor diferente. Luego actualiza tu URLconf
+para agregar una versión extra. Aquí un ejemplo usando completo::
+
+    from django.contrib.syndication.views import Feed
+    from django.utils.feedgenerator import Atom1Feed
+
+    from biblioteca.models import Libro
+
+    class UltimosLibrosFeed(Feed):
+        title = "Feed libros publicados"
+        link = "/ultimos-libros/"
+        description = "Ultimos libros publicados en la biblioteca digital."
+
+        def items(self):
+            return Libro.objects.order_by('-fecha_publicacion')[:5]
+
+    class UltimosLibrosAtom(UltimosLibrosFeed):
+        feed_type = Atom1Feed
+        subtitle = UltimosLibrosFeed.description
+
+.. test ok!
+
+Y este es el URLconf asociado::
+
+    from django.conf.urls import url
+    from biblioteca.feeds import UltimosLibrosFeed, UltimosLibrosAtom
+
+    urlpatterns = [
         # ...
-    my_view = cache_page(my_view, 60 * 15)
-
-De otra manera, si estás usando la versión 2.4 o superior de Python, puedes usar
-la sintaxis de un decorador. El siguiente ejemplo es equivalente al anterior::
-
-    from django.views.decorators.cache import cache_page
-
-    @cache_page(60 * 15)
-    def my_view(request, param):
+        url(r'^feeds/$', UltimosLibrosFeed()),
+        url(r'^atom/$', UltimosLibrosAtom()),
         # ...
+    ]
 
-``cache_page`` recibe un único argumento: el tiempo de vida en segundos de la
-cache. En el ejemplo anterior, el resultado de ``my_view()`` estará en cache
-unos 15 minutos. (toma nota de que lo hemos escrito como ``60 * 15`` para que
-sea entendible. ``60 * 15`` será evaluado como ``900``--que es igual a 15
-minutos multiplicados por 60 segundos cada minuto.)
+.. test ok!
 
-La cache por vista, como la cache por sitio, es indexada independientemente de
-la URL. Si múltiples URLs apuntan a la misma vista, cada URL será puesta en
-cache separadamente.
-Continuando con el ejemplo de ``my_view``, si tu URLconf se ve como::
-
-    urlpatterns = ('',
-        (r'^foo/(\d{1,2})/$', my_view),
-    )
-
-los pedidos a ``/foo/1/`` y a ``/foo/23/`` serán puestos en cache separadamente,
-como es de esperar. Pero una vez que una misma URL es pedida (p.e.
-``/foo/23/``), los siguientes pedidos a esa URL utilizarán la cache.
-
-Especificar la cache por vista en URLconf
------------------------------------------
-
-Los ejemplos en la sección anterior tienen codificado [#]_ que la vista se
-coloque en cache, porque ``cache_page`` modifica la función ``my_view`` ahí
-mismo. Este enfoque acopla tu vista con el sistema de cache, lo
-cual no es lo ideal por varias razones. Por ejemplo, puede que quieras reusar
-las funciones de la vista en otro sitio sin cache, o puede que quieras
-distribuir las vistas a gente que quiera usarlas sin que sean colocadas en la
-cache. La solución para estos problemas es especificar la cache por vista en
-URLconf en vez de especificarla junto a las vistas mismas.
-
-Hacer eso es muy fácil: simplemente envuelve la función de la vista con
-``cache_page`` cuando hagas referencia a ella en URLconf. Aquí el URLconf como
-estaba antes::
-
-    urlpatterns = ('',
-        (r'^foo/(\d{1,2})/$', my_view),
-    )
-
-Ahora la misma cosa con ``my_view`` envuelto con ``cache_page``::
-
-    from django.views.decorators.cache import cache_page
-
-    urlpatterns = ('',
-        (r'^foo/(\d{1,2})/$', cache_page(my_view, 60 * 15)),
-    )
-
-Si tomas este enfoque no olvides de importar ``cache_page`` dentro de tu
-URLconf.
-
-La API de cache de bajo nivel
-=============================
-
-Algunas veces, colocar en cache una página entera no te hace ganar mucho y es,
-de hecho, un inconveniente excesivo.
-
-Quizás, por ejemplo, tu sitio incluye una vista cuyos resultados dependen de
-diversas consultas costosas, lo resultados de las cuales cambian en intervalos
-diferentes. En este caso, no sería ideal usar la página entera en cache que la
-cache por sitio o por vista ofrecen, porque no querrás guardar en cache todo el
-resultado (ya que los resultados cambian frecuentemente), pero querrás guardar
-en cache los resultados que rara vez cambian.
-
-Para casos como este, Django expone una simple API de cache de bajo nivel, la
-cual vive en el módulo ``django.core.cache``. Puedes usar la API de cache de
-bajo nivel para almacenar los objetos en la cache con cualquier nivel de
-granularidad que te guste. Puedes colocar en la cache cualquier objeto Python
-que pueda ser serializado de forma segura: strings, diccionarios, listas de
-objetos del modelo, y demás. (La mayoría de los objetos comunes de Python pueden
-ser serializados; revisa la documentación de Python para más información acerca
-de serialización).  N.T.: pickling
-
-Aquí vemos como importar la API::
-
-    >>> from django.core.cache import cache
-
-La interfaz básica es ``set(key, value, timeout_seconds)`` y ``get(key)``:
-
-.. code-block:: python 
-
-    >>> cache.set('my_key', 'hello, world!', 30)
-    >>> cache.get('my_key')
-    'hello, world!'
-
-El argumento ``timeout_seconds`` es opcional y obtiene el valor del argumento
-``timeout`` de ``CACHE_BACKEND``, explicado anteriormente, si no se lo
-especifica.
-
-Si el objeto no existe en la cache, o el sistema de cache no se puede alcanzar,
-``cache.get()`` devuelve ``None``:
-
-.. code-block:: python 
-
-    # Wait 30 seconds for 'my_key' to expire...
-
-    >>> cache.get('my_key')
-    None
-
-    >>> cache.get('some_unset_key')
-    None
-
-Te recomendamos que no almacenes el valor literal ``None`` en la cache, porque
-no podrás distinguir entre tu valor ``None`` almacenado y el valor que devuelve
-la cache cuando no encuentra un objeto.
-
-``cache.get()`` puede recibir un argumento por omisión. Esto especifica qué
-valor debe devolver si el objeto no existe en la cache::
-
-    >>> cache.get('my_key', 'has expired')
-    'has expired'
-
-Para obtener múltiples valores de la cache de una sola vez, usa
-``cache.get_many()``. Si al sistema de cache le es posible, ``get_many()``
-tocará la cache sólo una vez, al contrario de tocar la cache por cada valor.
-``get_many()`` devuelve un diccionario con todas las key que has pedido que
-existen en la cache y todavía no han expirado::
-
-    >>> cache.set('a', 1)
-    >>> cache.set('b', 2)
-    >>> cache.set('c', 3)
-    >>> cache.get_many(['a', 'b', 'c'])
-    {'a': 1, 'b': 2, 'c': 3}
-
-Si una key no existe o ha expirado, no será incluida en el diccionario. Lo
-siguiente es una continuación del ejemplo anterior::
-
-    >>> cache.get_many(['a', 'b', 'c', 'd'])
-    {'a': 1, 'b': 2, 'c': 3}
-
-Finalmente, puedes eliminar keys explícitamente con ``cache.delete()``. Esta es
-una manera fácil de limpiar la cache para un objeto en particular::
-
-    >>> cache.delete('a')
-
-``cache.delete()`` no tiene un valor de retorno, y funciona de la misma manera
-si existe o no un valor en la cache.
-
-Caches upstream
-===============
-
-Este capítulo se ha enfocado en la cache de tus *propios* datos. Pero existe
-otro tipo de cache que es muy importante para los desarrolladores web: la cache
-realizada por los *upstream*. Estos son sistemas que colocan en cache páginas
-aún antes de que estas sean pedidas a tu sitio Web.
-
-Aquí hay algunos ejemplos de caches para upstream:
-
-* Tu ISP puede tener en cache algunas páginas, si tu pides una página de
-  http://example.com/, tu ISP te enviará la página sin tener que acceder a
-  example.com directamente. Los responsables de example.com no tienen idea
-  que esto pasa; el ISP se coloca entre example.com y tu navegador,
-  manejando todo lo que se refiera a cache transparentemente.
-
-* Tu sitio en Django puede colocarse detrás de un *cache proxy*, como
-  Squid Web Proxy Cache (http:://www.squid-cache.org/), que coloca en
-  cache páginas para un mejor rendimiento. En este caso, cada pedido será
-  controlado por el proxy antes que nada, y será pasado a tu aplicación sólo
-  si es necesario.
-
-* Tu navegador también pone páginas en un cache. Si una página Web envía
-  unos encabezados apropiados, tu navegador usará su copia de la cache local
-  para los siguientes pedidos a esa página, sin siquiera hacer nuevamente
-  contacto con la página web para ver si esta ha cambiado.
-
-La cache de upstream es un gran beneficio, pero puede ser peligroso. El
-contenido de muchas páginas Web pueden cambiar según la autenticación que se
-haya realizado u otras variables, y los sistemas basados en almacenar en cache
-según la URL pueden exponer datos incorrectos o delicados a diferentes
-visitantes de esas páginas.
-
-Por ejemplo, digamos que manejas un sistema de e-mail basado en Web, el
-contenido de la "bandeja de entrada" obviamente depende de que usuario esté
-logueado. Si el ISP hace caching de tu sitio ciegamente, el primer usuario que
-ingrese al sistema compartirá su bandeja de entrada, que está en cache, con los
-demás usuarios del sistema. Eso, definitivamente no es bueno.
-
-Afortunadamente, el protocolo HTTP provee una solución a este problema. Existen
-un número de encabezados HTTP que indican a las cache de upstream que
-diferencien sus contenidos de la cache dependiendo de algunas variables, y para
-que algunas páginas particulares no se coloquen en cache. Veremos algunos de
-estos encabezados en las secciones que siguen.
-
-Usar el encabezado Vary
------------------------
-
-El encabezado ``Vary`` define cuales encabezados debería tener en cuenta un
-sistema de cache cuando construye claves de su cache. Por ejemplo, si el
-contenido de una página Web depende de las preferencias de lenguaje del usuario,
-se dice que la página "varía según el lenguaje".
-
-Por omisión, el sistema de cache de Django crea sus claves de cache usando la
-ruta que se ha requerido (p.e.: ``"/stories/2005/jun/23/bank_robbed/"``). Esto
-significa que cada pedido a esa URL usará la misma versión de cache,
-independientemente de las características del navegador del cliente, como las
-cookies o las preferencias del lenguaje. Sin embargo, si esta página produce
-contenidos diferentes basándose en algunas cabeceras del request--como las
-cookies, el lenguaje, o el navegador--necesitarás usar el encabezado ``Vary``
-para indicarle a la cache que esa página depende de esas cosas.
-
-Para hacer esto en Django, usa el decorador ``vary_on_headers`` como sigue:
-
-.. code-block:: python 
-
-    from django.views.decorators.vary import vary_on_headers
-
-    # Python 2.3 syntax.
-    def my_view(request):
-        # ...
-    my_view = vary_on_headers(my_view, 'User-Agent')
-
-    # Python 2.4+ decorator syntax.
-    @vary_on_headers('User-Agent')
-    def my_view(request):
-        # ...
-
-En este caso, el mecanismo de cache (como middleware) colocará en cache una
-versión distinta de la página para cada tipo de user-agent.
-
-La ventaja de usar el decorador ``vary_on_headers`` en vez de fijar manualmente
-el encabezado ``Vary`` (usando algo como ``response['Vary'] = 'user-agent'``) es
-que el decorador *agrega* al encabezado ``Vary`` (el cual podría ya existir), en
-vez de fijarlo desde cero y potencialmente sobrescribir lo que ya había ahí.
-
-Puedes pasar múltiples encabezados a ``vary_on_headers()``:
-
-.. code-block:: python 
-
-    @vary_on_headers('User-Agent', 'Cookie')
-    def my_view(request):
-        # ...
-
-Esto le dice a la cache de upstream que diferencie *ambos*, lo que significa que
-cada combinación de una cookie y un navegador obtendrá su propio valor en cache.
-Por ejemplo, un pedido con navegador ``Mozilla`` y una cookie con el valor
-``foo=bar`` será considerada diferente a un pedido con el navegador ``Mozilla``
-y una cookie con el valor ``foo=ham``.
-
-Como las variaciones con las cookies son tan comunes existe un decorador
-``vary_on_cookie``. Las siguientes dos vistas son equivalentes:
-
-.. code-block:: python 
-
-
-    @vary_on_cookie
-    def my_view(request):
-        # ...
-
-    @vary_on_headers('Cookie')
-    def my_view(request):
-        # ...
-
-El encabezado que le pasas a ``vary_on_headers`` no diferencia mayúsculas de
-minúsculas; ``"User-Agent"`` es lo mismo que ``"user-agent"``.
-
-También puedes usar ``django.utils.cache.patch_vary_headers`` como función de
-ayuda. Esta función fija o añade al ``Vary header``, por ejemplo:
-
-.. code-block:: python 
-
-    from django.utils.cache import patch_vary_headers
-
-    def my_view(request):
-        # ...
-        response = render_to_response('template_name', context)
-        patch_vary_headers(response, ['Cookie'])
-        return response
-
-``patch_vary_headers`` obtiene una instancia de ``HttpResponse`` como su primer
-argumento y una lista/tupla de nombres de encabezados, sin diferenciar
-mayúsculas de minúsculas, como su segundo argumento.
-
-Otros Encabezados de cache
---------------------------
-
-Otro problema con la cache es la privacidad de los datos y donde deberían
-almacenarse los datos cuando se hace un vuelco de la cache.
-
-El usuario generalmente se enfrenta con dos tipos de cache: su propia cache de
-su navegador (una cache privada) y la cache de su proveedor (una cache pública).
-Una cache pública es usada por múltiples usuarios y controlada por algunos
-otros. Esto genera un problema con datos sensibles--no quieres que, por ejemplo,
-el número de tu cuenta bancaria sea almacenado en una cache pública. Por lo que
-las aplicaciones Web necesitan una manera de indicarle a la cache cuales datos
-son privados y cuales son públicos.
-
-La solución es indicar que la copia en cache de una página es "privada". Para
-hacer esto en Django usa el decorador de vista ``cache_control``:
-
-.. code-block:: python 
-
-    from django.views.decorators.cache import cache_control
-
-    @cache_control(private=True)
-    def my_view(request):
-        # ...
-
-Este decorador se encarga de enviar los encabezados HTTP apropiados detrás de
-escena.
-
-Existen otras pocas maneras de controlar los parámetros de cache. Por ejemplo,
-HTTP permite a las aplicaciones hacer lo siguiente:
-
-    * Definir el tiempo máximo que una página debe estar en cache.
-
-    * Especificar si una cache debería comprobar siempre la existencia de nuevas
-      versiones, entregando unicamente el contenido de la cache cuando no
-      hubiesen cambios.  (Algunas caches pueden entregar contenido aun si la
-      página en el servidor ha cambiado, simplemente porque la copia en cache
-      todavía no ha expirado.)
-
-En Django, utiliza el decorador ``cache_control`` para especificar estos
-parámetros de la cache. En el siguiente ejemplo, ``cache_control`` le indica a
-la cache revalidarse en cada acceso y almacenar versiones en cache hasta
-3.600 segundos:
-
-.. code-block:: python 
-
-    from django.views.decorators.cache import cache_control
-    @cache_control(must_revalidate=True, max_age=3600)
-    def my_view(request):
-        ...
-
-Cualquier directiva ``Cache-Control`` de HTTP válida es válida en
-``cache_control()``.
-Aquí hay una lista completa:
-
-    * ``public=True``
-    * ``private=True``
-    * ``no_cache=True``
-    * ``no_transform=True``
-    * ``must_revalidate=True``
-    * ``proxy_revalidate=True``
-    * ``max_age=num_seconds``
-    * ``s_maxage=num_seconds``
-
-
-.. admonition:: Tip
-
-    Para una explicación de las directivas ``Cache-Control`` de HTTP, lea las
-    especificaciones en
-    http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.9.
-
-El middleware de caching ya fija el encabezado ``max-age`` con el valor de
-``CACHE_MIDDLEWARE_SETTINGS``. Si utilizas un valor propio de ``max_age`` en
-un decorador ``cache_control``, el decorador tendrá precedencia, y los
-valores del encabezado serán fusionados correctamente.
-
-Otras optimizaciones
+El framework Sitemap
 ====================
 
-Django incluye otras piezas de middleware que pueden ser de ayuda para
-optimizar el rendimiento de tus aplicaciones:
+Un *sitemap* es un fichero XML en tu sitio web que le indica a los indexadores
+de los motores de búsqueda cuan frecuentemente cambian tus páginas así como la
+"importancia" relativa de ciertas páginas en relación con otras (siempre
+hablando de páginas de tu sitio). Esta información ayuda a los motores de
+búsqueda a indexar tu sitio.
 
-* ``django.middleware.http.ConditionalGetMiddleware`` agrega soporte para
-  navegadores modernos para condicionar respuestas GET basadas en los
-  encabezados ``ETag`` y ``Las-Modified``.
+Por ejemplo, esta es una parte del sitemap del sitio web de Django
+(http://www.djangoproject.com/sitemap.xml):
 
-* ``django.middleware.gzip.GZipMiddleware`` comprime las respuestas para
-  todos los navegadores modernos, ahorrando ancho de banda y tiempo de
-  transferencia.
+.. code-block:: html
 
-Orden de MIDDLEWARE_CLASSES
-===========================
+    <?xml version="1.0" encoding="UTF-8"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url>
+        <loc>http://www.djangoproject.com/documentation/</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.5</priority>
+      </url>
+      <url>
+        <loc>http://www.djangoproject.com/documentation/0_90/</loc>
+        <changefreq>never</changefreq>
+        <priority>0.1</priority>
+      </url>
+      ...
+    </urlset>
 
-Si utilizas ``CacheMiddleware``, es importante colocarlas en el lugar
-correcto dentro de la propiedad ``MIDDLEWARE_CLASSES``, porque el middleware
-de cache necesita conocer los encabezados por los cuales cambiar el
-almacenamiento en la cache.
+Para más información sobre sitemaps, vea http://www.sitemaps.org/.
 
-Coloca el ``CacheMiddleware`` después de cualquier middleware que pueda agregar algo
-al encabezado ``Vary``, incluyendo los siguientes:
+El framework sitemap de Django automatiza la creación de este fichero XML si
+lo indicas expresamente en el código Python. Para crear un sitemap, debes
+simplemente escribir una clase ``Sitemap`` y hacer referencia a la misma en tu
+URLconf.
 
-* ``SessionMiddleware``, que agrega ``Cookie``
-* ``GZipMiddleware``, que agrega ``Accept-Encoding``
+Instalación
+-----------
+
+Para instalar la aplicación sitemap, sigue los siguientes pasos:
+
+#. Agrega ``'django.contrib.sitemaps'`` a tu variable de configuración
+   ``INSTALLED_APPS``.
+
+#. Asegúrate de que
+   ``'django.template.loaders.app_directories.Loader'`` está en
+   tu variable de configuración ``TEMPLATE_LOADERS``. Por omisión se encuentra
+   activado, por lo que los cambios son necesarios solamente si modificaste
+   dicha variable de configuración.
+
+#. Asegúrate de que tienes instalado el framework sites
+
+.. Admonition:: Nota:
+
+    La aplicación sitemap no instala tablas en la base de datos. La única razón
+    de que esté en ``INSTALLED_APPS`` es que el cargador de plantillas
+    ``Loader()`` pueda encontrar las plantillas incluidas.
+
+Inicialización
+--------------
+
+Para activar la generación del sitemap en tu sitio Django, agrega la siguiente
+línea a tu URLconf::
+
+    from django.contrib.sitemaps.views import sitemap
+
+    urlpatterns =[
+        url(r'^sitemap\.xml$', sitemap, {'sitemaps': sitemaps},
+            name='django.contrib.sitemaps.views.sitemap')
+    ]
+
+Esta línea le dice a Django que construya un sitemap cuando un cliente accede
+a ``/sitemap.xml``.
+
+El nombre del fichero sitemap no es importante, pero la ubicación sí lo es. Los
+motores de búsqueda solamente indexan los enlaces en tu sitemap para el nivel de
+URL actual y anterior. Por ejemplo, si ``sitemap.xml`` reside en tu directorio
+principal, el mismo puede hacer referencia a cualquier URL en tu sitio. Pero si
+tu sitemap reside en ``/content/sitemap.xml``, solamente podrá hacer referencia
+a URLs que comiencen con ``/content/``.
+
+La vista sitemap toma un argumento extra: ``{'sitemaps': sitemaps}``.
+``sitemaps`` debe ser un diccionario que mapee una etiqueta corta de sección (p.
+ej. ``blog`` o ``consulta``) a tu clase ``Sitemap`` (p.e., ``BlogSitemap`` o
+``NewsSitemap``).
+
+También puede mapear una *instancia* de una clase ``Sitemap`` (p. ej.
+``GenericSitemap(alguna_var)``) en el mismo archivo ``urls.py``.
+
+Clases Sitemap
+--------------
+
+Una clase ``Sitemap`` es simplemente una clase Python que representa una
+"sección" de entradas en tu sitemap. Por ejemplo, una clase ``Sitemap`` puede
+representar todas las entradas de tu weblog, y otra puede representar todos los
+eventos de tu calendario.
+
+En el caso más simple, todas estas secciones se unen en un único ``sitemap.xml``,
+pero también es posible usar el framework para generar un índice sitemap que
+haga a referencia ficheros sitemap individuales, uno por sección (describiéndolo
+sintéticamente).
+
+Las clases ``Sitemap`` debe ser una subclase de ``django.contrib.sitemaps.Sitemap``.
+Estas pueden residir en cualquier parte del árbol de código.
+
+Por ejemplo, asumamos que posees un sistema llamado biblioteca (si haz seguido
+los ejemplos ya tienes uno), con un modelo ``Autor``, y quieres que tu sitemap
+incluya todos los enlaces a los autores.
+
+Tu clase ``Sitemap`` debería verse así:
+
+.. code-block:: python
+
+    from django.contrib.sitemaps import Sitemap
+    from biblioteca.models import Autor
+
+    class SitemapAutores(Sitemap):
+        changefreq = "monthly"
+        priority = 0.5
+
+        def items(self):
+            return Autor.objects.all()
+
+        def lastmod(self, items):
+            return items.ultimo_acceso
+
+Y solo necesitas anclar la clase ``SitemapAutores``  creada a la URLconf,  asi:
+
+.. code-block:: python
+
+    from django.conf.urls import url
+    from django.contrib.sitemaps.views import sitemap
+
+    from biblioteca.sitemap import SitemapAutores
+
+    urlpatterns =[
+        url(r'^sitemap\.xml$', sitemap, {'sitemaps': {'sitemaps': SitemapAutores}}),
+        ]
+
+Declarar un ``Sitemap`` debería verse muy similar a declarar un ``Feed``; esto
+es justamente un objetivo del diseño.
+
+De forma similar a las clases ``Feed``, los miembros de ``Sitemap`` pueden ser
+métodos o atributos. Consulta la sección "`Un feed más complejo`_" para obtener
+más información sobre cómo funciona.
+
+Una clase ``Sitemap`` puede definir los siguientes métodos/atributos:
+
+* ``items`` (**requerido**): Provee una lista de objetos. Al framework no le
+  importa que *tipo* de objeto es; todo lo que importa es que los objetos
+  sean pasados a los métodos ``location()``, ``lastmod()``,
+  ``changefreq()``, y ``priority()``.
+
+* ``location`` (opcional): Provee la URL absoluta para el objeto dado. La "URL
+  absoluta" significa una URL que no incluye el protocolo o el dominio.
+
+  Estos son algunos ejemplos:
+
+  * Bien: ``'/foo/bar/'``
+  * Mal: ``'example.com/foo/bar/'``
+  * Mal: ``'http://example.com/foo/bar/'``
+
+  Si ``location`` no es provisto, el framework llamará al método
+  ``get_absolute_url()`` en cada uno de los objetos retornados por ``items()``.
+
+* ``lastmod`` (opcional): La fecha de "última modificación" del objeto, como
+  un objeto ``datetime`` de Python.
+
+* ``changefreq`` (opcional): Cuán a menudo el objeto cambia. Los valores
+  posibles (según indican las especificaciones de Sitemaps) son:
+
+  * ``'always'``
+  * ``'hourly'``
+  * ``'daily'``
+  * ``'weekly'``
+  * ``'monthly'``
+  * ``'yearly'``
+  * ``'never'``
+
+* ``priority`` (opcional): Prioridad sugerida de indexado entre ``0.0``
+  y ``1.0``. La prioridad por omisión de una página es ``0.5``; ver la
+  documentación de http://sitemaps.org para más información de cómo
+  funciona ``priority``.
+
+Accesos directos
+----------------
+
+El framework sitemap provee un conjunto de clases para los casos más comunes.
+Describiremos estos casos en las secciones a continuación.
+
+FlatPageSitemap
+~~~~~~~~~~~~~~~
+
+La clase ``django.contrib.sitemaps.FlatPageSitemap`` apunta a todas las páginas
+planas definidas para el sitio actual y crea una entrada en el sitemap. Estas
+entradas incluyen solamente el atributo ``location`` -- no ``lastmod``,
+``changefreq``, o ``priority``.
+
+Para más información sobre Páginas Planas  o "flatpages" consulta el
+:doc:`capítulo 14<chapter14>`.
+
+Sitemap Genérico
+~~~~~~~~~~~~~~~~
+
+La clase ``GenericSitemap`` trabaja de forma bastante sencilla.
+
+Para usarla, solo crea una instancia pasándola en una variable a ``sitemap`` en
+forma de diccionario. El único requerimiento es que el diccionario tenga una
+entrada ``queryset``. También debe poseer una entrada ``date_field`` que
+especifica un campo fecha para los objetos obtenidos del ``queryset``. Esto será
+usado por el atributo ``lastmod`` en el sitemap generado. También puedes pasar
+los argumentos palabra clave (*keyword*) ``priority`` y ``changefreq`` al
+constructor ``GenericSitemap`` para especificar dichos atributos para todas las
+URLs.
+
+Este es un ejemplo de URLconf parecido al anterior, solo que aquí estamos
+usando la clase genérica ``GenericSiteMap`` usando el mismo modelo ``Autor``.
+
+.. code-block::python
+
+    from django.conf.urls import url
+    from django.contrib.sitemaps import GenericSitemap
+    from django.contrib.sitemaps.views import sitemap
+
+    from biblioteca.models import Autor
+
+    consulta = {
+        'queryset': Autor.objects.all(), # Un queryset con todos los objetos del modelo.
+        'date_field': 'ultimo_acceso', # Un campo fecha.
+    }
+
+    sitemaps = {
+        'autores': GenericSitemap(consulta, priority=0.6, changefreq= 'always'),
+    }
+
+    urlpatterns =[
+        url(r'^sitemap\.xml$', sitemap, {'sitemaps': sitemaps},
+            name='django.contrib.sitemaps.views.sitemap')
+    ]
+
+
+Crear un índice Sitemap
+-----------------------
+
+El framework sitemap también tiene la habilidad de crear índices sitemap que
+hagan referencia a ficheros sitemap individuales, uno por cada sección definida
+en tu diccionario ``sitemaps``. Las única diferencias de uso son:
+
+* Usas dos vistas en tu URLconf:
+  ``django.contrib.sitemaps.views.index`` y
+  ``django.contrib.sitemaps.views.sitemap``.
+
+* La vista ``django.contrib.sitemaps.views.sitemap`` debe tomar un parámetro
+  que corresponde a una palabra clave, llamado ``section``. Por ejemplo:
+
+Así deberían verse las líneas relevantes en tu URLconf para el ejemplo anterior::
+
+    urlpatterns =[
+        #...
+
+        url(r'^sitemap3\.xml$','django.contrib.sitemaps.views.index',
+            {'sitemaps': sitemaps}),
+        url(r'^sitemap-(?P<section>.+).xml$', 'django.contrib.sitemaps.views.sitemap',
+            {'sitemaps': sitemaps})
+    ]
+
+Esto genera automáticamente un fichero ``sitemap.xml`` que hace referencia a
+ambos ficheros ``sitemap-flatpages.xml`` y ``sitemap-autores.xml``. La clase
+``Sitemap`` y el diccionario ``sitemaps`` no cambian en absoluto.
+
+.. http://localhost:9000/sitemap-autores.xml
+
+Hacer ping a Google
+-------------------
+
+Puedes desear hacer un "ping" a Google cuando tu sitemap cambia, para hacerle
+saber que debe reindexar tu sitio. El framework provee una función para hacer
+justamente eso: ``django.contrib.sitemaps.ping_google()``.
+
+.. admonition:: ¡Primero regístrate con Google!
+
+    El comando ``ping_google()`` únicamente trabaja si haz registrado tu sitio
+    con ``Google Webmaster Tools``.
+
+``ping_google()`` toma un argumento opcional, ``sitemap_url``, que debe ser la
+URL absoluta de tu sitemap (por ej., ``'/sitemap.xml'``). Si este argumento no es
+provisto, ``ping_google()`` tratará de generar un sitemap realizando una
+búsqueda reversa en tu URLconf.
+
+``ping_google()`` lanza la excepción
+``django.contrib.sitemaps.SitemapNotFound`` si no puede determinar la URL de tu
+sitemap.
+
+Una forma útil de llamar a ``ping_google()`` es desde el método ``save()``::
+
+    from django.contrib.sitemaps import ping_google
+
+    class Libro(models.Model):
+        # ...
+        def save(self, force_insert=False, force_update=False):
+            super(Libro, self).save(force_insert, force_update)
+            try:
+                ping_google()
+            except Exception:
+                # Bare 'except' because we could get a variety
+                # of HTTP-related exceptions.
+                pass
+
+Una solución más eficiente, sin embargo, sería llamar a ``ping_google()`` desde
+un script ``cron`` o un manejador de tareas. La función hace un pedido HTTP a
+los servidores de Google, por lo que no querrás introducir esa demora asociada a
+la actividad de red cada vez que se llame al método ``save()``.
+
+Hacer pin a Google mediante manage.py
+-------------------------------------
+
+Una vez que la aplicacion ``sitemap``  es agregada a tu proyecto, puedes hacer
+ping a Google usando el comando ``ping_google``  mediante la línea de comandos
+as::
+
+    python manage.py ping_google [/sitemap.xml]
 
 ¿Qué sigue?
 ===========
 
-Django incluye un número de paquetes opcionales. Hemos cubierto algunos de los
-mismos: el sistema de administración (:doc:`Capítulo 6<chapter06>`) y el marco de
-sesiones/usuarios (:doc:`Capítulo 11<chapter11>`).
-
-El :doc:`próximo capítulo<chapter14>` cubre el resto de los marcos de trabajos "de la
-comunidad". Existen una cantidad interesante de herramientas disponibles; no
-querrás perderte ninguna de ellas.
-
-
-.. [#] \N. del T.: hard-coded
-
-
+A continuación, seguiremos indagando más profundamente en las herramientas
+internas que Django nos ofrece. Él :doc:`capítulo 14<chapter12>` examina todas las
+herramientas que necesitas para proveer sitios personalizados: sesiones, usuarios, y
+autenticación.
 
