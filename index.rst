@@ -1,38 +1,44 @@
-==================
-El libro de Django
-==================
+﻿======
+Django
+======
 
-Bienvenidos a la versión en línea de **El libro de Django**, un libro gratis
-sobre el framework web Django para el lenguaje de programación Python.
+Bienvenidos a la edición en línea de **el libro de Django**, un libro
+gratuito sobre el framework Django, para el lenguaje de programación Python.
 
-.. admonition:: Una nota acerca de esta edicion:
+.. admonition:: Una nota sobre esta edición
 
-    Bienvenidos a la edición en español del libro Django!
+   Este libro fue publicado originalmente por la editorial Apress
+   en 2009 y cubría Django 1.1. Desde entonces ha quedado un poco
+   desactualizado, es por ello que estamos trabajando en la actualización
+   del libro, para que cubra **Django 2.0**. Sin embargo necesitamos de
+   tu ayuda para lograrlo. Es por ello que decidimos compartir este
+   libro, con la esperanza de que encuentres en él un proyecto comunitario
+   `libre`__ y en constante evolución.
 
-    Este libro fue publicado originalmente por la editorial Apress en 2009 y
-    cubrió Django hasta la version 1.0. Desde entonces, hemos tratado de
-    actualizarlo. Estamos trabajando en actualizar el libro para cubrir Django
-    1.5, 2.0 y más allá. Pero necesitamos de tu ayuda, para actualizar este
-    libro de  `codigo abierto`__ -con todos sus defectos y virtudes- con la
-    esperanza de que vas a encontrarte con el amor de un un proyecto comunitario.
+   Así que si quieres echarnos una mano, ¡toda ayuda será bien recibida!
+   El código original de este libro, en la versión en ingles está alojado
+   en `GitHub`__  mientras que la versión en español esta alojada `aquí`__
+   en proceso de actualización. ¡Toda ayuda será bien recibida!
 
-Por lo tanto, si deseas ayudar, complementar, corrregir algun detalle o
-defecto, puedes hacerlo a traves de `GitHub`__  y enviarnos tus correcciones!
+    __ http://github.com/jacobian/djangobook.com
+    __ http://github.com/jacobian/djangobook.com
+    __ http://github.com/saulgm/djangobook.com
 
-__ http://github.com/jacobian/djangobook.com
-__ https://github.com/saul-g/El-libro-de-Django
+.. figure:: graphics/images/django-logo-positive.png
+    :alt: Logotipo de Django
 
-Capitulos
----------------
+Django sigue rodando...
+
+
+Capítulos
+=========
 
 .. toctree::
    :maxdepth: 1
    :glob:
 
-   frontmatter
-   introduction
    chapter*
    appendix*
+   frontmatter
    license
-   contents
 
