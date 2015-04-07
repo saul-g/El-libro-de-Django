@@ -1024,7 +1024,7 @@ como valor la fecha del día de hoy.
 
 Ejemplos (cuando la etiqueta ‘now’ es 17 Feb 2007):
 
-* ``16 Feb 2007`` se convierte en ``aller``.
+* ``16 Feb 2007`` se convierte en ``ayer``.
 * ``17 Feb 2007`` se convierte en ``hoy``.
 * ``18 Feb 2007`` se convierte en ``mañana``.
 * Cualquier otro día se formatea según el argumento dado o configurado en
