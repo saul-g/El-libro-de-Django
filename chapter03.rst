@@ -223,7 +223,7 @@ comienzo de la expresión regular. Esto le dice a Python que es una "cadena
 en crudo" -- lo que permite que las expresiones regulares sean escritas sin
 demasiadas sentencias de escape tal como cadenas ``'\n'`` , la cual es una
 cadena que indica una nueva línea. Cuando agregamos la ``r`` hicimos una cadena
-en crudo, la cual Python no tratar de escapar con ``r'\n'`` una cadena de dos
+en crudo, la cual Python no tratara de escapar con ``r'\n'`` una cadena de dos
 caracteres, la diagonal y la "n" minúscula. Para evitar colisiones entre las
 diagonales que usa Python y las encontradas en las expresiones regulares, es
 fuertemente recomendado usar cadenas en crudo, cada vez que necesites definir
@@ -1039,7 +1039,7 @@ de  información que nos brinda:
   anteriores y posteriores a la línea errónea, lo que nos brinda un poco mas
   de contexto.
 
-  Haz clic  debajo de *"Locals vars"* (variables locles) sobre el marco de la
+  Haz clic  debajo de *"Locals vars"* (variables locales) sobre el marco de la
   pila para ver la tabla completa de todas las variables locales y sus valores,
   este marco muestra la posición exacta del código en el cual fue lanzada la
   excepción. Esta información de  depuración es invaluable y muy privada.
