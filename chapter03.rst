@@ -1039,7 +1039,7 @@ de  información que nos brinda:
   anteriores y posteriores a la línea errónea, lo que nos brinda un poco mas
   de contexto.
 
-  Haz clic  debajo de *"Locals vars"* (variables locles) sobre el marco de la
+  Haz clic  debajo de *"Locals vars"* (variables locales) sobre el marco de la
   pila para ver la tabla completa de todas las variables locales y sus valores,
   este marco muestra la posición exacta del código en el cual fue lanzada la
   excepción. Esta información de  depuración es invaluable y muy privada.
