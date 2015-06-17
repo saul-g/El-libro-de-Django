@@ -310,7 +310,7 @@ plantilla de muestra del comienzo de este capítulo::
     >>> raw_template = """<p>Estimado: {{ nombre }},</p>
     ...
     ... <p>Gracias por el pedido que ordeno de {{ empresa }}. El pedido
-    ... se enviara el {{ ship_date|date: "j F Y"  }}.</p>
+    ... se enviara el {{ ship_date|date:"j F Y"  }}.</p>
     ...
     ... {% if garantía %}
     ... <p>La garantía será incluida en el paquete.</p>
