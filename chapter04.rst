@@ -586,9 +586,9 @@ método:
 
 .. code-block:: python
 
-          def delete(self):
+          def borrar(self):
               # Borra una cuenta
-          delete.alters_data = True
+          borrar.alters_data = True
 
 .. admonition:: ¿Que es self?
 
@@ -601,7 +601,7 @@ método:
 El sistema de plantillas no debería ejecutar cualquier método marcado de
 esta forma. En otras palabras, si una plantilla incluye ``{{ cuenta.borrar}}``,
 y el método ``borrar()``, marcado como ``alters_data=True``, esta etiqueta no
-ejecutará el método ``delete()``. Ya que este fallará silenciosamente.
+ejecutará el método ``borrar()``. Ya que este fallará silenciosamente.
 
 ¿Cómo se manejan las variables inválidas?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
