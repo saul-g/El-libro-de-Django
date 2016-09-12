@@ -187,10 +187,10 @@ que muestre el formulario de busqueda::
       return render(request, 'formulario_buscar.html')
 
 Tal como aprendimos en el :doc:`capítulo 3<chapter03>`, la vista puede estar
-en cualquier lugar de la ruta de búsqueda de Python. Pero por convensión esta
-deve de ir en una vista, por lo que la colocamos en ``biblioteca/views.py``.
+en cualquier lugar de la ruta de búsqueda de Python. Pero por convensión ésta
+debe de ir en una vista, por lo que la colocamos en ``biblioteca/views.py``.
 
-Acompañada de una plantilla ``formulario_buscar.html``, que deve ubicarse en
+Acompañada de una plantilla ``formulario_buscar.html``, que debe ubicarse en
 un directorio llamado ``templates``, dentro del directorio de la aplicación
 ``biblioteca``, en el mismo nivel que el directorio ``migrations``:
 
@@ -208,7 +208,7 @@ un directorio llamado ``templates``, dentro del directorio de la aplicación
   </body>
   </html>
 
-El patrón para la URL deve de ir en el archivo ``biblioteca/urls.py``  asi::
+El patrón para la URL debe de ir en el archivo ``biblioteca/urls.py``  así:
 
     from biblioteca  import views
 
