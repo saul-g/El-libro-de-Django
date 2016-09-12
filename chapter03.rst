@@ -64,7 +64,7 @@ Repasemos el código anterior línea a línea:
   convención ``request``. El cual es un objeto que contiene información
   sobre la vista que llama a la pagina actual, la cual es una instancia de
   la clase ``django.http.HttpRequest``. En este ejemplo, no hace nada el
-  método ``request``, no obstante siempre deve ser el primer parámetro de
+  método ``request``, no obstante siempre debe ser el primer parámetro de
   cualquier vista.
 
   Observa también que el nombre de la función no importa; ya que no tiene
