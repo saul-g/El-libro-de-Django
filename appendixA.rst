@@ -1399,7 +1399,7 @@ Por ejemplo, para definir un simple formulario de un modelo de
 
 .. admonition:: Note
 
-    La opcion ``fields`` no deve de confundirse con el diccionario ``fields``
+    La opcion ``fields`` no debe de confundirse con el diccionario ``fields``
     de el atributo de la opcion :attr:`~ModelAdmin.fieldsets`, de la siguiente
     seccion.
 
