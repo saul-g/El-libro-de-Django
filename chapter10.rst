@@ -857,7 +857,7 @@ objetos, en un único lugar con ``get_absolute_url()``.
 
 .. note::
 
-    La cadena que devuelve el método  ``get_absolute_url()`` deve contener
+    La cadena que devuelve el método  ``get_absolute_url()`` debe contener
     **únicamente** caracteres ASCII (requeridos por las especificaciones
     URI :rfc:`2396`) y deben ser encodificadas de ser necesario.
 
